@@ -60,21 +60,29 @@ Lists runtime environment variables such as keys, toggles, file paths, and debug
 
 This system is implemented using the following technologies:
 
-- **Python 3.11+** – Primary language for orchestration and agent logic
-- **LangGraph** – Framework for defining and executing deterministic multi-agent workflows
-- **OpenAI / Humanloop** – LLM execution, prompt versioning, and experiment tracking
-- **SQLite** – Lightweight, local storage for LangGraph state, test results, and iteration data
-- **JSON Schema** – Structured input/output validation and contract enforcement
-- **Jinja2** – Templating engine used to dynamically render prompts
-- **Pytest** – Core test framework for unit, integration, and orchestration testing
-- **pytest-mock** – Cleaner mocking syntax and fixtures for improved test readability
-- **responses** – HTTP mocking for external API requests (e.g. OpenAI, Humanloop)
-- **freezegun** – Freeze and control time during tests for deterministic behaviour
-- **coverage.py** – Measures code coverage and supports TDD completeness
-- **pytest-cov** – Integrates `coverage.py` with `pytest` for combined reporting
-- **Pydantic** – Typed data models and validation, if used internally
-- **Behave** – BDD framework used for integration tests
-- **ast** – Runs the architectural tests
+* **Python 3.11+** – Primary language for web application and agent logic
+* **FastAPI** – Web framework for the HTTP API
+* **Uvicorn\[standard]** – ASGI server runtime
+* **Pydantic v2 / pydantic-settings** – Typed request/response models and configuration management
+* **OpenAI SDK / httpx** – Async LLM integration
+* **PostgreSQL** – Primary database in production, with SQLite for local dev/CI
+* **SQLAlchemy 2.x async + asyncpg** – ORM and async database driver
+* **Alembic** – Database migrations
+* **Redis** – Caching, queues, and short-lived state
+* **Dramatiq with dramatiq-redis** – Background job processing
+* **WebSockets (FastAPI)** – Real-time streaming of progress and logs
+* **JSON Schema** – Structured contract validation
+* **Jinja2** – Templating for prompt rendering
+* **pytest / pytest-asyncio** – Contractual and behavioural unit tests
+* **Behave** – End-to-end integration tests with Gherkin feature files
+* **coverage.py / pytest-cov** – Code coverage enforcement
+* **respx** – HTTP mocking for async requests
+* **freezegun** – Time control in tests
+* **ruff / mypy** – Linting and typing
+* **OpenTelemetry SDK** – Tracing and metrics with OTLP exporter
+* **fastapi-limiter** – Rate limiting (Redis-backed)
+* **python-jose or authlib** – JWT authentication
+* **python-multipart / CORS middleware** – File uploads and cross-origin support
 
 All orchestration logic, schemas, tests, and helper utilities live directly under the project root directory, following a structured layout for clarity, separation of concerns, and agent compatibility.
 
