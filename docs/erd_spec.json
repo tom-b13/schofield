@@ -1,0 +1,204 @@
+{
+  "version": "0.3",
+  "conventions": {
+    "db_case": "snake_case",
+    "entities_case": "CamelCase",
+    "placeholder_format": "Entity.field_name",
+    "enums": {
+      "doc_kind": ["contract"],
+      "answer_kind": ["short_string", "long_text", "boolean", "enum", "number"]
+    }
+  },
+  "entities": [
+    {
+      "name": "Company",
+      "pk": {"company_id": "uuid"},
+      "fields": {
+        "legal_name": "text:not_null",
+        "registered_office_address": "text:null",
+        "created_at": "timestamptz:default_now",
+        "updated_at": "timestamptz:null"
+      },
+      "indexes": []
+    },
+    {
+      "name": "QuestionnaireQuestion",
+      "pk": {"question_id": "uuid"},
+      "fields": {
+        "external_qid": "text:unique",
+        "question_text": "text:not_null",
+        "answer_type": "answer_kind:not_null",
+        "section": "text:null",
+        "is_conditional": "boolean:default_false",
+        "parent_question_id": "uuid:null -> QuestionnaireQuestion.question_id",
+        "version": "int:default_1",
+        "is_active": "boolean:default_true"
+      },
+      "indexes": ["section", "answer_type"]
+    },
+    {
+      "name": "AnswerOption",
+      "pk": {"option_id": "uuid"},
+      "fields": {
+        "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
+        "value": "text:not_null",
+        "label": "text:not_null",
+        "sort_index": "int:default_0"
+      },
+      "uniques": ["question_id,value"],
+      "indexes": ["question_id"]
+    },
+    {
+      "name": "ContractTemplate",
+      "pk": {"contract_template_id": "uuid"},
+      "fields": {
+        "name": "text:not_null",
+        "version": "int:not_null",
+        "doc_uri": "text:not_null"
+      },
+      "uniques": ["name,version"],
+      "indexes": []
+    },
+    {
+      "name": "TemplatePlaceholder",
+      "pk": {"placeholder_id": "uuid"},
+      "fields": {
+        "document_type": "doc_kind:not_null",
+        "document_id": "uuid:not_null -> ContractTemplate.contract_template_id",
+        "entity_name": "text:not_null",
+        "field_name": "text:not_null",
+        "placeholder_text": "text:not_null"
+      },
+      "uniques": ["document_type,document_id,entity_name,field_name"],
+      "indexes": ["document_id", "entity_name,field_name"]
+    },
+    {
+      "name": "TransformationRule",
+      "pk": {"rule_id": "uuid"},
+      "fields": {
+        "name": "text:not_null",
+        "description": "text:null",
+        "expression": "jsonb:not_null"
+      },
+      "indexes": []
+    },
+    {
+      "name": "QuestionToPlaceholder",
+      "pk": {"q2p_id": "uuid"},
+      "fields": {
+        "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
+        "placeholder_id": "uuid:not_null -> TemplatePlaceholder.placeholder_id",
+        "transformation_rule_id": "uuid:null -> TransformationRule.rule_id",
+        "notes": "text:null"
+      },
+      "uniques": ["question_id,placeholder_id"],
+      "indexes": ["question_id", "placeholder_id"]
+    },
+
+    /* === NEW: UI grouping for screen-driven rendering === */
+
+    {
+      "name": "QuestionnaireScreen",
+      "pk": {"screen_id": "uuid"},
+      "fields": {
+        "name": "text:not_null",
+        "description": "text:null",
+        "version": "int:default_1",
+        "is_active": "boolean:default_true",
+        "sort_index": "int:default_0"
+      },
+      "indexes": ["sort_index", "is_active"]
+    },
+    {
+      "name": "ScreenGroup",
+      "pk": {"group_id": "uuid"},
+      "fields": {
+        "screen_id": "uuid:not_null -> QuestionnaireScreen.screen_id",
+        "name": "text:not_null",
+        "description": "text:null",
+        "sort_index": "int:default_0",
+        "repeatable": "boolean:default_false"
+      },
+      "indexes": ["screen_id", "sort_index"]
+    },
+    {
+      "name": "QuestionToScreen",
+      "pk": {"q2s_id": "uuid"},
+      "fields": {
+        "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
+        "screen_id": "uuid:not_null -> QuestionnaireScreen.screen_id",
+        "group_id": "uuid:null -> ScreenGroup.group_id",
+        "sort_index": "int:default_0",
+        "required": "boolean:default_false",
+        "visible_when": "jsonb:null",
+        "display_hint": "text:null",
+        "input_component": "text:null",
+        "validation": "jsonb:null"
+      },
+      "uniques": ["question_id,screen_id"],
+      "indexes": ["screen_id,sort_index", "group_id", "question_id"]
+    },
+
+    /* === END NEW === */
+
+    {
+      "name": "ResponseSet",
+      "pk": {"response_set_id": "uuid"},
+      "fields": {
+        "company_id": "uuid:not_null -> Company.company_id",
+        "created_at": "timestamptz:default_now",
+        "created_by": "text:null",
+        "template_lock": "jsonb:null"
+      },
+      "indexes": ["company_id", "created_at"]
+    },
+    {
+      "name": "Response",
+      "pk": {"response_id": "uuid"},
+      "fields": {
+        "response_set_id": "uuid:not_null -> ResponseSet.response_set_id",
+        "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
+        "value_json": "jsonb:not_null",
+        "value_text": "text:null",
+        "value_number": "numeric:null",
+        "value_bool": "boolean:null",
+        "option_id": "uuid:null -> AnswerOption.option_id"
+      },
+      "uniques": ["response_set_id,question_id"],
+      "indexes": ["response_set_id", "question_id", "option_id"]
+    },
+    {
+      "name": "ComputedPlaceholderValue",
+      "optional": true,
+      "pk": {"cpv_id": "uuid"},
+      "fields": {
+        "response_set_id": "uuid:not_null -> ResponseSet.response_set_id",
+        "placeholder_id": "uuid:not_null -> TemplatePlaceholder.placeholder_id",
+        "computed_json": "jsonb:not_null",
+        "rule_id": "uuid:null -> TransformationRule.rule_id",
+        "computed_at": "timestamptz:default_now"
+      },
+      "uniques": ["response_set_id,placeholder_id"],
+      "indexes": ["response_set_id", "placeholder_id"]
+    },
+    {
+      "name": "GeneratedDocument",
+      "pk": {"generated_document_id": "uuid"},
+      "fields": {
+        "response_set_id": "uuid:not_null -> ResponseSet.response_set_id",
+        "document_type": "doc_kind:not_null",
+        "document_id": "uuid:not_null -> ContractTemplate.contract_template_id",
+        "output_uri": "text:not_null",
+        "created_at": "timestamptz:default_now"
+      },
+      "indexes": ["response_set_id", "document_id", "created_at"]
+    }
+  ],
+  "notes": [
+    "UI renders screens by ordering QuestionnaireScreen.sort_index, then QuestionToScreen.sort_index within each screen.",
+    "visible_when/validation are UI-layer JSON expressions and do not alter core conditional logic.",
+    "Keep answers as first-class rows in Response; do not stuff them into Company.",
+    "Optional CPV table speeds generation and supports audit snapshots.",
+    "TransformationRule.expression should be a small, safe DSL (no arbitrary code)."
+  ]
+}

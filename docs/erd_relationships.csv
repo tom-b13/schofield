@@ -1,0 +1,23 @@
+from_entity,relationship,to_entity,cardinality,notes
+Company,has,ResponseSet,1-to-many,Company produces many response sets
+ResponseSet,includes,Response,1-to-many,Each response set has many responses
+ResponseSet,produces,GeneratedDocument,1-to-many,Documents generated per response set
+
+ContractTemplate,contains,TemplatePlaceholder,1-to-many,Placeholders belong to a specific template
+
+QuestionnaireQuestion,offers,AnswerOption,1-to-many,Options for enum-type questions
+QuestionnaireQuestion,parents,QuestionnaireQuestion,1-to-many,Optional parent-child for conditional logic
+QuestionnaireQuestion,maps_via_QuestionToPlaceholder,TemplatePlaceholder,many-to-many,Realised via QuestionToPlaceholder
+
+%% NEW: screen-driven UI
+QuestionnaireScreen,has,ScreenGroup,1-to-many,Optional subgroups within a screen
+QuestionnaireScreen,places_via_QuestionToScreen,QuestionnaireQuestion,many-to-many,Realised via QuestionToScreen
+ScreenGroup,groups_via_QuestionToScreen,QuestionnaireQuestion,many-to-many,Placement within a specific group on a screen
+
+%% Join tables (for clarity)
+QuestionnaireQuestion,maps,QuestionToPlaceholder,1-to-many,One question can map to many placeholders
+TemplatePlaceholder,mapped_by,QuestionToPlaceholder,1-to-many,One placeholder can be mapped from many questions
+
+QuestionnaireQuestion,placed_in,QuestionToScreen,1-to-many,One question can be placed in many screens
+QuestionnaireScreen,composes,QuestionToScreen,1-to-many,One screen composes many placements
+ScreenGroup,subgroups,QuestionToScreen,1-to-many,One group references many placements

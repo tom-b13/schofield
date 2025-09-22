@@ -1,0 +1,19 @@
+{
+  "entities": {
+    "Response": [
+      "value_json",
+      "value_text",
+      "value_number",
+      "value_bool",
+      "option_id"
+    ],
+    "GroupValue": [
+      "value_json",
+      "value_text",
+      "value_number",
+      "value_bool",
+      "option_id"
+    ]
+  },
+  "notes": "Column-level encryption policy for sensitive fields; mirrors ERD U10/U12."
+}
