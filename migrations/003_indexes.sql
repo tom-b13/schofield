@@ -1,25 +1,40 @@
--- migrations/003_indexes.sql
--- Common foreign key and lookup indexes
-CREATE INDEX IF NOT EXISTS idx_answeroption_question ON AnswerOption(question_id);
-CREATE INDEX IF NOT EXISTS idx_templateplaceholder_document ON TemplatePlaceholder(document_id);
-CREATE INDEX IF NOT EXISTS idx_q2p_question ON QuestionToPlaceholder(question_id);
-CREATE INDEX IF NOT EXISTS idx_q2p_placeholder ON QuestionToPlaceholder(placeholder_id);
+-- QuestionnaireQuestion
+CREATE INDEX IF NOT EXISTS ix_question_section ON questionnaire_question(section);
+CREATE INDEX IF NOT EXISTS ix_question_answer_type ON questionnaire_question(answer_type);
 
-CREATE INDEX IF NOT EXISTS idx_questionscreen_screen ON QuestionToScreen(screen_id, sort_index);
-CREATE INDEX IF NOT EXISTS idx_questionscreen_question ON QuestionToScreen(question_id);
+-- AnswerOption
+CREATE UNIQUE INDEX IF NOT EXISTS uq_answer_option_question_value ON answer_option(question_id, value);
+CREATE INDEX IF NOT EXISTS ix_answer_option_question ON answer_option(question_id);
 
-CREATE INDEX IF NOT EXISTS idx_fieldgroup_group_key ON FieldGroup(group_key);
-CREATE INDEX IF NOT EXISTS idx_q2fg_question ON QuestionToFieldGroup(question_id);
-CREATE INDEX IF NOT EXISTS idx_q2fg_group ON QuestionToFieldGroup(field_group_id);
+-- QuestionnaireScreen
+CREATE INDEX IF NOT EXISTS ix_screen_sort ON questionnaire_screen(sort_index);
+CREATE INDEX IF NOT EXISTS ix_screen_active ON questionnaire_screen(is_active);
 
-CREATE INDEX IF NOT EXISTS idx_groupvalue_responseset ON GroupValue(response_set_id);
-CREATE INDEX IF NOT EXISTS idx_groupvalue_group ON GroupValue(field_group_id);
-CREATE INDEX IF NOT EXISTS idx_groupvalue_source_question ON GroupValue(source_question_id);
+-- QuestionToScreen
+CREATE INDEX IF NOT EXISTS ix_q2s_screen_sort ON question_to_screen(screen_id, sort_index);
+CREATE INDEX IF NOT EXISTS ix_q2s_question ON question_to_screen(question_id);
 
-CREATE INDEX IF NOT EXISTS idx_responseset_company ON ResponseSet(company_id);
-CREATE INDEX IF NOT EXISTS idx_response_responseset ON Response(response_set_id);
-CREATE INDEX IF NOT EXISTS idx_response_question ON Response(question_id);
-CREATE INDEX IF NOT EXISTS idx_response_option ON Response(option_id);
+-- FieldGroup
+CREATE INDEX IF NOT EXISTS ix_field_group_key ON field_group(group_key);
 
-CREATE INDEX IF NOT EXISTS idx_gendoc_responseset ON GeneratedDocument(response_set_id);
-CREATE INDEX IF NOT EXISTS idx_gendoc_document ON GeneratedDocument(document_id);
+-- QuestionToFieldGroup
+CREATE INDEX IF NOT EXISTS ix_q2fg_question ON question_to_field_group(question_id);
+CREATE INDEX IF NOT EXISTS ix_q2fg_group ON question_to_field_group(field_group_id);
+
+-- ResponseSet
+CREATE INDEX IF NOT EXISTS ix_response_set_company ON response_set(company_id);
+CREATE INDEX IF NOT EXISTS ix_response_set_created_at ON response_set(created_at);
+
+-- Response
+CREATE INDEX IF NOT EXISTS ix_response_set ON response(response_set_id);
+CREATE INDEX IF NOT EXISTS ix_response_question ON response(question_id);
+CREATE INDEX IF NOT EXISTS ix_response_option ON response(option_id);
+
+-- GroupValue
+CREATE INDEX IF NOT EXISTS ix_group_value_set ON group_value(response_set_id);
+CREATE INDEX IF NOT EXISTS ix_group_value_group ON group_value(field_group_id);
+CREATE INDEX IF NOT EXISTS ix_group_value_source_q ON group_value(source_question_id);
+
+-- GeneratedDocument
+CREATE INDEX IF NOT EXISTS ix_generated_document_set ON generated_document(response_set_id);
+CREATE INDEX IF NOT EXISTS ix_generated_document_created ON generated_document(created_at);

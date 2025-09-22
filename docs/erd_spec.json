@@ -1,204 +1,253 @@
 {
-  "version": "0.3",
+  "version": "0.2",
   "conventions": {
     "db_case": "snake_case",
     "entities_case": "CamelCase",
-    "placeholder_format": "Entity.field_name",
+    "placeholder_format": "UPPERCASE_UNDERSCORE",
     "enums": {
-      "doc_kind": ["contract"],
-      "answer_kind": ["short_string", "long_text", "boolean", "enum", "number"]
+      "answer_kind": [
+        "short_string",
+        "long_text",
+        "boolean",
+        "number",
+        "enum_single"
+      ],
+      "apply_mode": [
+        "reference",
+        "copy_on_first_set",
+        "prefer_group"
+      ]
     }
   },
   "entities": [
     {
       "name": "Company",
-      "pk": {"company_id": "uuid"},
+      "pk": {
+        "company_id": "uuid:not_null"
+      },
       "fields": {
         "legal_name": "text:not_null",
-        "registered_office_address": "text:null",
-        "created_at": "timestamptz:default_now",
-        "updated_at": "timestamptz:null"
+        "registered_office_address": "text",
+        "created_at": "timestamptz:not_null",
+        "updated_at": "timestamptz"
       },
+      "uniques": [],
       "indexes": []
-    },
-    {
-      "name": "QuestionnaireQuestion",
-      "pk": {"question_id": "uuid"},
-      "fields": {
-        "external_qid": "text:unique",
-        "question_text": "text:not_null",
-        "answer_type": "answer_kind:not_null",
-        "section": "text:null",
-        "is_conditional": "boolean:default_false",
-        "parent_question_id": "uuid:null -> QuestionnaireQuestion.question_id",
-        "version": "int:default_1",
-        "is_active": "boolean:default_true"
-      },
-      "indexes": ["section", "answer_type"]
-    },
-    {
-      "name": "AnswerOption",
-      "pk": {"option_id": "uuid"},
-      "fields": {
-        "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
-        "value": "text:not_null",
-        "label": "text:not_null",
-        "sort_index": "int:default_0"
-      },
-      "uniques": ["question_id,value"],
-      "indexes": ["question_id"]
-    },
-    {
-      "name": "ContractTemplate",
-      "pk": {"contract_template_id": "uuid"},
-      "fields": {
-        "name": "text:not_null",
-        "version": "int:not_null",
-        "doc_uri": "text:not_null"
-      },
-      "uniques": ["name,version"],
-      "indexes": []
-    },
-    {
-      "name": "TemplatePlaceholder",
-      "pk": {"placeholder_id": "uuid"},
-      "fields": {
-        "document_type": "doc_kind:not_null",
-        "document_id": "uuid:not_null -> ContractTemplate.contract_template_id",
-        "entity_name": "text:not_null",
-        "field_name": "text:not_null",
-        "placeholder_text": "text:not_null"
-      },
-      "uniques": ["document_type,document_id,entity_name,field_name"],
-      "indexes": ["document_id", "entity_name,field_name"]
     },
     {
       "name": "TransformationRule",
-      "pk": {"rule_id": "uuid"},
+      "pk": {
+        "rule_id": "uuid:not_null"
+      },
       "fields": {
         "name": "text:not_null",
-        "description": "text:null",
+        "description": "text",
         "expression": "jsonb:not_null"
-      },
-      "indexes": []
+      }
     },
     {
-      "name": "QuestionToPlaceholder",
-      "pk": {"q2p_id": "uuid"},
+      "name": "QuestionnaireQuestion",
+      "pk": {
+        "question_id": "uuid:not_null"
+      },
+      "fields": {
+        "external_qid": "text",
+        "question_text": "text:not_null",
+        "answer_type": "enum:answer_kind:not_null",
+        "section": "text",
+        "is_conditional": "boolean:not_null",
+        "parent_question_id": "uuid -> QuestionnaireQuestion.question_id",
+        "version": "int:not_null",
+        "is_active": "boolean:not_null",
+        "placeholder_code": "text",
+        "mandatory": "boolean:not_null",
+        "apply_mode": "enum:apply_mode:not_null",
+        "transform_rule_id": "uuid -> TransformationRule.rule_id"
+      },
+      "uniques": [
+        "external_qid",
+        "(placeholder_code) where placeholder_code is not null"
+      ],
+      "indexes": [
+        "section",
+        "answer_type"
+      ]
+    },
+    {
+      "name": "AnswerOption",
+      "pk": {
+        "option_id": "uuid:not_null"
+      },
       "fields": {
         "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
-        "placeholder_id": "uuid:not_null -> TemplatePlaceholder.placeholder_id",
-        "transformation_rule_id": "uuid:null -> TransformationRule.rule_id",
-        "notes": "text:null"
+        "value": "text:not_null",
+        "label": "text",
+        "sort_index": "int:not_null"
       },
-      "uniques": ["question_id,placeholder_id"],
-      "indexes": ["question_id", "placeholder_id"]
+      "uniques": [
+        "(question_id,value)"
+      ],
+      "indexes": [
+        "question_id"
+      ]
     },
-
-    /* === NEW: UI grouping for screen-driven rendering === */
-
     {
       "name": "QuestionnaireScreen",
-      "pk": {"screen_id": "uuid"},
+      "pk": {
+        "screen_id": "uuid:not_null"
+      },
       "fields": {
         "name": "text:not_null",
-        "description": "text:null",
-        "version": "int:default_1",
-        "is_active": "boolean:default_true",
-        "sort_index": "int:default_0"
+        "description": "text",
+        "version": "int:not_null",
+        "is_active": "boolean:not_null",
+        "sort_index": "int:not_null"
       },
-      "indexes": ["sort_index", "is_active"]
-    },
-    {
-      "name": "ScreenGroup",
-      "pk": {"group_id": "uuid"},
-      "fields": {
-        "screen_id": "uuid:not_null -> QuestionnaireScreen.screen_id",
-        "name": "text:not_null",
-        "description": "text:null",
-        "sort_index": "int:default_0",
-        "repeatable": "boolean:default_false"
-      },
-      "indexes": ["screen_id", "sort_index"]
+      "indexes": [
+        "sort_index",
+        "is_active"
+      ]
     },
     {
       "name": "QuestionToScreen",
-      "pk": {"q2s_id": "uuid"},
+      "pk": {
+        "q2s_id": "uuid:not_null"
+      },
       "fields": {
         "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
         "screen_id": "uuid:not_null -> QuestionnaireScreen.screen_id",
-        "group_id": "uuid:null -> ScreenGroup.group_id",
-        "sort_index": "int:default_0",
-        "required": "boolean:default_false",
-        "visible_when": "jsonb:null",
-        "display_hint": "text:null",
-        "input_component": "text:null",
-        "validation": "jsonb:null"
+        "sort_index": "int:not_null",
+        "required": "boolean:not_null",
+        "visible_when": "jsonb",
+        "display_hint": "text",
+        "input_component": "text",
+        "validation": "jsonb"
       },
-      "uniques": ["question_id,screen_id"],
-      "indexes": ["screen_id,sort_index", "group_id", "question_id"]
+      "uniques": [
+        "(question_id,screen_id)"
+      ],
+      "indexes": [
+        "(screen_id,sort_index)",
+        "question_id"
+      ]
     },
-
-    /* === END NEW === */
-
+    {
+      "name": "FieldGroup",
+      "pk": {
+        "field_group_id": "uuid:not_null"
+      },
+      "fields": {
+        "group_key": "text:not_null",
+        "label": "text:not_null",
+        "description": "text",
+        "is_active": "boolean:not_null"
+      },
+      "uniques": [
+        "group_key"
+      ]
+    },
+    {
+      "name": "QuestionToFieldGroup",
+      "pk": {
+        "q2fg_id": "uuid:not_null"
+      },
+      "fields": {
+        "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
+        "field_group_id": "uuid:not_null -> FieldGroup.field_group_id",
+        "apply_mode": "enum:apply_mode:not_null",
+        "notes": "text"
+      },
+      "uniques": [
+        "(question_id,field_group_id)"
+      ],
+      "indexes": [
+        "question_id",
+        "field_group_id"
+      ]
+    },
     {
       "name": "ResponseSet",
-      "pk": {"response_set_id": "uuid"},
+      "pk": {
+        "response_set_id": "uuid:not_null"
+      },
       "fields": {
         "company_id": "uuid:not_null -> Company.company_id",
-        "created_at": "timestamptz:default_now",
-        "created_by": "text:null",
-        "template_lock": "jsonb:null"
+        "created_at": "timestamptz:not_null",
+        "created_by": "text",
+        "template_lock": "jsonb"
       },
-      "indexes": ["company_id", "created_at"]
+      "indexes": [
+        "company_id",
+        "created_at"
+      ]
     },
     {
       "name": "Response",
-      "pk": {"response_id": "uuid"},
+      "pk": {
+        "response_id": "uuid:not_null"
+      },
       "fields": {
         "response_set_id": "uuid:not_null -> ResponseSet.response_set_id",
         "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
         "value_json": "jsonb:not_null",
-        "value_text": "text:null",
-        "value_number": "numeric:null",
-        "value_bool": "boolean:null",
-        "option_id": "uuid:null -> AnswerOption.option_id"
+        "value_text": "text",
+        "value_number": "numeric",
+        "value_bool": "boolean",
+        "option_id": "uuid -> AnswerOption.option_id"
       },
-      "uniques": ["response_set_id,question_id"],
-      "indexes": ["response_set_id", "question_id", "option_id"]
+      "uniques": [
+        "(response_set_id,question_id)"
+      ],
+      "indexes": [
+        "response_set_id",
+        "question_id",
+        "option_id"
+      ]
     },
     {
-      "name": "ComputedPlaceholderValue",
-      "optional": true,
-      "pk": {"cpv_id": "uuid"},
+      "name": "GroupValue",
+      "pk": {
+        "group_value_id": "uuid:not_null"
+      },
       "fields": {
         "response_set_id": "uuid:not_null -> ResponseSet.response_set_id",
-        "placeholder_id": "uuid:not_null -> TemplatePlaceholder.placeholder_id",
-        "computed_json": "jsonb:not_null",
-        "rule_id": "uuid:null -> TransformationRule.rule_id",
-        "computed_at": "timestamptz:default_now"
+        "field_group_id": "uuid:not_null -> FieldGroup.field_group_id",
+        "value_json": "jsonb:not_null",
+        "value_text": "text",
+        "value_number": "numeric",
+        "value_bool": "boolean",
+        "option_id": "uuid -> AnswerOption.option_id",
+        "source_question_id": "uuid -> QuestionnaireQuestion.question_id",
+        "updated_at": "timestamptz:not_null"
       },
-      "uniques": ["response_set_id,placeholder_id"],
-      "indexes": ["response_set_id", "placeholder_id"]
+      "uniques": [
+        "(response_set_id,field_group_id)"
+      ],
+      "indexes": [
+        "response_set_id",
+        "field_group_id",
+        "source_question_id"
+      ]
     },
     {
       "name": "GeneratedDocument",
-      "pk": {"generated_document_id": "uuid"},
+      "pk": {
+        "generated_document_id": "uuid:not_null"
+      },
       "fields": {
         "response_set_id": "uuid:not_null -> ResponseSet.response_set_id",
-        "document_type": "doc_kind:not_null",
-        "document_id": "uuid:not_null -> ContractTemplate.contract_template_id",
         "output_uri": "text:not_null",
-        "created_at": "timestamptz:default_now"
+        "created_at": "timestamptz:not_null"
       },
-      "indexes": ["response_set_id", "document_id", "created_at"]
+      "indexes": [
+        "created_at",
+        "response_set_id"
+      ]
     }
   ],
   "notes": [
-    "UI renders screens by ordering QuestionnaireScreen.sort_index, then QuestionToScreen.sort_index within each screen.",
-    "visible_when/validation are UI-layer JSON expressions and do not alter core conditional logic.",
-    "Keep answers as first-class rows in Response; do not stuff them into Company.",
-    "Optional CPV table speeds generation and supports audit snapshots.",
-    "TransformationRule.expression should be a small, safe DSL (no arbitrary code)."
+    "Single handbook template parsed at merge time; no template tables.",
+    "Mapping is on QuestionnaireQuestion.placeholder_code with partial unique index.",
+    "answer_kind includes enum_single for single-choice questions."
   ]
 }

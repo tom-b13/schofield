@@ -1,148 +1,135 @@
--- migrations/001_init.sql
--- Initial schema creation (tables only, PKs inline; FKs/UNIQUES/INDEXES in later migrations)
-CREATE TABLE IF NOT EXISTS Company (
-  company_id UUID PRIMARY KEY,
-  legal_name TEXT NOT NULL,
-  registered_office_address TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ
+-- Generated 2025-09-22T23:17:51.080676Z
+-- Epic A (option 1): single handbook, no template tables.
+-- Create required extension(s)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;  -- for gen_random_uuid()
+
+-- Enums
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'answer_kind') THEN
+        CREATE TYPE answer_kind AS ENUM ('short_string','long_text','boolean','enum','number');
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'apply_mode') THEN
+        CREATE TYPE apply_mode AS ENUM ('reference','copy_on_first_set','prefer_group');
+    END IF;
+END $$;
+
+-- Tables (PKs inline, FKs/uniques/indexes added in 002/003)
+CREATE TABLE IF NOT EXISTS company (
+    company_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    legal_name TEXT NOT NULL,
+    registered_office_address TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NULL
 );
 
-CREATE TABLE IF NOT EXISTS QuestionnaireQuestion (
-  question_id UUID PRIMARY KEY,
-  external_qid TEXT UNIQUE,
-  question_text TEXT NOT NULL,
-  answer_type TEXT NOT NULL,
-  section TEXT,
-  is_conditional BOOLEAN DEFAULT FALSE,
-  parent_question_id UUID,
-  version INT DEFAULT 1,
-  is_active BOOLEAN DEFAULT TRUE
+CREATE TABLE IF NOT EXISTS transformation_rule (
+    rule_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT NULL,
+    expression JSONB NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS AnswerOption (
-  option_id UUID PRIMARY KEY,
-  question_id UUID NOT NULL,
-  value TEXT NOT NULL,
-  label TEXT NOT NULL,
-  sort_index INT DEFAULT 0
+CREATE TABLE IF NOT EXISTS questionnaire_question (
+    question_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    external_qid TEXT NULL,
+    question_text TEXT NOT NULL,
+    answer_type answer_kind NOT NULL,
+    section TEXT NULL,
+    is_conditional BOOLEAN NOT NULL DEFAULT FALSE,
+    parent_question_id UUID NULL,
+    version INT NOT NULL DEFAULT 1,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    -- option 1 additions:
+    placeholder_code TEXT NULL,
+    mandatory BOOLEAN NOT NULL DEFAULT FALSE,
+    apply_mode apply_mode NOT NULL DEFAULT 'reference',
+    transform_rule_id UUID NULL
 );
 
-CREATE TABLE IF NOT EXISTS ContractTemplate (
-  contract_template_id UUID PRIMARY KEY,
-  name TEXT NOT NULL,
-  version INT NOT NULL,
-  doc_uri TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS answer_option (
+    option_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question_id UUID NOT NULL,
+    value TEXT NOT NULL,
+    label TEXT NULL,
+    sort_index INT NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS TemplatePlaceholder (
-  placeholder_id UUID PRIMARY KEY,
-  document_type TEXT NOT NULL,
-  document_id UUID NOT NULL,
-  entity_name TEXT NOT NULL,
-  field_name TEXT NOT NULL,
-  placeholder_text TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS questionnaire_screen (
+    screen_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT NULL,
+    version INT NOT NULL DEFAULT 1,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_index INT NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS TransformationRule (
-  rule_id UUID PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  expression JSONB NOT NULL
+CREATE TABLE IF NOT EXISTS question_to_screen (
+    q2s_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question_id UUID NOT NULL,
+    screen_id UUID NOT NULL,
+    sort_index INT NOT NULL DEFAULT 0,
+    required BOOLEAN NOT NULL DEFAULT FALSE,
+    visible_when JSONB NULL,
+    display_hint TEXT NULL,
+    input_component TEXT NULL,
+    validation JSONB NULL
 );
 
-CREATE TABLE IF NOT EXISTS QuestionToPlaceholder (
-  q2p_id UUID PRIMARY KEY,
-  question_id UUID NOT NULL,
-  placeholder_id UUID NOT NULL,
-  transformation_rule_id UUID,
-  notes TEXT
+CREATE TABLE IF NOT EXISTS field_group (
+    field_group_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    description TEXT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
-CREATE TABLE IF NOT EXISTS QuestionnaireScreen (
-  screen_id UUID PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  version INT DEFAULT 1,
-  is_active BOOLEAN DEFAULT TRUE,
-  sort_index INT DEFAULT 0
+CREATE TABLE IF NOT EXISTS question_to_field_group (
+    q2fg_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question_id UUID NOT NULL,
+    field_group_id UUID NOT NULL,
+    apply_mode apply_mode NOT NULL,
+    notes TEXT NULL
 );
 
-CREATE TABLE IF NOT EXISTS QuestionToScreen (
-  q2s_id UUID PRIMARY KEY,
-  question_id UUID NOT NULL,
-  screen_id UUID NOT NULL,
-  sort_index INT DEFAULT 0,
-  required BOOLEAN DEFAULT FALSE,
-  visible_when JSONB,
-  display_hint TEXT,
-  input_component TEXT,
-  validation JSONB
+CREATE TABLE IF NOT EXISTS response_set (
+    response_set_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by TEXT NULL,
+    template_lock JSONB NULL
 );
 
--- NEW: Field Grouping
-CREATE TABLE IF NOT EXISTS FieldGroup (
-  field_group_id UUID PRIMARY KEY,
-  group_key TEXT NOT NULL,
-  label TEXT NOT NULL,
-  description TEXT,
-  is_active BOOLEAN DEFAULT TRUE
+CREATE TABLE IF NOT EXISTS response (
+    response_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    response_set_id UUID NOT NULL,
+    question_id UUID NOT NULL,
+    value_json JSONB NOT NULL,
+    value_text TEXT NULL,
+    value_number NUMERIC NULL,
+    value_bool BOOLEAN NULL,
+    option_id UUID NULL
 );
 
-CREATE TABLE IF NOT EXISTS QuestionToFieldGroup (
-  q2fg_id UUID PRIMARY KEY,
-  question_id UUID NOT NULL,
-  field_group_id UUID NOT NULL,
-  apply_mode TEXT NOT NULL,
-  notes TEXT
+CREATE TABLE IF NOT EXISTS group_value (
+    group_value_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    response_set_id UUID NOT NULL,
+    field_group_id UUID NOT NULL,
+    value_json JSONB NOT NULL,
+    value_text TEXT NULL,
+    value_number NUMERIC NULL,
+    value_bool BOOLEAN NULL,
+    option_id UUID NULL,
+    source_question_id UUID NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS GroupValue (
-  group_value_id UUID PRIMARY KEY,
-  response_set_id UUID NOT NULL,
-  field_group_id UUID NOT NULL,
-  value_json JSONB NOT NULL,
-  value_text TEXT,
-  value_number NUMERIC,
-  value_bool BOOLEAN,
-  option_id UUID,
-  source_question_id UUID,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS ResponseSet (
-  response_set_id UUID PRIMARY KEY,
-  company_id UUID NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  created_by TEXT,
-  template_lock JSONB
-);
-
-CREATE TABLE IF NOT EXISTS Response (
-  response_id UUID PRIMARY KEY,
-  response_set_id UUID NOT NULL,
-  question_id UUID NOT NULL,
-  value_json JSONB NOT NULL,
-  value_text TEXT,
-  value_number NUMERIC,
-  value_bool BOOLEAN,
-  option_id UUID
-);
-
-CREATE TABLE IF NOT EXISTS ComputedPlaceholderValue (
-  cpv_id UUID PRIMARY KEY,
-  response_set_id UUID NOT NULL,
-  placeholder_id UUID NOT NULL,
-  computed_json JSONB NOT NULL,
-  rule_id UUID,
-  computed_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS GeneratedDocument (
-  generated_document_id UUID PRIMARY KEY,
-  response_set_id UUID NOT NULL,
-  document_type TEXT NOT NULL,
-  document_id UUID NOT NULL,
-  output_uri TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+-- Simplified generated_document (no template/doc_kind)
+CREATE TABLE IF NOT EXISTS generated_document (
+    generated_document_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    response_set_id UUID NOT NULL,
+    output_uri TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
