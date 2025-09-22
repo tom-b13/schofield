@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://b13.ai/schemas/erd_and_runtime_inputs.schema.json",
+  "title": "Epic A \u2014 ERD and runtime inputs",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {},
+  "components": {
+    "schemas": {
+      "ErdSpec": {
+        "type": "object",
+        "required": [
+          "version",
+          "conventions",
+          "entities"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "conventions": {
+            "type": "object",
+            "required": [
+              "db_case",
+              "entities_case",
+              "placeholder_format",
+              "enums"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "db_case": {
+                "type": "string",
+                "enum": [
+                  "snake_case"
+                ]
+              },
+              "entities_case": {
+                "type": "string",
+                "enum": [
+                  "CamelCase"
+                ]
+              },
+              "placeholder_format": {
+                "type": "string",
+                "const": "Entity.field_name"
+              },
+              "enums": {
+                "type": "object",
+                "required": [
+                  "doc_kind",
+                  "answer_kind",
+                  "apply_mode"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "doc_kind": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "contains": {
+                      "const": "contract"
+                    }
+                  },
+                  "answer_kind": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "allOf": [
+                      {
+                        "contains": {
+                          "const": "short_string"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "long_text"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "boolean"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "enum"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "number"
+                        }
+                      }
+                    ]
+                  },
+                  "apply_mode": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "allOf": [
+                      {
+                        "contains": {
+                          "const": "reference"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "copy_on_first_set"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "prefer_group"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "entities": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "pk",
+                "fields"
+              ],
+              "additionalProperties": true,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[A-Z][A-Za-z0-9]*$"
+                },
+                "optional": {
+                  "type": "boolean"
+                },
+                "pk": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": {
+                    "$ref": "#/$defs/SqlTypeDecl"
+                  }
+                },
+                "fields": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": {
+                    "$ref": "#/$defs/SqlTypeDeclOrFk"
+                  }
+                },
+                "uniques": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "indexes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "$defs": {
+          "SqlTypeDecl": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_]+(?::[A-Za-z0-9_]+(?:_[A-Za-z0-9_]+)*)?(?:\\([^)]+\\))?$"
+          },
+          "SqlTypeDeclOrFk": {
+            "type": "string",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SqlTypeDecl"
+              },
+              {
+                "pattern": "^[A-Za-z0-9_]+(?::[A-Za-z0-9_]+(?:_[A-Za-z0-9_]+)*)?\\s*->\\s*[A-Za-z0-9_]+\\.[A-Za-z0-9_]+$"
+              }
+            ]
+          }
+        }
+      },
+      "MigrationFile": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^migrations/(001_init|002_constraints|003_indexes|004_rollbacks)\\.sql$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "DatabaseUrl": {
+        "type": "string",
+        "pattern": "^(postgres(ql)?|sqlite)://.+$"
+      },
+      "Boolean": {
+        "type": "boolean"
+      },
+      "EncryptionMode": {
+        "type": "string",
+        "enum": [
+          "tde",
+          "column",
+          "tde+column"
+        ]
+      },
+      "KmsKeyAlias": {
+        "type": "string",
+        "minLength": 1
+      },
+      "KmsKeyHandle": {
+        "type": "object",
+        "required": [
+          "provider",
+          "key_id"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          }
+        }
+      },
+      "SecretString": {
+        "type": "string",
+        "minLength": 1
+      },
+      "CaBundle": {
+        "type": "string",
+        "description": "Path to a PEM file or PEM content",
+        "minLength": 1
+      },
+      "TimeoutSeconds": {
+        "type": "integer",
+        "minimum": 1
+      }
+    }
+  }
+}
