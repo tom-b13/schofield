@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://b13.ai/schemas/erd_and_runtime_inputs.schema.json",
-  "title": "Epic A \u2014 ERD and runtime inputs (handbook, no template tables)",
+  "title": "Epic A \u2014 ERD and runtime inputs (handbook, direct placeholder lookup)",
   "type": "object",
   "additionalProperties": false,
   "components": {
@@ -41,24 +41,19 @@
                 ]
               },
               "placeholder_format": {
-                "type": "string"
+                "type": "string",
+                "enum": [
+                  "UPPERCASE_UNDERSCORE"
+                ]
               },
               "enums": {
                 "type": "object",
                 "required": [
-                  "answer_kind",
-                  "apply_mode"
+                  "answer_kind"
                 ],
                 "additionalProperties": false,
                 "properties": {
                   "answer_kind": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "minItems": 1
-                  },
-                  "apply_mode": {
                     "type": "array",
                     "items": {
                       "type": "string"

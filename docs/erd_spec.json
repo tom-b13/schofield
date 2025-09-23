@@ -1,21 +1,16 @@
 {
-  "version": "0.2",
+  "version": "0.3",
   "conventions": {
     "db_case": "snake_case",
     "entities_case": "CamelCase",
     "placeholder_format": "UPPERCASE_UNDERSCORE",
     "enums": {
       "answer_kind": [
-        "short_string",
-        "long_text",
         "boolean",
+        "enum_single",
+        "long_text",
         "number",
-        "enum_single"
-      ],
-      "apply_mode": [
-        "reference",
-        "copy_on_first_set",
-        "prefer_group"
+        "short_string"
       ]
     }
   },
@@ -30,19 +25,6 @@
         "registered_office_address": "text",
         "created_at": "timestamptz:not_null",
         "updated_at": "timestamptz"
-      },
-      "uniques": [],
-      "indexes": []
-    },
-    {
-      "name": "TransformationRule",
-      "pk": {
-        "rule_id": "uuid:not_null"
-      },
-      "fields": {
-        "name": "text:not_null",
-        "description": "text",
-        "expression": "jsonb:not_null"
       }
     },
     {
@@ -54,24 +36,14 @@
         "external_qid": "text",
         "question_text": "text:not_null",
         "answer_type": "enum:answer_kind:not_null",
-        "section": "text",
-        "is_conditional": "boolean:not_null",
-        "parent_question_id": "uuid -> QuestionnaireQuestion.question_id",
-        "version": "int:not_null",
-        "is_active": "boolean:not_null",
         "placeholder_code": "text",
-        "mandatory": "boolean:not_null",
-        "apply_mode": "enum:apply_mode:not_null",
-        "transform_rule_id": "uuid -> TransformationRule.rule_id"
+        "mandatory": "boolean:not_null"
       },
       "uniques": [
         "external_qid",
         "(placeholder_code) where placeholder_code is not null"
       ],
-      "indexes": [
-        "section",
-        "answer_type"
-      ]
+      "indexes": []
     },
     {
       "name": "AnswerOption",
@@ -88,46 +60,6 @@
         "(question_id,value)"
       ],
       "indexes": [
-        "question_id"
-      ]
-    },
-    {
-      "name": "QuestionnaireScreen",
-      "pk": {
-        "screen_id": "uuid:not_null"
-      },
-      "fields": {
-        "name": "text:not_null",
-        "description": "text",
-        "version": "int:not_null",
-        "is_active": "boolean:not_null",
-        "sort_index": "int:not_null"
-      },
-      "indexes": [
-        "sort_index",
-        "is_active"
-      ]
-    },
-    {
-      "name": "QuestionToScreen",
-      "pk": {
-        "q2s_id": "uuid:not_null"
-      },
-      "fields": {
-        "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
-        "screen_id": "uuid:not_null -> QuestionnaireScreen.screen_id",
-        "sort_index": "int:not_null",
-        "required": "boolean:not_null",
-        "visible_when": "jsonb",
-        "display_hint": "text",
-        "input_component": "text",
-        "validation": "jsonb"
-      },
-      "uniques": [
-        "(question_id,screen_id)"
-      ],
-      "indexes": [
-        "(screen_id,sort_index)",
         "question_id"
       ]
     },
@@ -154,7 +86,6 @@
       "fields": {
         "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
         "field_group_id": "uuid:not_null -> FieldGroup.field_group_id",
-        "apply_mode": "enum:apply_mode:not_null",
         "notes": "text"
       },
       "uniques": [
@@ -173,8 +104,7 @@
       "fields": {
         "company_id": "uuid:not_null -> Company.company_id",
         "created_at": "timestamptz:not_null",
-        "created_by": "text",
-        "template_lock": "jsonb"
+        "created_by": "text"
       },
       "indexes": [
         "company_id",
@@ -240,13 +170,13 @@
         "created_at": "timestamptz:not_null"
       },
       "indexes": [
-        "created_at",
-        "response_set_id"
+        "response_set_id",
+        "created_at"
       ]
     }
   ],
   "notes": [
-    "Single handbook template parsed at merge time; no template tables.",
+    "Single handbook template parsed at merge; no template/mapping tables are persisted.",
     "Mapping is on QuestionnaireQuestion.placeholder_code with partial unique index.",
     "answer_kind includes enum_single for single-choice questions."
   ]
