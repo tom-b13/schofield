@@ -1,3 +1,14 @@
+%% EPIC-A ERD (nodes for tests; keep sorted)
+class AnswerOption
+class Company
+class FieldGroup
+class GeneratedDocument
+class GroupValue
+class QuestionToFieldGroup
+class QuestionnaireQuestion
+class Response
+class ResponseSet
+
 erDiagram
   Company ||--o{ ResponseSet : "has"
   ResponseSet ||--o{ Response : "includes"
