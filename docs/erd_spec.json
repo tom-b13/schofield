@@ -1,19 +1,21 @@
 {
-  "version": "1.0",
+  "version": "0.3",
   "conventions": {
     "db_case": "snake_case",
     "entities_case": "CamelCase",
     "placeholder_format": "UPPERCASE_UNDERSCORE",
     "enums": {
-      "answer_kind": ["boolean", "enum_single", "long_text", "number", "short_string"]
+      "answer_kind": [
+        "boolean",
+        "enum_single",
+        "long_text",
+        "number",
+        "short_string"
+      ]
     }
   },
-  "enums": [
-    {"name": "answer_kind", "values": ["boolean", "enum_single", "long_text", "number", "short_string"]}
-  ],
   "entities": [
     {
-<<<<<<< HEAD
       "name": "Company",
       "pk": {
         "company_id": "uuid:not_null"
@@ -48,211 +50,134 @@
       ]
     },
     {
-=======
->>>>>>> 597d03a (auto continue until the end of application development and included a placeholder mechanism to set the number of behavioural and architectural tests thourhg langgraph_state)
       "name": "AnswerOption",
-      "fields": [
-        {"name": "label", "type": "text"},
-        {"name": "option_id", "type": "uuid"},
-        {"name": "question_id", "type": "uuid"},
-        {"name": "sort_index", "type": "int"},
-        {"name": "value", "type": "text"}
-      ],
-      "primary_key": {"name": "pk_answer_option", "columns": ["option_id"]},
-      "foreign_keys": [
-        {"name": "fk_answer_option_question", "columns": ["question_id"], "references": {"entity": "QuestionnaireQuestion", "columns": ["question_id"]}}
-      ],
-      "unique": [
-        {"name": "uq_answer_option_question_value", "columns": ["question_id", "value"]}
+      "pk": {
+        "option_id": "uuid:not_null"
+      },
+      "fields": {
+        "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
+        "value": "text:not_null",
+        "label": "text",
+        "sort_index": "int:not_null"
+      },
+      "uniques": [
+        "(question_id,value)"
       ],
       "indexes": [
-        {"name": "ix_answer_option_question", "columns": ["question_id"]}
+        "question_id"
       ]
-    },
-    {
-      "name": "Company",
-      "fields": [
-        {"name": "company_id", "type": "uuid"},
-        {"name": "created_at", "type": "timestamptz"},
-        {"name": "legal_name", "type": "text", "sensitive": true, "encrypted": true},
-        {"name": "registered_office_address", "type": "text", "sensitive": true, "encrypted": true},
-        {"name": "updated_at", "type": "timestamptz"}
-      ],
-      "primary_key": {"name": "pk_company", "columns": ["company_id"]}
     },
     {
       "name": "FieldGroup",
-      "fields": [
-        {"name": "description", "type": "text"},
-        {"name": "field_group_id", "type": "uuid"},
-        {"name": "group_key", "type": "text"},
-        {"name": "is_active", "type": "boolean"},
-        {"name": "label", "type": "text"}
-      ],
-      "primary_key": {"name": "pk_field_group", "columns": ["field_group_id"]}
-    },
-    {
-      "name": "GeneratedDocument",
-      "fields": [
-        {"name": "created_at", "type": "timestamptz"},
-        {"name": "generated_document_id", "type": "uuid"},
-        {"name": "output_uri", "type": "text", "sensitive": true, "encrypted": true},
-        {"name": "response_set_id", "type": "uuid"}
-      ],
-      "primary_key": {"name": "pk_generated_document", "columns": ["generated_document_id"]},
-      "foreign_keys": [
-        {"name": "fk_generated_document_set", "columns": ["response_set_id"], "references": {"entity": "ResponseSet", "columns": ["response_set_id"]}}
-      ],
-      "indexes": [
-        {"name": "ix_generated_document_created", "columns": ["created_at"]},
-        {"name": "ix_generated_document_set", "columns": ["response_set_id"]}
-      ]
-    },
-    {
-      "name": "GroupValue",
-      "fields": [
-        {"name": "field_group_id", "type": "uuid"},
-        {"name": "group_value_id", "type": "uuid"},
-        {"name": "option_id", "type": "uuid"},
-        {"name": "response_set_id", "type": "uuid"},
-        {"name": "source_question_id", "type": "uuid"},
-        {"name": "updated_at", "type": "timestamptz"},
-        {"name": "value_bool", "type": "boolean"},
-        {"name": "value_json", "type": "jsonb"},
-        {"name": "value_number", "type": "numeric"},
-        {"name": "value_text", "type": "text"}
-      ],
-      "primary_key": {"name": "pk_group_value", "columns": ["group_value_id"]},
-      "foreign_keys": [
-        {"name": "fk_group_value_group", "columns": ["field_group_id"], "references": {"entity": "FieldGroup", "columns": ["field_group_id"]}},
-        {"name": "fk_group_value_option", "columns": ["option_id"], "references": {"entity": "AnswerOption", "columns": ["option_id"]}},
-        {"name": "fk_group_value_set", "columns": ["response_set_id"], "references": {"entity": "ResponseSet", "columns": ["response_set_id"]}},
-        {"name": "fk_group_value_source_q", "columns": ["source_question_id"], "references": {"entity": "QuestionnaireQuestion", "columns": ["question_id"]}}
-      ],
-      "unique": [
-        {"name": "uq_group_value_per_set", "columns": ["response_set_id", "field_group_id"]}
-      ],
-      "indexes": [
-        {"name": "ix_group_value_group", "columns": ["field_group_id"]},
-        {"name": "ix_group_value_set", "columns": ["response_set_id"]},
-        {"name": "ix_group_value_source_q", "columns": ["source_question_id"]}
+      "pk": {
+        "field_group_id": "uuid:not_null"
+      },
+      "fields": {
+        "group_key": "text:not_null",
+        "label": "text:not_null",
+        "description": "text",
+        "is_active": "boolean:not_null"
+      },
+      "uniques": [
+        "group_key"
       ]
     },
     {
       "name": "QuestionToFieldGroup",
-      "fields": [
-        {"name": "field_group_id", "type": "uuid"},
-        {"name": "notes", "type": "text"},
-        {"name": "q2fg_id", "type": "uuid"},
-        {"name": "question_id", "type": "uuid"}
-      ],
-      "primary_key": {"name": "pk_q2fg", "columns": ["q2fg_id"]},
-      "foreign_keys": [
-        {"name": "fk_q2fg_field_group", "columns": ["field_group_id"], "references": {"entity": "FieldGroup", "columns": ["field_group_id"]}},
-        {"name": "fk_q2fg_question", "columns": ["question_id"], "references": {"entity": "QuestionnaireQuestion", "columns": ["question_id"]}}
-      ],
-      "unique": [
-        {"name": "uq_q2fg_question_group", "columns": ["question_id", "field_group_id"]}
+      "pk": {
+        "q2fg_id": "uuid:not_null"
+      },
+      "fields": {
+        "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
+        "field_group_id": "uuid:not_null -> FieldGroup.field_group_id",
+        "notes": "text"
+      },
+      "uniques": [
+        "(question_id,field_group_id)"
       ],
       "indexes": [
-        {"name": "ix_q2fg_field_group", "columns": ["field_group_id"]},
-        {"name": "ix_q2fg_question", "columns": ["question_id"]}
-      ]
-    },
-    {
-      "name": "QuestionnaireQuestion",
-      "fields": [
-        {"name": "answer_type", "type": "answer_kind"},
-        {"name": "external_qid", "type": "text"},
-        {"name": "mandatory", "type": "boolean"},
-        {"name": "placeholder_code", "type": "text"},
-        {"name": "question_id", "type": "uuid"},
-        {"name": "question_text", "type": "text"}
-      ],
-      "primary_key": {"name": "pk_questionnaire_question", "columns": ["question_id"]},
-      "unique": [
-        {"name": "uq_question_external_qid", "columns": ["external_qid"]},
-        {"name": "uq_question_placeholder_code", "columns": ["placeholder_code"], "where": "placeholder_code IS NOT NULL"}
-      ],
-      "indexes": [
-        {"name": "ix_question_answer_type", "columns": ["answer_type"]}
-      ]
-    },
-    {
-      "name": "Response",
-      "fields": [
-        {"name": "option_id", "type": "uuid"},
-        {"name": "question_id", "type": "uuid"},
-        {"name": "response_id", "type": "uuid"},
-        {"name": "response_set_id", "type": "uuid"},
-        {"name": "value_bool", "type": "boolean"},
-        {"name": "value_json", "type": "jsonb", "sensitive": true, "encrypted": true},
-        {"name": "value_number", "type": "numeric"},
-        {"name": "value_text", "type": "text"}
-      ],
-      "primary_key": {"name": "pk_response", "columns": ["response_id"]},
-      "foreign_keys": [
-        {"name": "fk_response_option", "columns": ["option_id"], "references": {"entity": "AnswerOption", "columns": ["option_id"]}},
-        {"name": "fk_response_question", "columns": ["question_id"], "references": {"entity": "QuestionnaireQuestion", "columns": ["question_id"]}},
-        {"name": "fk_response_set", "columns": ["response_set_id"], "references": {"entity": "ResponseSet", "columns": ["response_set_id"]}}
-      ],
-      "unique": [
-        {"name": "uq_response_set_question", "columns": ["response_set_id", "question_id"]}
-      ],
-      "indexes": [
-        {"name": "ix_response_option", "columns": ["option_id"]},
-        {"name": "ix_response_question", "columns": ["question_id"]},
-        {"name": "ix_response_set", "columns": ["response_set_id"]}
+        "question_id",
+        "field_group_id"
       ]
     },
     {
       "name": "ResponseSet",
-      "fields": [
-        {"name": "company_id", "type": "uuid"},
-        {"name": "created_at", "type": "timestamptz"},
-        {"name": "created_by", "type": "text"},
-        {"name": "response_set_id", "type": "uuid"}
+      "pk": {
+        "response_set_id": "uuid:not_null"
+      },
+      "fields": {
+        "company_id": "uuid:not_null -> Company.company_id",
+        "created_at": "timestamptz:not_null",
+        "created_by": "text"
+      },
+      "indexes": [
+        "company_id",
+        "created_at"
+      ]
+    },
+    {
+      "name": "Response",
+      "pk": {
+        "response_id": "uuid:not_null"
+      },
+      "fields": {
+        "response_set_id": "uuid:not_null -> ResponseSet.response_set_id",
+        "question_id": "uuid:not_null -> QuestionnaireQuestion.question_id",
+        "value_json": "jsonb:not_null",
+        "value_text": "text",
+        "value_number": "numeric",
+        "value_bool": "boolean",
+        "option_id": "uuid -> AnswerOption.option_id"
+      },
+      "uniques": [
+        "(response_set_id,question_id)"
       ],
-      "primary_key": {"name": "pk_response_set", "columns": ["response_set_id"]},
-      "foreign_keys": [
-        {"name": "fk_response_set_company", "columns": ["company_id"], "references": {"entity": "Company", "columns": ["company_id"]}}
+      "indexes": [
+        "response_set_id",
+        "question_id",
+        "option_id"
+      ]
+    },
+    {
+      "name": "GroupValue",
+      "pk": {
+        "group_value_id": "uuid:not_null"
+      },
+      "fields": {
+        "response_set_id": "uuid:not_null -> ResponseSet.response_set_id",
+        "field_group_id": "uuid:not_null -> FieldGroup.field_group_id",
+        "value_json": "jsonb:not_null",
+        "value_text": "text",
+        "value_number": "numeric",
+        "value_bool": "boolean",
+        "option_id": "uuid -> AnswerOption.option_id",
+        "source_question_id": "uuid -> QuestionnaireQuestion.question_id",
+        "updated_at": "timestamptz:not_null"
+      },
+      "uniques": [
+        "(response_set_id,field_group_id)"
+      ],
+      "indexes": [
+        "response_set_id",
+        "field_group_id",
+        "source_question_id"
+      ]
+    },
+    {
+      "name": "GeneratedDocument",
+      "pk": {
+        "generated_document_id": "uuid:not_null"
+      },
+      "fields": {
+        "response_set_id": "uuid:not_null -> ResponseSet.response_set_id",
+        "output_uri": "text:not_null",
+        "created_at": "timestamptz:not_null"
+      },
+      "indexes": [
+        "response_set_id",
+        "created_at"
       ]
     }
-  ],
-  "encrypted_fields": [
-    "Company.legal_name",
-    "Company.registered_office_address",
-    "Response.value_json",
-    "GeneratedDocument.output_uri"
-  ],
-  "constraints_applied": [
-    "fk_generated_document_set",
-    "fk_answer_option_question",
-    "fk_group_value_group",
-    "fk_group_value_option",
-    "fk_group_value_set",
-    "fk_group_value_source_q",
-    "fk_q2fg_field_group",
-    "fk_q2fg_question",
-    "fk_response_option",
-    "fk_response_question",
-    "fk_response_set",
-    "fk_response_set_company",
-    "pk_answer_option",
-    "pk_company",
-    "pk_field_group",
-    "pk_generated_document",
-    "pk_group_value",
-    "pk_q2fg",
-    "pk_questionnaire_question",
-    "pk_response",
-    "pk_response_set",
-    "uq_answer_option_question_value",
-    "uq_group_value_per_set",
-    "uq_q2fg_question_group",
-    "uq_question_external_qid",
-    "uq_question_placeholder_code",
-    "uq_response_set_question"
   ],
   "notes": [
     "Single handbook template parsed at merge; no template/mapping tables are persisted.",
