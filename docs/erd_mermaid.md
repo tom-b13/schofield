@@ -7,7 +7,7 @@ erDiagram
   %% (PolicyTemplate optionally exists in extended models)
 
   QuestionnaireQuestion ||--o{ AnswerOption : "offers"
-  QuestionnaireQuestion ||--o{ QuestionnaireQuestion : "parents_via_parent_question_id"
+  QuestionnaireQuestion ||--o{ QuestionnaireQuestion : "parents"
   QuestionnaireQuestion }o--o{ TemplatePlaceholder : "maps_via_QuestionToPlaceholder"
 
   %% === NEW: Screen-driven UI model ===
