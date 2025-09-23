@@ -37,13 +37,17 @@
         "question_text": "text:not_null",
         "answer_type": "enum:answer_kind:not_null",
         "placeholder_code": "text",
-        "mandatory": "boolean:not_null"
+        "mandatory": "boolean:not_null",
+        "parent_question_id": "uuid",
+        "visible_if_value": "text"
       },
       "uniques": [
         "external_qid",
         "(placeholder_code) where placeholder_code is not null"
       ],
-      "indexes": []
+      "indexes": [
+        "parent_question_id"
+      ]
     },
     {
       "name": "AnswerOption",

@@ -10,6 +10,7 @@ DROP INDEX IF EXISTS ix_response_set;
 DROP INDEX IF EXISTS ix_answer_option_question;
 DROP INDEX IF EXISTS ix_question_answer_type;
 DROP INDEX IF EXISTS uq_question_placeholder_code;
+DROP INDEX IF EXISTS ix_question_parent_question_id;
 
 ALTER TABLE group_value
     DROP CONSTRAINT IF EXISTS fk_group_value_source_q,
@@ -37,6 +38,7 @@ ALTER TABLE answer_option
     DROP CONSTRAINT IF EXISTS fk_answer_option_question;
 
 ALTER TABLE questionnaire_question
+    DROP CONSTRAINT IF EXISTS fk_question_parent_question,
     DROP CONSTRAINT IF EXISTS uq_question_external_qid;
 
 DROP TABLE IF EXISTS generated_document;
