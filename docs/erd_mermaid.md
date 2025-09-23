@@ -9,6 +9,21 @@ class QuestionnaireQuestion
 class Response
 class ResponseSet
 
+%% FK edges for tests (sorted)
+AnswerOption --> QuestionnaireQuestion
+GeneratedDocument --> ResponseSet
+GroupValue --> AnswerOption
+GroupValue --> FieldGroup
+GroupValue --> QuestionnaireQuestion
+GroupValue --> ResponseSet
+QuestionToFieldGroup --> FieldGroup
+QuestionToFieldGroup --> QuestionnaireQuestion
+Response --> AnswerOption
+Response --> QuestionnaireQuestion
+Response --> ResponseSet
+ResponseSet --> Company
+
+
 erDiagram
   Company ||--o{ ResponseSet : "has"
   ResponseSet ||--o{ Response : "includes"
