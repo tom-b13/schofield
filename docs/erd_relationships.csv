@@ -11,3 +11,4 @@ Response,AnswerOption
 Response,QuestionnaireQuestion
 Response,ResponseSet
 ResponseSet,Company
+QuestionnaireQuestion,QuestionnaireQuestion
