@@ -1,76 +1,83 @@
-1) Objective
+# Functional Outline
 
-Establish a robust relational schema to store questionnaire definitions, answers, mappings, placeholders, templates, and generated documents, with database-level encryption to protect all sensitive data.
+## 1) Objective
 
-2) In-scope tables
+Establish a robust relational schema to store questionnaire definitions, answers, **mappings via `QuestionnaireQuestion.placeholder_code`**, and generated documents—while enforcing encryption in transit and supporting encryption at rest for sensitive data.
 
-Company, QuestionnaireQuestion, AnswerOption, ContractTemplate, TemplatePlaceholder, TransformationRule, QuestionToPlaceholder, ResponseSet, Response, optional ComputedPlaceholderValue, GeneratedDocument, FieldGroup, QuestionToFieldGroup, GroupValue.
-All field definitions, PK/FK, uniques, and indexes are described in ./docs/erd_spec.json.
+---
 
-3) Goals
+## 2) In-scope tables
 
-Migrations run from a clean state to produce all tables with PKs, FKs, uniques, and indexes as defined in the ERD spec.
+**Company, QuestionnaireQuestion, AnswerOption, ResponseSet, Response, GeneratedDocument, FieldGroup, QuestionToFieldGroup, GroupValue.**  
+*All field definitions, PK/FK, uniques, and indexes are described in `./docs/erd_spec.json`.*
 
-All data at rest is encrypted:
+Notes:
 
-Disk-level encryption: enabled via PostgreSQL’s pgcrypto or cloud-managed encryption (e.g., AWS KMS, Azure TDE, GCP CMEK).
+- `QuestionnaireQuestion` includes: `placeholder_code` (nullable), `mandatory` (bool, default `false`).  
+- A **partial unique index** enforces that `placeholder_code` is unique when present.  
+- `answer_kind` enum includes: `short_string`, `long_text`, `boolean`, `number`, **`enum_single`**.
 
-Column-level encryption: applied to sensitive fields (Company.legal_name, Company.registered_office_address, Response.value_json, typed helper columns, GeneratedDocument.output_uri).
+---
 
-Application can insert and retrieve rows without schema errors.
+## 3) Goals
 
-A join from Response → QuestionToPlaceholder → TemplatePlaceholder correctly resolves values for all placeholders.
+- Migrations run from a clean state to produce all tables with PKs, FKs, uniques, and indexes as defined in the ERD spec.  
+- Enumerations are present and correct, including **`enum_single`** for single-choice questions (backed by `AnswerOption`).  
+- The application can insert and retrieve rows without schema errors.
 
-Constraints enforce integrity (one response per question per submission, no duplicate placeholders).
+**Constraints enforce integrity:**
+- One response per question per submission: `UNIQUE(response_set_id, question_id)` on `Response`.  
+- No duplicate placeholders: **partial unique** on `QuestionnaireQuestion(placeholder_code)` where not null.  
+- Group invariants:  
+  - `UNIQUE(response_set_id, field_group_id)` on `GroupValue`.  
+  - `UNIQUE(question_id, field_group_id)` on `QuestionToFieldGroup`.  
+- For `enum_single`:  
+  - At least one `AnswerOption` exists for the question.  
+  - `UNIQUE(question_id, value)` on `AnswerOption`.  
+  - If a response uses `enum_single`, its `option_id` references an `AnswerOption` for the same question.
 
-ERD export (./docs/erd_mermaid.md, ./docs/erd_relationships.csv) matches the schema.
+- ERD export (`./docs/erd_mermaid.md`, `./docs/erd_relationships.csv`) matches the schema.
 
-4) Deliverables
+---
 
-SQL migration files (types, tables, constraints, indexes).
+## 4) Deliverables
 
-Updated ERD spec JSON (./docs/erd_spec.json) as the normative definition.
+- SQL migration files (types, tables, constraints, indexes), including base `001_init.sql`–`004_rollbacks.sql` and patch `005_add_enum_single.sql`.  
+- Updated ERD spec JSON (`./docs/erd_spec.json`) as the normative definition.  
+- Updated Mermaid ERD (`./docs/erd_mermaid.md`) and relationships CSV (`./docs/erd_relationships.csv`).  
+- Migration rollback scripts.  
+- Encryption documentation (TLS enforcement and at-rest guidance).
 
-Updated Mermaid ERD (./docs/erd_mermaid.md) and relationships CSV (./docs/erd_relationships.csv).
+---
 
-Migration rollback scripts.
+## 5) Non-functional requirements
 
-Encryption documentation: instructions on key management, rotation, and handling of encrypted columns.
-
-5) Non-functional requirements
-
-Encryption at rest: all database files encrypted by default (managed DB recommended).
-
-Encryption in transit: TLS enforced on all DB connections.
-
-Column-level encryption: sensitive fields encrypted with keys managed by a KMS.
-
-Performance: indexes compatible with encrypted fields where needed (e.g., deterministic encryption for lookup columns, blind indexing if full encryption is used).
-
-Traceability: every placeholder value still traceable back to its source question and transformation rule.
-
-Extensibility: schema supports new templates and policies without structural changes.
+- **Encryption at rest**: database files encrypted by default (managed DB recommended).  
+- **Encryption in transit**: TLS enforced on all DB connections.  
+- **Performance**: indexes chosen for primary read paths (question → response; `placeholder_code` lookups).  
+- **Determinism & repeatability**: migrations are ordered and idempotent; rollbacks reverse cleanly.  
+- **Traceability**: each placeholder code is uniquely attributable to a single source question.
 
 # 1. Scope
 
 ## 1.1 Purpose  
-Establish a secure and robust relational data model for storing questionnaire-related information while ensuring all sensitive data is encrypted.
+Establish a secure and robust relational data model for storing questionnaire-related information, including answers and mappings to document placeholders, while ensuring sensitive data is protected.
 
 ## 1.2 Inclusions  
-- Creation of relational tables for questionnaires, answers, templates, and documents.
-- Implementation of primary and foreign key constraints to enforce data integrity.
-- Encryption of sensitive data at both column and disk levels.
-- Provision of SQL migration files, rollback scripts, and updated ERD documentation.
-- Ensuring application compatibility for data insertion and retrieval without schema errors.
-- Support for join operations to resolve placeholder values correctly.
+- Creation of relational tables for questionnaires, answers, response sets, generated documents, field groups, and group values.  
+- Implementation of primary keys, foreign keys, **uniqueness (including a partial unique on `QuestionnaireQuestion.placeholder_code`)**, and indexes to enforce integrity and performance.  
+- Encryption at rest and **TLS in transit**; support for column-level encryption flags for sensitive fields as specified in the ERD.  
+- Provision of SQL migration files, rollback scripts, and updated ERD documentation (JSON, Mermaid, relationships CSV).  
+- Ensuring application compatibility for data insertion and retrieval without schema errors.  
+- **Direct placeholder resolution** via lookup of `placeholder_code` on questions (placeholders are parsed from the single handbook at merge time).
 
 ## 1.3 Exclusions  
-- Changes to application logic unrelated to data handling.
-- Non-relational data storage solutions or structures.
+- Changes to application logic unrelated to data handling.  
+- Non-relational data storage solutions or structures.  
 - Any development beyond the defined encryption standards and constraints.
 
 ## 1.4 Context  
-This story is integral to the overall architecture of the questionnaire management system, interacting with core database functionalities through PostgreSQL. It lays the groundwork for secure data handling practices, alongside necessary integrations with external services for key management.
+This story establishes the database foundation for the questionnaire management system on PostgreSQL. Placeholders are **not** stored as separate template entities; instead, each question may carry a `placeholder_code` used to populate the handbook during merge. Where column-level encryption is enabled, keys may be managed by an external KMS; all database connections must use TLS.
 
 ## 2.2. EARS Functionality
 
@@ -78,17 +85,12 @@ This story is integral to the overall architecture of the questionnaire manageme
 
 * **U1** The system will create a relational schema to persist questionnaire definitions.
 * **U2** The system will create a relational schema to persist questionnaire answers.
-* **U3** The system will create a relational schema to persist mappings between questions and placeholders.
-* **U4** The system will create a relational schema to persist placeholders defined in templates.
-* **U5** The system will create a relational schema to persist versioned templates.
-* **U6** The system will create a relational schema to persist generated documents.
-* **U7** The system will create a relational schema to persist transformation rules.
-* **U8** The system will create a relational schema to persist response sets as submissions.
-* **U9** The system will create a relational schema to persist computed placeholder values as a cache.
-* **U10** The system will support column-level encryption flags for sensitive fields as specified in the ERD.
-* **U11**  The system will create a relational schema to persist field groups that represent shared values across questions.
-* **U12** The system will create a relational schema to persist group values per response set and link them to field groups and (optionally) source questions.
-(Place these after U10.)
+* **U3** The system will create a relational schema to persist mappings by storing a `placeholder_code` on questions, with uniqueness enforced when present.
+* **U4** The system will create a relational schema to persist response sets as submissions.
+* **U5** The system will create a relational schema to persist generated documents.
+* **U6** The system will create a relational schema to persist field groups that represent shared values across questions.
+* **U7** The system will create a relational schema to persist group values per response set and link them to field groups and (optionally) source questions.
+* **U8** The system will support column-level encryption flags for sensitive fields as specified in the ERD.
 
 ### 2.2.2 Event-driven requirements
 
@@ -97,29 +99,27 @@ This story is integral to the overall architecture of the questionnaire manageme
 * **E3** When column-level encryption is enabled, the system will apply encryption to fields marked as sensitive during migration.
 * **E4** When a database connection is initiated, the system will enforce TLS according to configuration.
 * **E5** When a row is inserted, the system will validate the value type against the declared schema.
-* **E6** When a join is executed from Response to QuestionToPlaceholder to TemplatePlaceholder, the system will resolve values for placeholders.
+* **E6** When placeholder values are resolved, the system will perform a direct lookup by `placeholder_code` on questions (unique when present) to source the value.
 * **E7** When placeholder values are resolved, the system will return the resolved values to the requesting component.
 * **E8** When rollback migrations are executed, the system will drop objects created by the corresponding migration in reverse order.
-* **E9** When migrations are executed, the system will create unique constraints for (response_set_id, field_group_id) on GroupValue and (question_id, field_group_id) on QuestionToFieldGroup.
-* **E10** When migrations are executed, the system will create supporting indexes on foreign keys for FieldGroup, QuestionToFieldGroup, and GroupValue.
-(These mirror E1–E2 but make the grouping invariants explicit.)
+* **E9** When migrations are executed, the system will create a unique constraint for `(response_set_id, field_group_id)` on `GroupValue` and for `(question_id, field_group_id)` on `QuestionToFieldGroup`.
+* **E10** When migrations are executed, the system will create supporting indexes on foreign keys for `FieldGroup`, `QuestionToFieldGroup`, and `GroupValue`.
 
 ### 2.2.3 State-driven requirements
 
 * **S1** While data is at rest, the system will ensure that database files are encrypted by default.
 * **S2** While a TLS session is established, the system will encrypt data in transit for all database connections.
-* **S3** While sensitive fields are accessed, the system will use keys managed by a KMS for decryption and access control.
-* **S4** While joins are executed, the system will ensure deterministic results for repeated operations with the same inputs.
+* **S3** While sensitive fields are accessed, the system will use keys managed by a KMS for decryption and access control (when enabled).
+* **S4** While lookups are executed, the system will ensure deterministic results for repeated operations with the same inputs.
 
 ### 2.2.4 Optional-feature requirements
 
 * **O1** Where new templates are introduced, the system will integrate them without requiring schema changes.
 * **O2** Where new policies are introduced, the system will integrate them without requiring schema changes.
-* **O3** Where the cache is enabled, the system will materialise computed placeholder values per response set.
 
 ### 2.2.5 Unwanted-behaviour requirements
 
-* **N1** If duplicate placeholders are attempted for a template version, the system will prevent their persistence.
+* **N1** If duplicate `placeholder_code` values are attempted (non-null), the system will prevent their persistence.
 * **N2** If more than one response per question per submission is attempted, the system will reject the operation.
 * **N3** If an unsupported data type is submitted, the system will reject the operation.
 * **N4** If encryption keys are unavailable or invalid, the system will prevent access to encrypted data.
@@ -128,30 +128,31 @@ This story is integral to the overall architecture of the questionnaire manageme
 
 ### 2.2.6 Step Index
 
-* **STEP-1** Objective → U1, U2, U3, U4, U5, U6, U7, U8, U9, U10
-* **STEP-2** In-scope tables → U1, U2, U3, U4, U5, U6, U7, U8, U9, U10
+* **STEP-1** Objective → U1, U2, U3, U4, U5, U6, U7, U8
+* **STEP-2** In-scope tables → U1, U2, U3, U4, U5, U6, U7, U8
 * **STEP-3** Goals → E1, E2, E3, E4, E5, E6, E7, E8, S1, S2, S3, S4
-* **STEP-4** Deliverables → O1, O2, O3
+* **STEP-4** Deliverables → O1, O2
 * **STEP-5** Non-functional requirements → N1, N2, N3, N4, N5, N6
 
-| Field                             | Description                                                                         | Type          | Schema / Reference                                     | Notes                                                    | Pre-Conditions                                                                                                                            | Origin   |
-| --------------------------------- | ----------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| docs/erd\_spec.json               | Authoritative ERD spec (entities, fields, PK/FK, uniques, indexes, encrypted flags) | file json     | ./docs/erd\_spec.json                                  | None                                                     | File exists and is readable; Content parses as valid JSON; Content conforms to the referenced schema                                      | acquired |
-| docs/erd\_mermaid.md              | Human-readable ERD diagram text used for parity checks                              | file markdown | ./docs/erd\_mermaid.md                                 | None                                                     | File exists and is readable; Content is UTF-8 text; Diagram blocks are syntactically valid Mermaid                                        | acquired |
-| docs/erd\_relationships.csv       | Machine-readable relationships list for cross-checks                                | file csv      | ./docs/erd\_relationships.csv                          | None                                                     | File exists and is readable; Content parses as CSV; Columns match expected headers                                                        | acquired |
-| migrations/001\_init.sql          | Base migration that creates initial schema and enums                                | file sql      | #/components/schemas/MigrationFile                     | First migration in sequence                              | File exists and is readable; File parses as valid SQL; Statements execute without error                                                   | acquired |
-| migrations/002\_constraints.sql   | Migration that adds PK, FK, uniques, check constraints                              | file sql      | #/components/schemas/MigrationFile                     | Executed after init                                      | File exists and is readable; File parses as valid SQL; Statements execute without error                                                   | acquired |
-| migrations/003\_indexes.sql       | Migration that adds indexes for joins and performance                               | file sql      | #/components/schemas/MigrationFile                     | Executed after constraints                               | File exists and is readable; File parses as valid SQL; Statements execute without error                                                   | acquired |
-| migrations/004\_rollbacks.sql     | Rollback migration scripts for schema teardown                                      | file sql      | #/components/schemas/MigrationFile                     | Used for reversibility testing                           | File exists and is readable; File parses as valid SQL; Statements execute without error                                                   | acquired |
-| config/database.url               | JDBC/DSN used by migration runner                                                   | string        | #/components/schemas/DatabaseUrl                       | Example: `postgresql://user@host:5432/db`                | Field is required and must be provided; Value must be a valid DSN; Hostname must resolve                                                  | provided |
-| config/database.ssl.required      | Toggle to enforce TLS for DB connections                                            | boolean       | #/components/schemas/Boolean                           | Default true                                             | Field is required and must be provided; Value must be boolean; If true, TLS materials must be available                                   | provided |
-| config/encryption.mode            | Encryption mode selection (e.g., tde, column)                                       | string        | #/components/schemas/EncryptionMode                    | Allowed: `tde`, `column`, `tde+column`                   | Field is required and must be provided; Value must be one of allowed set                                                                  | provided |
-| config/kms.key\_alias             | Logical KMS key identifier for column encryption                                    | string        | #/components/schemas/KmsKeyAlias                       | Example: `alias/contracts-app`                           | Field is required when encryption.mode includes `column`; Alias must exist in KMS                                                         | provided |
-| kms.get\_key(alias)               | KMS returns handle/material for encryption                                          | object        | #/components/schemas/KmsKeyHandle                      | Provider: KMS service                                    | Call must complete without error; Return value must match the declared schema; Return value must be treated as immutable within this step | returned |
-| secrets/db\_password              | Secret Manager provides DB password                                                 | string        | #/components/schemas/SecretString                      | Provider: Secret Manager                                 | Call must complete without error; Return value must match the declared schema; Secret must not be logged                                  | returned |
-| truststore/ca\_bundle.pem         | CA bundle for TLS verification                                                      | file pem      | #/components/schemas/CaBundle                          | May be OS bundle or project file                         | File exists and is readable; Content parses as valid PEM; Certificate dates are within validity                                           | acquired |
-| policy/encrypted\_fields          | List of columns marked “encrypted: true” in ERD                                     | list\[string] | ./docs/erd\_spec.json#/entities/\*/fields/\*/encrypted | Derived from ERD; used to assert column-level encryption | File exists and is readable; JSON pointers resolve; Each field exists in the target entity                                                | acquired |
-| config/migration.timeout\_seconds | Execution timeout per migration                                                     | integer       | #/components/schemas/TimeoutSeconds                    | None                                                     | Field is required and must be provided; Value must be integer > 0                                                                         | provided |
+| Field                                 | Description                                                                         | Type          | Schema / Reference                                   | Notes                                                                                                                              | Pre-Conditions                                                                                                                            | Origin   |
+| ------------------------------------- | ----------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| docs/erd\_spec.json                   | Authoritative ERD spec (entities, fields, PK/FK, uniques, indexes, encrypted flags) | file json     | ./docs/erd\_spec.json                                | None                                                                                                                               | File exists and is readable; Content parses as valid JSON; Content conforms to the referenced schema                                      | acquired |
+| docs/erd\_mermaid.md                  | Human-readable ERD diagram text used for parity checks                              | file markdown | ./docs/erd\_mermaid.md                               | None                                                                                                                               | File exists and is readable; Content is UTF-8 text; Diagram blocks are syntactically valid Mermaid                                        | acquired |
+| docs/erd\_relationships.csv           | Machine-readable relationships list for cross-checks                                | file csv      | ./docs/erd\_relationships.csv                        | None                                                                                                                               | File exists and is readable; Content parses as CSV; Columns match expected headers                                                        | acquired |
+| migrations/001\_init.sql              | Base migration that creates initial schema and enums                                | file sql      | #/components/schemas/MigrationFile                   | First migration in sequence                                                                                                        | File exists and is readable; File parses as valid SQL; Statements execute without error                                                   | acquired |
+| migrations/002\_constraints.sql       | Migration that adds PK, FK, uniques, check constraints                              | file sql      | #/components/schemas/MigrationFile                   | Executed after init; **Includes partial unique on `QuestionnaireQuestion(placeholder_code)` WHERE `placeholder_code IS NOT NULL`** | File exists and is readable; File parses as valid SQL; Statements execute without error                                                   | acquired |
+| migrations/003\_indexes.sql           | Migration that adds indexes for **lookups and performance**                         | file sql      | #/components/schemas/MigrationFile                   | Executed after constraints                                                                                                         | File exists and is readable; File parses as valid SQL; Statements execute without error                                                   | acquired |
+| migrations/005\_add\_enum\_single.sql | Patch migration that adds `enum_single` to `answer_kind`                            | file sql      | #/components/schemas/MigrationFile                   | Executed after indexes                                                                                                             | File exists and is readable; File parses as valid SQL; Statements execute without error                                                   | acquired |
+| migrations/004\_rollbacks.sql         | Rollback migration scripts for schema teardown                                      | file sql      | #/components/schemas/MigrationFile                   | Used for reversibility testing                                                                                                     | File exists and is readable; File parses as valid SQL; Statements execute without error                                                   | acquired |
+| config/database.url                   | JDBC/DSN used by migration runner                                                   | string        | #/components/schemas/DatabaseUrl                     | Example: `postgresql://user@host:5432/db`                                                                                          | Field is required and must be provided; Value must be a valid DSN; Hostname must resolve                                                  | provided |
+| config/database.ssl.required          | Toggle to enforce TLS for DB connections                                            | boolean       | #/components/schemas/Boolean                         | Default true                                                                                                                       | Field is required and must be provided; Value must be boolean; If true, TLS materials must be available                                   | provided |
+| config/encryption.mode                | Encryption mode selection (e.g., tde, column)                                       | string        | #/components/schemas/EncryptionMode                  | Allowed: `tde`, `column`, `tde+column`                                                                                             | Field is required and must be provided; Value must be one of allowed set                                                                  | provided |
+| config/kms.key\_alias                 | Logical KMS key identifier for column encryption                                    | string        | #/components/schemas/KmsKeyAlias                     | Example: `alias/contracts-app`                                                                                                     | Field is required when encryption.mode includes `column`; Alias must exist in KMS                                                         | provided |
+| kms.get\_key(alias)                   | KMS returns handle/material for encryption                                          | object        | #/components/schemas/KmsKeyHandle                    | Provider: KMS service                                                                                                              | Call must complete without error; Return value must match the declared schema; Return value must be treated as immutable within this step | returned |
+| secrets/db\_password                  | Secret Manager provides DB password                                                 | string        | #/components/schemas/SecretString                    | Provider: Secret Manager                                                                                                           | Call must complete without error; Return value must match the declared schema; Secret must not be logged                                  | returned |
+| truststore/ca\_bundle.pem             | CA bundle for TLS verification                                                      | file pem      | #/components/schemas/CaBundle                        | May be OS bundle or project file                                                                                                   | File exists and is readable; Content parses as valid PEM; Certificate dates are within validity                                           | acquired |
+| policy/encrypted\_fields              | List of columns marked “encrypted: true” in ERD                                     | list\[string] | ./docs/erd\_spec.json#/entities/*/fields/*/encrypted | Derived from ERD; used to assert column-level encryption                                                                           | File exists and is readable; JSON pointers resolve; Each field exists in the target entity                                                | acquired |
+| config/migration.timeout\_seconds     | Execution timeout per migration                                                     | integer       | #/components/schemas/TimeoutSeconds                  | None                                                                                                                               | Field is required and must be provided; Value must be integer > 0                                                                         | provided |
 
 | Field                                                      | Description                                            | Type            | Schema / Reference                                                                                                                   | Notes                                                  | Post-Conditions                                                                                                                                                                                                 |
 | ---------------------------------------------------------- | ------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -382,11 +383,11 @@ If a journal is persisted, each entry must include `filename` (project-relative 
 **6.1.14 Deterministic Ordering of Collections**
 Collections representing entities, fields, constraints, indexes, enums, and journal entries must define a deterministic ordering key (name or sequence) and consistently apply it.
 
-**6.1.15 One-to-One Mapping Artefacts Are Present**
-The schema must include the artefacts necessary to support the join path `Response → QuestionToPlaceholder → TemplatePlaceholder` (tables and keys present).
+**6.1.15 Placeholder Lookup Artefacts Are Present**
+The schema must include the artefacts necessary to support **direct placeholder resolution by lookup** on `QuestionnaireQuestion.placeholder_code` (e.g., presence of the field and uniqueness when present).
 
 **6.1.16 Constraint Rules Enforced Structurally**
-The model must declare structures that enable “one response per question per submission” and “no duplicate placeholders per template version”.
+The model must declare structures that enable “one response per question per submission” and “**no duplicate placeholder codes**”.
 
 **6.1.17 TLS Requirement Exposed as Configuration**
 The architecture must surface a boolean configuration to enforce TLS for database connections.
@@ -403,28 +404,22 @@ Rollback migration scripts must be present and organised to reverse prior migrat
 **6.1.21 Generated Document Storage is Modelled**
 The schema must include a structure for generated documents with a stable identifier and output URI.
 
-**6.1.22 Transformation Rules are First-Class**
-Transformation rules must exist as a first-class schema component separate from questions, placeholders, and responses.
+**6.1.22 Deterministic Lookup Contracts Are Encoded in Keys**
+Keys and indexes necessary to guarantee **deterministic lookup** for repeated inputs must be explicitly defined on the participating tables (e.g., partial unique on `QuestionnaireQuestion.placeholder_code`, supporting indexes on `Response`).
 
-**6.1.23 Cache of Computed Placeholder Values is Modelled (Optional)**
-If caching is enabled, a table for computed placeholder values must exist distinct from responses and placeholders.
-
-**6.1.24 Deterministic Join Contracts Are Encoded in Keys**
-Keys and indexes necessary to guarantee deterministic join evaluation for repeated inputs must be explicitly defined on the participating tables.
-
-**6.1.25 Encryption at Rest Policy is Traceable to Columns**
+**6.1.23 Encryption at Rest Policy is Traceable to Columns**
 For every field marked encrypted in the model, there must be a corresponding entry in `outputs.encrypted_fields[]`.
 
-**6.1.26 Constraint/Index Definitions Live With Schema, Not Code Paths**
+**6.1.24 Constraint/Index Definitions Live With Schema, Not Code Paths**
 All PK/FK/UNIQUE/CHECK constraints and indexes must be declared in schema/migration artefacts rather than embedded in application code.
 
-**6.1.27 Placeholder Uniqueness Encoded as a Constraint**
-Template placeholder uniqueness per template version must be enforced via a declared unique constraint rather than runtime checks.
+**6.1.25 Placeholder Uniqueness Encoded as a Constraint**
+**Placeholder code** uniqueness must be enforced via a declared **partial unique** constraint on `QuestionnaireQuestion.placeholder_code` (non-null values only), rather than runtime checks.
 
-**6.1.28 One-Response-Per-Question-Per-Submission Encoded as a Constraint**
+**6.1.26 One-Response-Per-Question-Per-Submission Encoded as a Constraint**
 The “one response per question per submission” rule must be enforced by a composite unique constraint across the response table’s key fields.
 
-**6.1.29 Deterministic Export Parity With ERD**
+**6.1.27 Deterministic Export Parity With ERD**
 A generated ERD parity export must structurally correspond to the ERD spec (same entities and relationships represented), as static artefacts alongside the schema.
 
 ## 6.2 Happy Path Contractual Acceptance Criteria
@@ -445,49 +440,49 @@ A generated ERD parity export must structurally correspond to the ERD spec (same
 *Given* an entity with a primary key,
 *When* migrations are applied,
 *Then* the entity must expose its `primary_key.columns[]`.
-**Reference:** U3, E2; `outputs.entities[].primary_key.columns[]`
+**Reference:** U1, E2; `outputs.entities[].primary_key.columns[]`
 
 **6.2.1.4 Foreign Key Constraints Are Present**
 *Given* related entities exist,
 *When* migrations apply constraints,
 *Then* each foreign key must be declared with name, columns, and referenced entity and columns.
-**Reference:** U3, E2; `outputs.entities[].foreign_keys[]`
+**Reference:** U1, E2; `outputs.entities[].foreign_keys[]`
 
 **6.2.1.5 Unique Constraints Are Present**
 *Given* a schema requires uniqueness,
 *When* migrations apply constraints,
 *Then* unique constraints must be externally listed by name and columns.
-**Reference:** U3, E2; `outputs.entities[].unique_constraints[]`
+**Reference:** U1, E2; `outputs.entities[].unique_constraints[]`
 
 **6.2.1.6 Indexes Are Present**
 *Given* entities are migrated,
 *When* indexes are required,
 *Then* each index must be externally observable with name and columns.
-**Reference:** U3, E2; `outputs.entities[].indexes[]`
+**Reference:** U1, E2; `outputs.entities[].indexes[]`
 
 **6.2.1.7 Enums Are Externally Declared**
 *Given* enums are defined in the schema,
 *When* migrations apply,
 *Then* enums must be visible with their declared name and values.
-**Reference:** U3, E1; `outputs.enums[].name`, `outputs.enums[].values[]`
+**Reference:** U1, E1; `outputs.enums[].name`, `outputs.enums[].values[]`
 
 **6.2.1.8 Encrypted Fields Are Explicitly Flagged**
 *Given* a field is sensitive,
 *When* migrations apply encryption,
 *Then* the field must expose an `encrypted` flag.
-**Reference:** U4, E3, S3; `outputs.entities[].fields[].encrypted`
+**Reference:** U8, E3, S3; `outputs.entities[].fields[].encrypted`
 
 **6.2.1.9 Global Encrypted Fields Manifest Exists**
 *Given* fields are encrypted,
 *When* outputs are materialised,
 *Then* a global manifest must list all encrypted fields.
-**Reference:** U4, S1, S3; `outputs.encrypted_fields[]`
+**Reference:** U8, S1, S3; `outputs.encrypted_fields[]`
 
 **6.2.1.10 Constraints Are Listed Globally**
 *Given* constraints are applied,
 *When* outputs are materialised,
 *Then* a global list of constraints must exist.
-**Reference:** U3, E2; `outputs.constraints_applied[]`
+**Reference:** U1, E2; `outputs.constraints_applied[]`
 
 **6.2.1.11 Migration Journal Entries Include Filenames**
 *Given* migrations are applied,
@@ -508,22 +503,22 @@ A generated ERD parity export must structurally correspond to the ERD spec (same
 **Reference:** N2; `outputs.entities[].unique_constraints[]`
 
 **6.2.1.14 Duplicate Placeholders Are Rejected**
-*Given* placeholders are defined in templates,
-*When* outputs are persisted,
-*Then* each placeholder must be unique per template version.
-**Reference:** N1; `outputs.entities[].unique_constraints[]`
+*Given* placeholder codes are defined on questions,
+*When* outputs are materialised,
+*Then* each non-null `placeholder_code` must be unique (partial unique index on `QuestionnaireQuestion.placeholder_code`).
+**Reference:** U3, N1, E2; `outputs.entities[].unique_constraints[]`
 
-**6.2.1.15 Joins Correctly Resolve Placeholders**
-*Given* a join across Response, QuestionToPlaceholder, and TemplatePlaceholder is executed,
-*When* placeholders are resolved,
-*Then* outputs must include the resolved values.
-**Reference:** E6; `outputs.entities[].name` (Response, QuestionToPlaceholder, TemplatePlaceholder)
+**6.2.1.15 Direct Lookup Correctly Resolves Placeholders**
+*Given* a `placeholder_code` exists on a question,
+*When* placeholder values are resolved,
+*Then* the system will source at most one question per code (DB-enforced uniqueness) and expose the direct-lookup model (no template join path).
+**Reference:** E6; `outputs.entities[].name` (includes `QuestionnaireQuestion`), `outputs.entities[].unique_constraints[]`
 
 **6.2.1.16 TLS Enforcement Is Externally Visible**
 *Given* database connections are established,
 *When* a TLS connection is required,
-*Then* outputs must include the enforcement of TLS as a configuration property.
-**Reference:** S2, E4; `outputs.entities[].fields[]` (TLS configuration flag)
+*Then* the configuration must declare enforcement (e.g., `config.database.ssl.required = true`) and connections must be attempted over TLS.
+**Reference:** S2, E4; `config.database.ssl.required`
 
 **6.2.1.17 Deterministic Ordering of Artefacts**
 *Given* collections are produced,
@@ -1457,7 +1452,7 @@ A generated ERD parity export must structurally correspond to the ERD spec (same
 **Error Mode:** POST_OUTPUTS_MIGRATION_JOURNAL_APPLIED_AT_MISSING_WHEN_JOURNAL_EXISTS  
 **Reference:** outputs.migration_journal[].applied_at
 
-6.3 Happy Path Behavioural Acceptance Criteria
+## 6.3 Happy Path Behavioural Acceptance Criteria
 
 6.3.1.1 Migration Initiates Schema Creation
 Given the migration runner starts,
@@ -1489,16 +1484,16 @@ When a row insert is attempted,
 Then the system must validate row values against the declared schema before insertion proceeds.
 Reference: E5; STEP-3
 
-6.3.1.6 Join Execution Follows Row Validation
+**6.3.1.6 Direct Lookup Follows Row Validation**
 Given row insertion has passed schema validation,
-When joins are required,
-Then the system must execute joins from Response to QuestionToPlaceholder to TemplatePlaceholder.
+When placeholder sourcing is required,
+Then the system must perform a **direct lookup** by `QuestionnaireQuestion.placeholder_code` (unique when present).
 Reference: E6; STEP-3
 
-6.3.1.7 Placeholder Resolution Follows Join Execution
-Given joins are successfully executed,
+**6.3.1.7 Placeholder Resolution Follows Direct Lookup**
+Given direct lookup completes successfully,
 When placeholder resolution is required,
-Then the system must trigger resolution of placeholder values for downstream use.
+Then the system must return the resolved values to the requesting component.
 Reference: E7; STEP-3
 
 6.3.1.8 Rollback Follows Migration Failure
@@ -1513,11 +1508,8 @@ When the same step is repeated with identical inputs,
 Then the system must maintain deterministic results for that operation before proceeding to the next step.
 Reference: S4; STEP-3
 
-6.3.1.10 Optional Cache Materialisation Follows Configuration
-Given cache support is enabled,
-When a response set is processed,
-Then the system must trigger materialisation of computed placeholder values for that response set.
-Reference: O3; STEP-4
+**6.3.1.10 *(Reserved)***
+*(This numbering is reserved; no behavioural step is defined here in this epic.)*
 
 6.3.1.11 New Template Introduction Triggers Schema Reuse
 Given a new template is introduced,
@@ -1860,28 +1852,37 @@ Reference: dependency: runtime config; Step: STEP-3
 * ERD/exports list entities/fields/constraints/indexes in deterministic sorted order by their canonical names.
   **AC-Ref:** 6.1.14
 
-7.1.15 — One-to-One Mapping Artefacts Are Present
-**Title:** Join path artefacts exist for placeholder resolution
-**Purpose:** Ensure required tables/keys for `Response → QuestionToPlaceholder → TemplatePlaceholder` exist.
-**Test Data:** `./docs/erd_spec.json`, `./migrations/001_init.sql`, `./migrations/002_constraints.sql`
-**Mocking:** None.
-**Assertions:**
+REPLACE 7.1.15 with this
 
-* ERD includes entities `Response`, `QuestionToPlaceholder`, `TemplatePlaceholder`.
-* FKs link Response to Question/Placeholder mapping and mapping to TemplatePlaceholder.
-* Migrations create those tables and FKs.
-  **AC-Ref:** 6.1.15
+7.1.15 — Placeholder Lookup Artefacts Are Present
+Title: Direct lookup artefacts exist for placeholder resolution
+Purpose: Ensure the schema supports placeholder resolution by direct lookup on questions (no template/mapping join path).
+Test Data: ./docs/erd_spec.json, ./migrations/001_init.sql, ./migrations/002_constraints.sql
+Mocking: None.
+Assertions:
+
+ERD includes QuestionnaireQuestion with optional placeholder_code in fields[*].name.
+
+002_constraints.sql defines a partial unique on QuestionnaireQuestion(placeholder_code) where placeholder_code IS NOT NULL.
+
+No entities named TemplatePlaceholder or QuestionToPlaceholder appear in ERD or migrations.
+AC-Ref: 6.1.15
+
+EDIT 7.1.16 (adjust the second rule only)
 
 7.1.16 — Constraint Rules Enforced Structurally
-**Title:** Structural constraints encode response and placeholder rules
-**Purpose:** Verify structural uniqueness rules exist for “one response per question per submission” and “no duplicate placeholders per template version”.
-**Test Data:** `./docs/erd_spec.json`, `./migrations/002_constraints.sql`
-**Mocking:** None.
-**Assertions:**
+Title: Structural constraints encode response and placeholder rules
+Purpose: Verify structural uniqueness rules exist for “one response per question per submission” and “no duplicate placeholders”.
+Test Data: ./docs/erd_spec.json, ./migrations/002_constraints.sql
+Mocking: None.
+Assertions:
 
-* ERD defines composite unique constraints for both rules.
-* `002_constraints.sql` contains matching `UNIQUE` definitions.
-  **AC-Ref:** 6.1.16
+ERD defines a composite unique on Response(response_set_id, question_id).
+
+002_constraints.sql contains a matching UNIQUE definition (or equivalent) for one-response-per-question-per-submission.
+
+ERD/migrations encode no duplicate placeholders via a partial unique on QuestionnaireQuestion(placeholder_code) where placeholder_code IS NOT NULL.
+AC-Ref: 6.1.16
 
 7.1.17 — TLS Requirement Exposed as Configuration
 **Title:** TLS enforcement flag is available in configuration
@@ -1935,36 +1936,18 @@ Reference: dependency: runtime config; Step: STEP-3
 * `001_init.sql` creates corresponding table/columns.
   **AC-Ref:** 6.1.21
 
-7.1.22 — Transformation Rules are First-Class
-**Title:** Transformation rules exist as a separate schema component
-**Purpose:** Confirm transformation rules are modelled independently from questions/placeholders/responses.
-**Test Data:** `./docs/erd_spec.json`, `./migrations/001_init.sql`
-**Mocking:** None.
-**Assertions:**
 
-* ERD contains `TransformationRule` (or equivalent).
-* `001_init.sql` creates table for transformation rules.
-  **AC-Ref:** 6.1.22
+7.1.24 — Deterministic Lookup Contracts Are Encoded in Keys
+Title: Keys/indexes guarantee deterministic placeholder lookup
+Purpose: Ensure keys/indexes required for deterministic lookups are declared.
+Test Data: ./docs/erd_spec.json, ./migrations/002_constraints.sql, ./migrations/003_indexes.sql
+Mocking: None.
+Assertions:
 
-7.1.23 — Cache of Computed Placeholder Values is Modelled (Optional)
-**Title:** Optional computed placeholder cache table exists
-**Purpose:** Verify presence of a distinct cache table if caching is enabled.
-**Test Data:** `./docs/erd_spec.json`, `./migrations/001_init.sql`
-**Mocking:** None.
-**Assertions:**
+002_constraints.sql defines a partial unique index/constraint on QuestionnaireQuestion(placeholder_code) where not null (single source of truth per code).
 
-* If cache feature is enabled in ERD, table `ComputedPlaceholderValue` (or equivalent) exists in ERD and in `001_init.sql`.
-  **AC-Ref:** 6.1.23
-
-7.1.24 — Deterministic Join Contracts Are Encoded in Keys
-**Title:** Keys/indexes guarantee deterministic join evaluation
-**Purpose:** Ensure keys/indexes required for deterministic joins are declared.
-**Test Data:** `./docs/erd_spec.json`, `./migrations/002_constraints.sql`, `./migrations/003_indexes.sql`
-**Mocking:** None.
-**Assertions:**
-
-* Required PK/FK and supporting indexes exist on join columns across Response, mapping, and placeholders.
-  **AC-Ref:** 6.1.24
+003_indexes.sql includes supporting indexes for primary lookup paths (e.g., Response(response_set_id), Response(question_id)), ensuring stable, repeatable resolution.
+AC-Ref: 6.1.24
 
 7.1.25 — Encryption at Rest Policy is Traceable to Columns
 **Title:** Encrypted fields trace to global manifest
@@ -1989,15 +1972,16 @@ Reference: dependency: runtime config; Step: STEP-3
   **AC-Ref:** 6.1.26
 
 7.1.27 — Placeholder Uniqueness Encoded as a Constraint
-**Title:** Template placeholder uniqueness enforced via unique constraint
-**Purpose:** Verify a composite unique constraint encodes placeholder uniqueness per template version.
-**Test Data:** `./docs/erd_spec.json`, `./migrations/002_constraints.sql`
-**Mocking:** None.
-**Assertions:**
+Title: Placeholder code uniqueness enforced via partial unique on questions
+Purpose: Verify uniqueness of placeholder codes is enforced on questions (no template/version scope).
+Test Data: ./docs/erd_spec.json, ./migrations/002_constraints.sql
+Mocking: None.
+Assertions:
 
-* ERD defines the composite unique on placeholder fields.
-* `002_constraints.sql` contains matching `UNIQUE` statement.
-  **AC-Ref:** 6.1.27
+ERD defines a partial unique on QuestionnaireQuestion(placeholder_code) (non-null values only).
+
+002_constraints.sql contains the corresponding CREATE UNIQUE INDEX … WHERE placeholder_code IS NOT NULL (or equivalent constraint).
+AC-Ref: 6.1.27
 
 7.1.28 — One-Response-Per-Question-Per-Submission Encoded as a Constraint
 **Title:** Response uniqueness enforced structurally
@@ -2022,14 +2006,14 @@ Reference: dependency: runtime config; Step: STEP-3
 * No extra entities/relationships appear in exports beyond ERD.
   **AC-Ref:** 6.1.29
 
-## 7.2.1 Happy path contractual tests 
+## 7.2.1 Happy path contractual tests
 
 **7.2.1.1 — Entities are persisted with canonical names**
 Title: `outputs.entities[].name` reflects ERD entity canonical names
 Purpose: Verify that migrated entities are emitted with canonical names exactly as defined.
 Test Data:
 
-* ERD entities (subset sufficient for test): `["Company","QuestionnaireQuestion","AnswerOption","ContractTemplate","TemplatePlaceholder","TransformationRule","QuestionToPlaceholder","ResponseSet","Response","GeneratedDocument"]`
+* ERD entities (subset sufficient for test): `["Company","QuestionnaireQuestion","AnswerOption","ResponseSet","Response","GeneratedDocument","FieldGroup","QuestionToFieldGroup","GroupValue"]`
 * Invocation: run migrations from a clean database, then request the Section 4 outputs snapshot.
   Mocking: None — the test validates real migration output and schema export; mocking would invalidate the structural guarantee.
   Assertions:
@@ -2037,7 +2021,7 @@ Test Data:
 * Order must be deterministically ascending by name.
 * No extra names appear.
   AC-Ref: 6.2.1.1
-  EARS-Refs: U1, U2, U3, U4, U5, U6, U7, U8, E1
+  EARS-Refs: U1, U2, U8, E1
 
 ---
 
@@ -2049,7 +2033,7 @@ Test Data:
 * Choose entity: `Response`
 * ERD expected fields/types (excerpt):
 
-  * `id: uuid`, `response_set_id: uuid`, `question_id: uuid`, `value_json: jsonb`, `created_at: timestamptz`
+  * `response_id: uuid`, `response_set_id: uuid`, `question_id: uuid`, `value_json: jsonb`
     Mocking: None — structural.
     Assertions:
 * In `outputs.entities[?name=="Response"].fields[]`, assert presence of the above names with exact `type` values shown.
@@ -2066,10 +2050,10 @@ Purpose: Verify presence and correctness of PK columns list.
 Test Data:
 
 * Entity: `Response`
-* ERD PK: `["id"]`
+* ERD PK: `["response_id"]`
   Mocking: None — structural.
   Assertions:
-* `outputs.entities[?name=="Response"].primary_key.columns` equals exactly `["id"]`.
+* `outputs.entities[?name=="Response"].primary_key.columns` equals exactly `["response_id"]`.
 * List is non-empty and deterministic.
   AC-Ref: 6.2.1.3
   EARS-Refs: U3, E2
@@ -2083,10 +2067,10 @@ Test Data:
 
 * Expected FK on `Response`:
 
-  * `name: "fk_response_response_set"`
+  * `name: "fk_response_set"`
   * `columns: ["response_set_id"]`
   * `references.entity: "ResponseSet"`
-  * `references.columns: ["id"]`
+  * `references.columns: ["response_set_id"]`
     Mocking: None — structural.
     Assertions:
 * An entry exactly matching the above exists under `Response.foreign_keys[]`.
@@ -2114,11 +2098,11 @@ Test Data:
 
 **7.2.1.6 — Indexes are present**
 Title: `outputs.entities[].indexes[]` exposes index name and columns
-Purpose: Verify presence of a join performance index for placeholder resolution.
+Purpose: Verify presence of a lookup index for placeholder resolution.
 Test Data:
 
-* Entity: `QuestionToPlaceholder`
-* Expected index: `name: "ix_q2p_question_id"`, `columns: ["question_id"]`
+* Entity: `QuestionnaireQuestion`
+* Expected index: `name: "uq_question_placeholder_code"`, `columns: ["placeholder_code"]`
   Mocking: None — structural.
   Assertions:
 * Index exists with exact name and columns.
@@ -2134,7 +2118,7 @@ Purpose: Verify presence and exact membership for an ERD-defined enum.
 Test Data:
 
 * Enum: `answer_kind`
-* Expected values: `["text","multiple_choice","number"]`
+* Expected values: `["boolean","enum_single","long_text","number","short_string"]`
   Mocking: None — structural.
   Assertions:
 * `outputs.enums[?name=="answer_kind"].values` equals the array above, in deterministic ascending order.
@@ -2152,7 +2136,7 @@ Test Data:
   Mocking: None — structural.
   Assertions:
 * For each listed field, `outputs.entities[?name==Entity].fields[?name==Field].encrypted` is `true`.
-* For a non-sensitive field (e.g., `Response.id`), `encrypted` is `false` or omitted per schema rules.
+* For a non-sensitive field (e.g., `Response.response_id`), `encrypted` is `false` or omitted per schema rules.
   AC-Ref: 6.2.1.8
   EARS-Refs: U10, E3, S3
 
@@ -2185,7 +2169,7 @@ Test Data:
 * Sample required identifiers include:
 
   * `pk_response`
-  * `fk_response_response_set`
+  * `fk_response_set`
   * `uq_response_set_question`
     Mocking: None — structural.
     Assertions:
@@ -2241,30 +2225,30 @@ Test Data:
 ---
 
 **7.2.1.14 — Duplicate placeholders are rejected via uniqueness**
-Title: Placeholder uniqueness per template version is externally visible
-Purpose: Verify template placeholder uniqueness is encoded as a unique constraint.
+Title: Placeholder code uniqueness is externally visible
+Purpose: Verify placeholder code uniqueness is encoded as a partial unique on questions.
 Test Data:
 
-* Entity: `TemplatePlaceholder`
-* Expected unique: `uq_template_version_placeholder_name` on `["template_version_id","name"]`
+* Entity: `QuestionnaireQuestion`
+* Expected unique/index: `uq_question_placeholder_code` on `["placeholder_code"]` (partial: `WHERE placeholder_code IS NOT NULL`)
   Mocking: None — structural.
   Assertions:
-* The unique exists with exact name and columns under the entity’s `unique_constraints[]`.
+* The unique/index exists with exact name and columns under the entity’s outputs.
   AC-Ref: 6.2.1.14
   EARS-Refs: N1
 
 ---
 
-**7.2.1.15 — Joins correctly resolve placeholders (structural visibility)**
-Title: Join path artefacts for `Response → QuestionToPlaceholder → TemplatePlaceholder` are present
-Purpose: Verify that the three tables necessary for the join are present and keyed for resolution.
+**7.2.1.15 — Direct lookup correctly resolves placeholders (structural visibility)**
+Title: Direct lookup artefacts for placeholder resolution are present
+Purpose: Verify the model exposes direct lookup via `QuestionnaireQuestion.placeholder_code` and does **not** rely on a template/mapping join.
 Test Data:
 
-* Entities: `Response`, `QuestionToPlaceholder`, `TemplatePlaceholder`
+* Entity: `QuestionnaireQuestion`
   Mocking: None — structural.
   Assertions:
-* All three entities exist in `outputs.entities[]`.
-* FKs enabling the traversal exist and match the expected referenced entities/columns.
+* `QuestionnaireQuestion` exists with a `placeholder_code` field.
+* Entities named `QuestionToPlaceholder` and `TemplatePlaceholder` do **not** appear in `outputs.entities[]`.
   AC-Ref: 6.2.1.15
   EARS-Refs: E6, S4
 
@@ -4766,159 +4750,156 @@ Two FKs both named `fk_dept`:
 
 ## 7.3 Happy Path Behavioural Tests
 
-**7.3.1.1 — Table creation is initiated after migration runner starts**
-**Title:** Start → Create Tables sequencing
-**Purpose:** Verify that table creation is invoked immediately after the migration runner starts, and not before.
-**Test Data:** Minimal ERD with one entity `Company`; config `{ database.url: "postgresql://user@host:5432/db", database.ssl.required: true }`.
+**7.3.1.1 — Table creation is initiated after migration runner starts**  
+**Title:** Start → Create Tables sequencing  
+**Purpose:** Verify that table creation is invoked immediately after the migration runner starts, and not before.  
+**Test Data:** Minimal ERD with one entity `Company`; config `{ database.url: "postgresql://user@host:5432/db", database.ssl.required: true }`.  
 **Mocking:**
 
 * Mock `MigrationRunner.create_tables()` to return a dummy success token.
 * Mock DB client connect to return a dummy TLS-secured session sufficient for sequencing.
-* Rationale: external boundaries only; observe invocation order.
-  **Assertions:** Assert invoked once immediately after migration runner start completes, and not before.
+* Rationale: external boundaries only; observe invocation order.  
+  **Assertions:** Assert invoked once immediately after migration runner start completes, and not before.  
   **AC-Ref:** 6.3.1.1
 
 ---
 
-**7.3.1.2 — Constraint creation follows table creation**
-**Title:** Create Tables → Create Constraints sequencing
-**Purpose:** Verify that constraint creation (PK/FK/UNIQUE/INDEX) starts only after table creation completes.
-**Test Data:** ERD with two entities and one FK; same DB config as 7.3.1.1.
+**7.3.1.2 — Constraint creation follows table creation**  
+**Title:** Create Tables → Create Constraints sequencing  
+**Purpose:** Verify that constraint creation (PK/FK/UNIQUE/INDEX) starts only after table creation completes.  
+**Test Data:** ERD with two entities and one FK; same DB config as 7.3.1.1.  
 **Mocking:**
 
 * Mock `MigrationRunner.create_constraints()` to return dummy success.
-* Mock `MigrationRunner.create_tables()` to return success token.
-  **Assertions:** Assert invoked once immediately after table creation completes, and not before.
+* Mock `MigrationRunner.create_tables()` to return success token.  
+  **Assertions:** Assert invoked once immediately after table creation completes, and not before.  
   **AC-Ref:** 6.3.1.2
 
 ---
 
-**7.3.1.3 — Encryption application follows constraint creation**
-**Title:** Create Constraints → Apply Encryption sequencing
-**Purpose:** Verify that column-level encryption setup is invoked only after constraints are created.
-**Test Data:** ERD marking `Company.legal_name` as encrypted; config `{ encryption.mode: "column", kms.key_alias: "alias/contracts-app" }`.
+**7.3.1.3 — Encryption application follows constraint creation**  
+**Title:** Create Constraints → Apply Encryption sequencing  
+**Purpose:** Verify that column-level encryption setup is invoked only after constraints are created.  
+**Test Data:** ERD marking `Company.legal_name` as encrypted; config `{ encryption.mode: "column", kms.key_alias: "alias/contracts-app" }`.  
 **Mocking:**
 
 * Mock `MigrationRunner.apply_column_encryption()` to return dummy success.
-* Mock KMS client `get_key("alias/contracts-app")` to return a dummy handle.
-  **Assertions:** Assert invoked once immediately after constraint creation completes, and not before.
+* Mock KMS client `get_key("alias/contracts-app")` to return a dummy handle.  
+  **Assertions:** Assert invoked once immediately after constraint creation completes, and not before.  
   **AC-Ref:** 6.3.1.3
 
 ---
 
-**7.3.1.4 — TLS session established before any DB operation**
-**Title:** Connection Request → Enforce TLS sequencing
-**Purpose:** Verify that TLS enforcement is performed before subsequent database operations begin.
-**Test Data:** Config `{ database.ssl.required: true }`.
+**7.3.1.4 — TLS session established before any DB operation**  
+**Title:** Connection Request → Enforce TLS sequencing  
+**Purpose:** Verify that TLS enforcement is performed before subsequent database operations begin.  
+**Test Data:** Config `{ database.ssl.required: true }`.  
 **Mocking:**
 
 * Mock DB client `connect()` to require `sslmode=require` and return dummy success.
-* Mock truststore load to return a dummy CA bundle object.
-  **Assertions:** Assert invoked once immediately after connection request and before any schema or data operation; not invoked after.
+* Mock truststore load to return a dummy CA bundle object.  
+  **Assertions:** Assert invoked once immediately after connection request and before any schema or data operation; not invoked after.  
   **AC-Ref:** 6.3.1.4
 
 ---
 
-**7.3.1.5 — Row validation is performed after secure connection**
-**Title:** TLS Established → Validate Row sequencing
-**Purpose:** Verify that type validation is invoked only after a secure DB session is established.
-**Test Data:** Example insert `{ Response.id: "r-1", value_json: {"k":"v"} }`.
+**7.3.1.5 — Row validation is performed after secure connection**  
+**Title:** TLS Established → Validate Row sequencing  
+**Purpose:** Verify that type validation is invoked only after a secure DB session is established.  
+**Test Data:** Example insert `{ Response.id: "r-1", value_json: {"k":"v"} }`.  
 **Mocking:**
 
 * Mock `DBSession.validate_row()` to return dummy success.
-* DB connect mocked as in 7.3.1.4.
-  **Assertions:** Assert invoked once immediately after TLS session establishment completes, and not before.
+* DB connect mocked as in 7.3.1.4.  
+  **Assertions:** Assert invoked once immediately after TLS session establishment completes, and not before.  
   **AC-Ref:** 6.3.1.5
 
 ---
 
-**7.3.1.6 — Join execution follows row validation**
-**Title:** Validate Row → Execute Join sequencing
-**Purpose:** Verify that the join `Response → QuestionToPlaceholder → TemplatePlaceholder` is invoked only after row validation completes.
-**Test Data:** Minimal IDs linking one response to one placeholder mapping.
+**7.3.1.6 — Direct lookup follows row validation**  
+**Title:** Validate Row → Direct Lookup sequencing  
+**Purpose:** Verify that **direct lookup by `QuestionnaireQuestion.placeholder_code`** is invoked only after row validation completes (no join path).  
+**Test Data:** One `placeholder_code` (e.g., `"COMPANY_NAME"`) present on a `QuestionnaireQuestion`.  
 **Mocking:**
 
-* Mock `DBSession.execute_join()` to return a dummy rowset handle.
-* Mock `DBSession.validate_row()` to return success.
-  **Assertions:** Assert invoked once immediately after row validation completes, and not before.
+* Mock `PlaceholderResolver.lookup_by_code("COMPANY_NAME")` (or `DBSession.select_one(...)`) to return a dummy question record.
+* Mock `DBSession.validate_row()` to return success.  
+  **Assertions:** Assert lookup is invoked once immediately after row validation completes, and not before.  
   **AC-Ref:** 6.3.1.6
 
 ---
 
-**7.3.1.7 — Placeholder resolution follows join execution**
-**Title:** Execute Join → Resolve Placeholders sequencing
-**Purpose:** Verify that placeholder resolution is triggered only after the join finishes.
-**Test Data:** One placeholder `{{company_name}}` mapped from `Response`.
+**7.3.1.7 — Placeholder resolution follows direct lookup**  
+**Title:** Direct Lookup → Resolve Placeholders sequencing  
+**Purpose:** Verify that placeholder resolution is triggered only after the **direct lookup** finishes.  
+**Test Data:** One placeholder `{{company_name}}` mapped via `placeholder_code`.  
 **Mocking:**
 
-* Mock `Resolver.resolve_placeholders(join_result)` to return a dummy success token.
-* Mock `DBSession.execute_join()` to return a dummy rowset sufficient to proceed.
-  **Assertions:** Assert invoked once immediately after join execution completes, and not before.
+* Mock `Resolver.resolve_placeholders(lookup_result)` to return a dummy success token.
+* Mock `PlaceholderResolver.lookup_by_code(...)` to return a dummy record sufficient to proceed.  
+  **Assertions:** Assert resolution is invoked once immediately after direct lookup completes, and not before.  
   **AC-Ref:** 6.3.1.7
 
 ---
 
-**7.3.1.8 — Rollback is initiated immediately after a migration failure**
-**Title:** Migration Failure → Rollback sequencing
-**Purpose:** Verify that rollback is triggered as the immediate next step after a migration failure.
-**Test Data:** Same ERD as 7.3.1.1; simulate failure in table creation.
+**7.3.1.8 — Rollback is initiated immediately after a migration failure**  
+**Title:** Migration Failure → Rollback sequencing  
+**Purpose:** Verify that rollback is triggered as the immediate next step after a migration failure.  
+**Test Data:** Same ERD as 7.3.1.1; simulate failure in table creation.  
 **Mocking:**
 
 * Mock `MigrationRunner.create_tables()` to raise a controlled failure signal.
-* Mock `MigrationRunner.rollback()` to return dummy success.
-  **Assertions:** Assert invoked once immediately after migration failure is signalled, and not before.
+* Mock `MigrationRunner.rollback()` to return dummy success.  
+  **Assertions:** Assert invoked once immediately after migration failure is signalled, and not before.  
   **AC-Ref:** 6.3.1.8
 
 ---
 
-**7.3.1.9 — Determinism check precedes transition to the next step**
-**Title:** Step Completion → Determinism Gate → Next Step sequencing
-**Purpose:** Verify that a determinism gate is evaluated before transitioning to the next step.
-**Test Data:** Repeatable input seed for a step (e.g., sorted entity list).
+**7.3.1.9 — Determinism check precedes transition to the next step**  
+**Title:** Step Completion → Determinism Gate → Next Step sequencing  
+**Purpose:** Verify that a determinism gate is evaluated before transitioning to the next step.  
+**Test Data:** Repeatable input seed for a step (e.g., sorted entity list).  
 **Mocking:**
 
 * Mock `DeterminismChecker.verify(step_output, seed)` to return dummy success.
-* Next-step initiation mocked to allow sequencing only after checker returns.
-  **Assertions:** Assert invoked once immediately after step completion and before the next step is initiated; not after.
+* Next-step initiation mocked to allow sequencing only after checker returns.  
+  **Assertions:** Assert invoked once immediately after step completion and before the next step is initiated; not after.  
   **AC-Ref:** 6.3.1.9
 
 ---
 
-**7.3.1.10 — Cache materialisation is triggered when enabled**
-**Title:** Config Enabled → Materialise Cache sequencing
-**Purpose:** Verify that computed placeholder cache materialisation is invoked when cache is enabled and a response set is processed.
-**Test Data:** Config `{ cache.enabled: true }`, response set id `rs-1`.
-**Mocking:**
-
-* Mock `Cache.materialise(rs-1)` to return dummy success.
-* Upstream processing mocked to emit “response set processed” event.
-  **Assertions:** Assert invoked once immediately after response set processing completes, and not before.
+**7.3.1.10 — _(Reserved)_**  
+**Title:** _(Reserved)_  
+**Purpose:** _(Reserved in this epic; no cache materialisation test)_  
+**Test Data:** _(n/a)_  
+**Mocking:** _(n/a)_  
+  **Assertions:** _(n/a)_  
   **AC-Ref:** 6.3.1.10
 
 ---
 
-**7.3.1.11 — New template registration proceeds without schema migrations**
-**Title:** Register Template → Reuse Schema sequencing
-**Purpose:** Verify that template registration continues the workflow without initiating schema migration steps.
-**Test Data:** Template id `tpl-1`, version `v1`.
+**7.3.1.11 — New template registration proceeds without schema migrations**  
+**Title:** Register Template → Reuse Schema sequencing  
+**Purpose:** Verify that template registration continues the workflow without initiating schema migration steps.  
+**Test Data:** Template id `tpl-1`, version `v1`.  
 **Mocking:**
 
 * Mock `TemplateRegistry.register()` to return dummy success.
-* Spy on `MigrationRunner.start()` to ensure it is not invoked.
-  **Assertions:** Assert template registration invoked once immediately after template introduction; assert migration runner not invoked at any time during this flow.
+* Spy on `MigrationRunner.start()` to ensure it is not invoked.  
+  **Assertions:** Assert template registration invoked once immediately after template introduction; assert migration runner not invoked at any time during this flow.  
   **AC-Ref:** 6.3.1.11
 
 ---
 
-**7.3.1.12 — New policy registration proceeds without schema migrations**
-**Title:** Register Policy → Reuse Schema sequencing
-**Purpose:** Verify that policy registration continues the workflow without initiating schema migration steps.
-**Test Data:** Policy id `pol-1`, rule `no_pii_export=true`.
+**7.3.1.12 — New policy registration proceeds without schema migrations**  
+**Title:** Register Policy → Reuse Schema sequencing  
+**Purpose:** Verify that policy registration continues the workflow without initiating schema migration steps.  
+**Test Data:** Policy id `pol-1`, rule `no_pii_export=true`.  
 **Mocking:**
 
 * Mock `PolicyRegistry.register()` to return dummy success.
-* Spy on `MigrationRunner.start()` to ensure it is not invoked.
-  **Assertions:** Assert policy registration invoked once immediately after policy introduction; assert migration runner not invoked at any time during this flow.
+* Spy on `MigrationRunner.start()` to ensure it is not invoked.  
+  **Assertions:** Assert policy registration invoked once immediately after policy introduction; assert migration runner not invoked at any time during this flow.  
   **AC-Ref:** 6.3.1.12
 
 ## 7.3.2 Sad Path Behavioural Tests
@@ -5302,3 +5283,36 @@ Mocking: Mock the configuration loader used by STEP-3 to raise a dependency-unav
 Assertions: Assert error handler is invoked once immediately on config fetch failure and not before. Assert ZERO DB connections or DDL invocations occur. Assert ENV_DB_UNAVAILABLE observed as the environment code used for unavailable DB prerequisites at connect time. Assert one telemetry error event.
 AC-Ref: 6.3.2.20
 Error Mode: ENV_DB_UNAVAILABLE
+
+# Schemas
+
+schemas/
+  erd_and_runtime_inputs.schema.json
+  migration_outputs.schema.json
+
+Test File Tree
+
+tests/
+  conftest.py
+  test_arch_epic_a.py          # architectural
+  test_functional_epic_a.py    # contractual + behavioural via pytest
+  fixtures/
+    __init__.py
+    tmp_workdir.py
+    kms_stub.py
+    tls_materials.py
+
+# Application File Tree
+
+app/
+  __init__.py
+  config.py
+  db/
+    __init__.py
+    base.py
+    migrations_runner.py
+migrations/
+  001_init.sql
+  002_constraints.sql
+  003_indexes.sql
+  004_rollbacks.sql
