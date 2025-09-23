@@ -9,176 +9,182 @@
     }
   },
   "enums": [
-    {"name": "answer_kind", "values": ["boolean", "enum_single", "long_text", "number", "short_string"]}
+    { "name": "answer_kind", "values": ["boolean", "enum_single", "long_text", "number", "short_string"] }
   ],
   "entities": [
     {
       "name": "AnswerOption",
       "fields": [
-        {"name": "label", "type": "text"},
-        {"name": "option_id", "type": "uuid"},
-        {"name": "question_id", "type": "uuid"},
-        {"name": "sort_index", "type": "int"},
-        {"name": "value", "type": "text"}
+        { "name": "label", "type": "text" },
+        { "name": "option_id", "type": "uuid" },
+        { "name": "question_id", "type": "uuid" },
+        { "name": "sort_index", "type": "int" },
+        { "name": "value", "type": "text" }
       ],
-      "primary_key": {"name": "pk_answer_option", "columns": ["option_id"]},
+      "primary_key": { "name": "pk_answer_option", "columns": ["option_id"] },
       "foreign_keys": [
-        {"name": "fk_answer_option_question", "columns": ["question_id"], "references": {"entity": "QuestionnaireQuestion", "columns": ["question_id"]}}
+        { "name": "fk_answer_option_question", "columns": ["question_id"], "references": { "entity": "QuestionnaireQuestion", "columns": ["question_id"] } }
       ],
       "unique": [
-        {"name": "uq_answer_option_question_value", "columns": ["question_id", "value"]}
+        { "name": "uq_answer_option_question_value", "columns": ["question_id", "value"] }
       ],
       "indexes": [
-        {"name": "ix_answer_option_question", "columns": ["question_id"]}
+        { "name": "ix_answer_option_question", "columns": ["question_id"] }
       ]
     },
     {
       "name": "Company",
       "fields": [
-        {"name": "company_id", "type": "uuid"},
-        {"name": "created_at", "type": "timestamptz"},
-        {"name": "legal_name", "type": "text", "sensitive": true, "encrypted": true},
-        {"name": "registered_office_address", "type": "text", "sensitive": true, "encrypted": true},
-        {"name": "updated_at", "type": "timestamptz"}
+        { "name": "company_id", "type": "uuid" },
+        { "name": "created_at", "type": "timestamptz" },
+        { "name": "legal_name", "type": "text", "sensitive": true, "encrypted": true },
+        { "name": "registered_office_address", "type": "text", "sensitive": true, "encrypted": true },
+        { "name": "updated_at", "type": "timestamptz" }
       ],
-      "primary_key": {"name": "pk_company", "columns": ["company_id"]}
+      "primary_key": { "name": "pk_company", "columns": ["company_id"] }
     },
     {
       "name": "FieldGroup",
       "fields": [
-        {"name": "description", "type": "text"},
-        {"name": "field_group_id", "type": "uuid"},
-        {"name": "group_key", "type": "text"},
-        {"name": "is_active", "type": "boolean"},
-        {"name": "label", "type": "text"}
+        { "name": "description", "type": "text" },
+        { "name": "field_group_id", "type": "uuid" },
+        { "name": "group_key", "type": "text" },
+        { "name": "is_active", "type": "boolean" },
+        { "name": "label", "type": "text" }
       ],
-      "primary_key": {"name": "pk_field_group", "columns": ["field_group_id"]}
+      "primary_key": { "name": "pk_field_group", "columns": ["field_group_id"] }
     },
     {
       "name": "GeneratedDocument",
       "fields": [
-        {"name": "created_at", "type": "timestamptz"},
-        {"name": "generated_document_id", "type": "uuid"},
-        {"name": "output_uri", "type": "text", "sensitive": true, "encrypted": true},
-        {"name": "response_set_id", "type": "uuid"}
+        { "name": "created_at", "type": "timestamptz" },
+        { "name": "generated_document_id", "type": "uuid" },
+        { "name": "output_uri", "type": "text", "sensitive": true, "encrypted": true },
+        { "name": "response_set_id", "type": "uuid" }
       ],
-      "primary_key": {"name": "pk_generated_document", "columns": ["generated_document_id"]},
+      "primary_key": { "name": "pk_generated_document", "columns": ["generated_document_id"] },
       "foreign_keys": [
-        {"name": "fk_generated_document_set", "columns": ["response_set_id"], "references": {"entity": "ResponseSet", "columns": ["response_set_id"]}}
+        { "name": "fk_generated_document_set", "columns": ["response_set_id"], "references": { "entity": "ResponseSet", "columns": ["response_set_id"] } }
       ],
       "indexes": [
-        {"name": "ix_generated_document_created", "columns": ["created_at"]},
-        {"name": "ix_generated_document_set", "columns": ["response_set_id"]}
+        { "name": "ix_generated_document_created", "columns": ["created_at"] },
+        { "name": "ix_generated_document_set", "columns": ["response_set_id"] }
       ]
     },
     {
       "name": "GroupValue",
       "fields": [
-        {"name": "field_group_id", "type": "uuid"},
-        {"name": "group_value_id", "type": "uuid"},
-        {"name": "option_id", "type": "uuid"},
-        {"name": "response_set_id", "type": "uuid"},
-        {"name": "source_question_id", "type": "uuid"},
-        {"name": "updated_at", "type": "timestamptz"},
-        {"name": "value_bool", "type": "boolean"},
-        {"name": "value_json", "type": "jsonb"},
-        {"name": "value_number", "type": "numeric"},
-        {"name": "value_text", "type": "text"}
+        { "name": "field_group_id", "type": "uuid" },
+        { "name": "group_value_id", "type": "uuid" },
+        { "name": "option_id", "type": "uuid" },
+        { "name": "response_set_id", "type": "uuid" },
+        { "name": "source_question_id", "type": "uuid" },
+        { "name": "updated_at", "type": "timestamptz" },
+        { "name": "value_bool", "type": "boolean" },
+        { "name": "value_json", "type": "jsonb" },
+        { "name": "value_number", "type": "numeric" },
+        { "name": "value_text", "type": "text" }
       ],
-      "primary_key": {"name": "pk_group_value", "columns": ["group_value_id"]},
+      "primary_key": { "name": "pk_group_value", "columns": ["group_value_id"] },
       "foreign_keys": [
-        {"name": "fk_group_value_group", "columns": ["field_group_id"], "references": {"entity": "FieldGroup", "columns": ["field_group_id"]}},
-        {"name": "fk_group_value_option", "columns": ["option_id"], "references": {"entity": "AnswerOption", "columns": ["option_id"]}},
-        {"name": "fk_group_value_set", "columns": ["response_set_id"], "references": {"entity": "ResponseSet", "columns": ["response_set_id"]}},
-        {"name": "fk_group_value_source_q", "columns": ["source_question_id"], "references": {"entity": "QuestionnaireQuestion", "columns": ["question_id"]}}
+        { "name": "fk_group_value_group", "columns": ["field_group_id"], "references": { "entity": "FieldGroup", "columns": ["field_group_id"] } },
+        { "name": "fk_group_value_option", "columns": ["option_id"], "references": { "entity": "AnswerOption", "columns": ["option_id"] } },
+        { "name": "fk_group_value_set", "columns": ["response_set_id"], "references": { "entity": "ResponseSet", "columns": ["response_set_id"] } },
+        { "name": "fk_group_value_source_q", "columns": ["source_question_id"], "references": { "entity": "QuestionnaireQuestion", "columns": ["question_id"] } }
       ],
       "unique": [
-        {"name": "uq_group_value_per_set", "columns": ["response_set_id", "field_group_id"]}
+        { "name": "uq_group_value_per_set", "columns": ["response_set_id", "field_group_id"] }
       ],
       "indexes": [
-        {"name": "ix_group_value_group", "columns": ["field_group_id"]},
-        {"name": "ix_group_value_set", "columns": ["response_set_id"]},
-        {"name": "ix_group_value_source_q", "columns": ["source_question_id"]}
+        { "name": "ix_group_value_group", "columns": ["field_group_id"] },
+        { "name": "ix_group_value_set", "columns": ["response_set_id"] },
+        { "name": "ix_group_value_source_q", "columns": ["source_question_id"] }
       ]
     },
     {
       "name": "QuestionToFieldGroup",
       "fields": [
-        {"name": "field_group_id", "type": "uuid"},
-        {"name": "notes", "type": "text"},
-        {"name": "q2fg_id", "type": "uuid"},
-        {"name": "question_id", "type": "uuid"}
+        { "name": "field_group_id", "type": "uuid" },
+        { "name": "notes", "type": "text" },
+        { "name": "q2fg_id", "type": "uuid" },
+        { "name": "question_id", "type": "uuid" }
       ],
-      "primary_key": {"name": "pk_q2fg", "columns": ["q2fg_id"]},
+      "primary_key": { "name": "pk_q2fg", "columns": ["q2fg_id"] },
       "foreign_keys": [
-        {"name": "fk_q2fg_field_group", "columns": ["field_group_id"], "references": {"entity": "FieldGroup", "columns": ["field_group_id"]}},
-        {"name": "fk_q2fg_question", "columns": ["question_id"], "references": {"entity": "QuestionnaireQuestion", "columns": ["question_id"]}}
+        { "name": "fk_q2fg_field_group", "columns": ["field_group_id"], "references": { "entity": "FieldGroup", "columns": ["field_group_id"] } },
+        { "name": "fk_q2fg_question", "columns": ["question_id"], "references": { "entity": "QuestionnaireQuestion", "columns": ["question_id"] } }
       ],
       "unique": [
-        {"name": "uq_q2fg_question_group", "columns": ["question_id", "field_group_id"]}
+        { "name": "uq_q2fg_question_group", "columns": ["question_id", "field_group_id"] }
       ],
       "indexes": [
-        {"name": "ix_q2fg_field_group", "columns": ["field_group_id"]},
-        {"name": "ix_q2fg_question", "columns": ["question_id"]}
+        { "name": "ix_q2fg_field_group", "columns": ["field_group_id"] },
+        { "name": "ix_q2fg_question", "columns": ["question_id"] }
       ]
     },
     {
       "name": "QuestionnaireQuestion",
       "fields": [
-        {"name": "answer_type", "type": "answer_kind"},
-        {"name": "external_qid", "type": "text"},
-        {"name": "mandatory", "type": "boolean"},
-        {"name": "placeholder_code", "type": "text"},
-        {"name": "question_id", "type": "uuid"},
-        {"name": "question_text", "type": "text"}
+        { "name": "answer_type", "type": "answer_kind" },
+        { "name": "external_qid", "type": "text" },
+        { "name": "mandatory", "type": "boolean" },
+        { "name": "parent_question_id", "type": "uuid" },
+        { "name": "placeholder_code", "type": "text" },
+        { "name": "question_id", "type": "uuid" },
+        { "name": "question_text", "type": "text" },
+        { "name": "visible_if_value", "type": "text" }
       ],
-      "primary_key": {"name": "pk_questionnaire_question", "columns": ["question_id"]},
+      "primary_key": { "name": "pk_questionnaire_question", "columns": ["question_id"] },
+      "foreign_keys": [
+        { "name": "fk_question_parent_question", "columns": ["parent_question_id"], "references": { "entity": "QuestionnaireQuestion", "columns": ["question_id"] } }
+      ],
       "unique": [
-        {"name": "uq_question_external_qid", "columns": ["external_qid"]},
-        {"name": "uq_question_placeholder_code", "columns": ["placeholder_code"], "where": "placeholder_code IS NOT NULL"}
+        { "name": "uq_question_external_qid", "columns": ["external_qid"] },
+        { "name": "uq_question_placeholder_code", "columns": ["placeholder_code"], "where": "placeholder_code IS NOT NULL" }
       ],
       "indexes": [
-        {"name": "ix_question_answer_type", "columns": ["answer_type"]}
+        { "name": "ix_question_answer_type", "columns": ["answer_type"] },
+        { "name": "ix_question_parent_question_id", "columns": ["parent_question_id"] }
       ]
     },
     {
       "name": "Response",
       "fields": [
-        {"name": "option_id", "type": "uuid"},
-        {"name": "question_id", "type": "uuid"},
-        {"name": "response_id", "type": "uuid"},
-        {"name": "response_set_id", "type": "uuid"},
-        {"name": "value_bool", "type": "boolean"},
-        {"name": "value_json", "type": "jsonb", "sensitive": true, "encrypted": true},
-        {"name": "value_number", "type": "numeric"},
-        {"name": "value_text", "type": "text"}
+        { "name": "option_id", "type": "uuid" },
+        { "name": "question_id", "type": "uuid" },
+        { "name": "response_id", "type": "uuid" },
+        { "name": "response_set_id", "type": "uuid" },
+        { "name": "value_bool", "type": "boolean" },
+        { "name": "value_json", "type": "jsonb", "sensitive": true, "encrypted": true },
+        { "name": "value_number", "type": "numeric" },
+        { "name": "value_text", "type": "text" }
       ],
-      "primary_key": {"name": "pk_response", "columns": ["response_id"]},
+      "primary_key": { "name": "pk_response", "columns": ["response_id"] },
       "foreign_keys": [
-        {"name": "fk_response_option", "columns": ["option_id"], "references": {"entity": "AnswerOption", "columns": ["option_id"]}},
-        {"name": "fk_response_question", "columns": ["question_id"], "references": {"entity": "QuestionnaireQuestion", "columns": ["question_id"]}},
-        {"name": "fk_response_set", "columns": ["response_set_id"], "references": {"entity": "ResponseSet", "columns": ["response_set_id"]}}
+        { "name": "fk_response_option", "columns": ["option_id"], "references": { "entity": "AnswerOption", "columns": ["option_id"] } },
+        { "name": "fk_response_question", "columns": ["question_id"], "references": { "entity": "QuestionnaireQuestion", "columns": ["question_id"] } },
+        { "name": "fk_response_set", "columns": ["response_set_id"], "references": { "entity": "ResponseSet", "columns": ["response_set_id"] } }
       ],
       "unique": [
-        {"name": "uq_response_set_question", "columns": ["response_set_id", "question_id"]}
+        { "name": "uq_response_set_question", "columns": ["response_set_id", "question_id"] }
       ],
       "indexes": [
-        {"name": "ix_response_option", "columns": ["option_id"]},
-        {"name": "ix_response_question", "columns": ["question_id"]},
-        {"name": "ix_response_set", "columns": ["response_set_id"]}
+        { "name": "ix_response_option", "columns": ["option_id"] },
+        { "name": "ix_response_question", "columns": ["question_id"] },
+        { "name": "ix_response_set", "columns": ["response_set_id"] }
       ]
     },
     {
       "name": "ResponseSet",
       "fields": [
-        {"name": "company_id", "type": "uuid"},
-        {"name": "created_at", "type": "timestamptz"},
-        {"name": "created_by", "type": "text"},
-        {"name": "response_set_id", "type": "uuid"}
+        { "name": "company_id", "type": "uuid" },
+        { "name": "created_at", "type": "timestamptz" },
+        { "name": "created_by", "type": "text" },
+        { "name": "response_set_id", "type": "uuid" }
       ],
-      "primary_key": {"name": "pk_response_set", "columns": ["response_set_id"]},
+      "primary_key": { "name": "pk_response_set", "columns": ["response_set_id"] },
       "foreign_keys": [
-        {"name": "fk_response_set_company", "columns": ["company_id"], "references": {"entity": "Company", "columns": ["company_id"]}}
+        { "name": "fk_response_set_company", "columns": ["company_id"], "references": { "entity": "Company", "columns": ["company_id"] } }
       ]
     }
   ],
@@ -197,6 +203,7 @@
     "fk_group_value_source_q",
     "fk_q2fg_field_group",
     "fk_q2fg_question",
+    "fk_question_parent_question",
     "fk_response_option",
     "fk_response_question",
     "fk_response_set",
