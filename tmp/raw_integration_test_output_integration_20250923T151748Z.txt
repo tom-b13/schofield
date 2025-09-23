@@ -1,0 +1,29 @@
+Exception AssertionError: Regular expression should not use begin/end-markers: ^the migration runner starts,?$
+Traceback (most recent call last):
+  File "/home/codex/.local/bin/behave", line 8, in <module>
+    sys.exit(main())
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/__main__.py", line 183, in main
+    return run_behave(config)
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/__main__.py", line 127, in run_behave
+    failed = runner.run()
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/runner.py", line 804, in run
+    return self.run_with_paths()
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/runner.py", line 809, in run_with_paths
+    self.load_step_definitions()
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/runner.py", line 796, in load_step_definitions
+    load_step_modules(step_paths)
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/runner_util.py", line 412, in load_step_modules
+    exec_file(os.path.join(path, name), step_module_globals)
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/runner_util.py", line 386, in exec_file
+    exec(code, globals_, locals_)
+  File "tests/integration/features/steps/epic_a_behaviour_steps.py", line 95, in <module>
+    def step_given_runner_starts(context):
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/step_registry.py", line 92, in wrapper
+    self.add_step_definition(step_type, step_text, func)
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/step_registry.py", line 59, in add_step_definition
+    step_definitions.append(get_matcher(func, step_text))
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/matchers.py", line 422, in get_matcher
+    return current_matcher(func, pattern)
+  File "/home/codex/.local/lib/python3.10/site-packages/behave/matchers.py", line 330, in __init__
+    assert not (pattern.startswith("^") or pattern.endswith("$")), \
+AssertionError: Regular expression should not use begin/end-markers: ^the migration runner starts,?$

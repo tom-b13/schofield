@@ -1,0 +1,79 @@
+{
+  "clarke_review": {
+    "acceptable_as_is": [
+      "7.1.1",
+      "7.1.2",
+      "7.1.3",
+      "7.1.4",
+      "7.1.5",
+      "7.1.6",
+      "7.1.7",
+      "7.1.8",
+      "7.1.9",
+      "7.1.10",
+      "7.1.11",
+      "7.1.13",
+      "7.1.15",
+      "7.1.16",
+      "7.1.17",
+      "7.1.18",
+      "7.1.21",
+      "7.1.24",
+      "7.1.25",
+      "7.1.26",
+      "7.1.27",
+      "7.1.28",
+      "7.1.29"
+    ],
+    "needs_improvement": [
+      "7.1.14",
+      "7.1.19",
+      "7.1.20"
+    ],
+    "required_missing_tests": [],
+    "suspicious_passing_tests": [
+      "7.1.12"
+    ],
+    "explicit_actions_for_ada": [
+      {
+        "test_id": "7.1.12",
+        "category": "suspicious_passing_tests",
+        "instruction": "Rewrite test_global_constraints_manifest_exists to assert completeness: (1) Build expected constraint identifiers from ERD (collect names from primary_key, foreign_keys[*].name, unique[*].name, and any check names if present). (2) Parse 002_constraints.sql to collect declared constraint/index identifiers using patterns for CONSTRAINT <name>, CREATE UNIQUE INDEX <name>, and named PRIMARY KEY/FOREIGN KEY constraints. (3) Require constraints_applied to be non-empty and to equal the union of ERD- and SQL-declared identifiers (or at minimum be a superset of ERD-declared identifiers). Fail if the array is empty or missing any identifier.",
+        "files": [
+          "tests/architectural/test_epic_a_data_model_architecture.py"
+        ],
+        "evidence": "Spec docs/Epic A - Data model & migration.md lines ~1824–1833 (7.1.12); current test lines 316–324 only check type/emptiness and will pass with an empty list."
+      },
+      {
+        "test_id": "7.1.14",
+        "category": "needs_improvement",
+        "instruction": "Expand test_collections_are_in_deterministic_sorted_order to verify ordering for multiple collections: (1) Assert fields within each ERD entity are sorted by field name. (2) Assert ERD unique constraints, foreign keys, and indexes lists are sorted by their canonical names. (3) For docs/erd_relationships.csv, assert rows are sorted deterministically by source,target (after header). (4) Keep Mermaid node ordering check and add a check that Mermaid edges (source→target pairs) are emitted in sorted order.",
+        "files": [
+          "tests/architectural/test_epic_a_data_model_architecture.py"
+        ],
+        "evidence": "Spec 7.1.14 at lines ~1845–1853 requires deterministic order for entities/fields/constraints/indexes. Current test lines 344–358 only check entity names and optionally Mermaid nodes; CSV/fields/constraints/indexes are not validated."
+      },
+      {
+        "test_id": "7.1.19",
+        "category": "needs_improvement",
+        "instruction": "Strengthen test_erd_sources_versioned_as_project_artifacts to ensure readability: use _read_json(DOCS/'erd_spec.json'), _read_text(DOCS/'erd_mermaid.md'), and _read_csv_rows(DOCS/'erd_relationships.csv') to assert files parse/read successfully and contain non-empty content.",
+        "files": [
+          "tests/architectural/test_epic_a_data_model_architecture.py"
+        ],
+        "evidence": "Spec 7.1.19 at lines ~1908–1916 states files must exist and be readable. Current test lines 435–441 only check existence."
+      },
+      {
+        "test_id": "7.1.20",
+        "category": "needs_improvement",
+        "instruction": "Enhance test_rollback_scripts_present_and_reverse_prior_migrations to assert strict reverse order: (1) Extract the sequence of created objects (tables, indexes, constraints if named) from 001–003 in creation order. (2) In 004_rollbacks.sql, locate corresponding DROP statements and record their positions. (3) Assert that every created object has a matching DROP and that DROP positions are strictly increasing when iterating the created list in reverse. Keep existing token presence checks.",
+        "files": [
+          "tests/architectural/test_epic_a_data_model_architecture.py"
+        ],
+        "evidence": "Spec 7.1.20 at lines ~1918–1926 requires reversing prior migrations in strict reverse sequence. Current test lines 443–455 only check presence of DROP statements without enforcing order."
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

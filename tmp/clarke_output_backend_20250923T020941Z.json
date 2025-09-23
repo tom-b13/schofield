@@ -1,0 +1,1504 @@
+{
+  "clarke_review": {
+    "acceptable_as_is": [
+      "7.2.1.1",
+      "7.2.1.2",
+      "7.2.1.3",
+      "7.2.1.4",
+      "7.2.1.5",
+      "7.2.1.6",
+      "7.2.1.7",
+      "7.2.1.8",
+      "7.2.1.9",
+      "7.2.1.10",
+      "7.2.1.11",
+      "7.2.1.12",
+      "7.2.1.13",
+      "7.2.1.14",
+      "7.2.1.15",
+      "7.2.1.16",
+      "7.2.1.17",
+      "7.3.1.1",
+      "7.3.1.2",
+      "7.3.1.3",
+      "7.3.1.4",
+      "7.3.1.5",
+      "7.3.1.6",
+      "7.3.1.7",
+      "7.3.1.8",
+      "7.3.1.9",
+      "7.3.1.10",
+      "7.3.1.11",
+      "7.3.1.12"
+    ],
+    "needs_improvement": [
+      "7.2.2.1",
+      "7.2.2.2",
+      "7.2.2.3",
+      "7.2.2.4",
+      "7.2.2.5",
+      "7.2.2.6",
+      "7.2.2.7",
+      "7.2.2.8",
+      "7.2.2.9",
+      "7.2.2.10",
+      "7.2.2.11",
+      "7.2.2.12",
+      "7.2.2.13",
+      "7.2.2.14",
+      "7.2.2.15",
+      "7.2.2.16",
+      "7.2.2.17",
+      "7.2.2.18",
+      "7.2.2.19",
+      "7.2.2.20",
+      "7.2.2.21",
+      "7.2.2.22",
+      "7.2.2.23",
+      "7.2.2.24",
+      "7.2.2.25",
+      "7.2.2.26",
+      "7.2.2.27",
+      "7.2.2.28",
+      "7.2.2.29",
+      "7.2.2.30",
+      "7.2.2.31",
+      "7.2.2.32",
+      "7.2.2.33",
+      "7.2.2.34",
+      "7.2.2.35",
+      "7.2.2.36",
+      "7.2.2.37",
+      "7.2.2.38",
+      "7.2.2.39",
+      "7.2.2.40",
+      "7.2.2.41",
+      "7.2.2.42",
+      "7.2.2.43",
+      "7.2.2.44",
+      "7.2.2.45",
+      "7.2.2.46",
+      "7.2.2.47",
+      "7.2.2.48",
+      "7.2.2.49",
+      "7.2.2.50",
+      "7.2.2.51",
+      "7.2.2.52",
+      "7.2.2.53",
+      "7.2.2.54",
+      "7.2.2.55",
+      "7.2.2.56",
+      "7.2.2.57",
+      "7.2.2.58",
+      "7.2.2.59",
+      "7.2.2.60",
+      "7.2.2.61",
+      "7.2.2.62",
+      "7.2.2.63",
+      "7.2.2.64",
+      "7.2.2.65",
+      "7.2.2.66",
+      "7.2.2.67",
+      "7.2.2.68",
+      "7.2.2.69",
+      "7.2.2.70",
+      "7.2.2.71",
+      "7.2.2.72",
+      "7.2.2.73",
+      "7.2.2.74",
+      "7.2.2.75",
+      "7.2.2.76",
+      "7.2.2.77",
+      "7.2.2.78",
+      "7.2.2.79",
+      "7.2.2.80",
+      "7.2.2.81",
+      "7.2.2.82",
+      "7.2.2.83",
+      "7.2.2.84",
+      "7.2.2.85",
+      "7.2.2.86",
+      "7.2.2.87",
+      "7.2.2.88",
+      "7.2.2.89",
+      "7.2.2.90",
+      "7.2.2.91",
+      "7.2.2.92",
+      "7.2.2.93",
+      "7.2.2.94",
+      "7.2.2.95",
+      "7.2.2.96",
+      "7.2.2.97",
+      "7.2.2.98",
+      "7.2.2.99",
+      "7.2.2.100",
+      "7.2.2.101",
+      "7.2.2.102",
+      "7.2.2.103",
+      "7.2.2.104",
+      "7.2.2.105",
+      "7.2.2.106",
+      "7.2.2.107",
+      "7.2.2.108",
+      "7.2.2.109",
+      "7.2.2.110",
+      "7.2.2.111",
+      "7.2.2.112",
+      "7.2.2.113",
+      "7.2.2.114",
+      "7.2.2.115",
+      "7.2.2.116",
+      "7.2.2.117",
+      "7.2.2.118",
+      "7.2.2.119",
+      "7.2.2.120",
+      "7.2.2.121",
+      "7.2.2.122",
+      "7.2.2.123",
+      "7.2.2.124",
+      "7.2.2.125",
+      "7.2.2.126",
+      "7.3.2.1",
+      "7.3.2.2",
+      "7.3.2.3",
+      "7.3.2.4",
+      "7.3.2.5",
+      "7.3.2.6",
+      "7.3.2.7",
+      "7.3.2.8",
+      "7.3.2.9",
+      "7.3.2.10",
+      "7.3.2.11",
+      "7.3.2.12",
+      "7.3.2.13",
+      "7.3.2.14",
+      "7.3.2.15",
+      "7.3.2.16",
+      "7.3.2.17",
+      "7.3.2.18",
+      "7.3.2.19",
+      "7.3.2.20"
+    ],
+    "required_missing_tests": [],
+    "suspicious_passing_tests": [],
+    "explicit_actions_for_ada": [
+      {
+        "test_id": "7.2.2.1",
+        "category": "needs_improvement",
+        "instruction": "In _gen_722_prelude/_gen_722_post, keep FileNotFoundError mock for ./docs/erd_spec.json and add explicit asserts: error.message contains 'docs/erd_spec.json' and one of ['missing','unreadable','not found']; verify open mocked once; retain exit_code==1, status=='error', error.code from spec, and enforce 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.1 'Assertions' require filename mention, failure mode code, and no outputs; generator around lines ~760–900."
+      },
+      {
+        "test_id": "7.2.2.2",
+        "category": "needs_improvement",
+        "instruction": "In _gen_722_prelude/_gen_722_post for sec_id=='2', retain JSONDecodeError mock; assert error.message mentions 'JSON' and includes a position hint ('pos'/'line'/'column'); assert JSON loader mock called once; keep exit_code==1, error.code from spec, and 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.2 'Assertions' require JSON parser position; current test misses parser-call verification."
+      },
+      {
+        "test_id": "7.2.2.3",
+        "category": "needs_improvement",
+        "instruction": "Restore schema validator boundary mocking: in _gen_722_prelude for sec_id=='3', mock a schema validator to raise ValidationError; in _gen_722_post assert validator called once and error.message lists missing properties (e.g., 'name','fields'); keep exit_code==1, status=='error', correct error.code, and 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.3 'Mocking' and 'Assertions' require validator boundary usage; lines ~699–706 previously removed the mock/assert."
+      },
+      {
+        "test_id": "7.2.2.4",
+        "category": "needs_improvement",
+        "instruction": "Keep FileNotFoundError mock for ./docs/erd_mermaid.md and add post-asserts: message includes path and 'missing'/'unreadable'; verify open called once; retain exit_code==1, proper error.code, and strict absence of 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.4 requires path-specific messaging and boundary call verification."
+      },
+      {
+        "test_id": "7.2.2.5",
+        "category": "needs_improvement",
+        "instruction": "Retain UnicodeDecodeError mock for Mermaid read and assert error.message includes 'utf-8' or 'encoding'; assert read_text decoder mock called once; keep exit_code==1, correct error.code, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.5 requires encoding mention and boundary call verification."
+      },
+      {
+        "test_id": "7.2.2.6",
+        "category": "needs_improvement",
+        "instruction": "Keep mermaid_parser mock raising parse exception; assert error.message contains parser snippet (e.g., 'unknown directive'); verify parser called once; retain exit_code==1, correct error.code, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.6 mandates parser invocation and error details."
+      },
+      {
+        "test_id": "7.2.2.7",
+        "category": "needs_improvement",
+        "instruction": "Keep FileNotFoundError mock for ./docs/erd_relationships.csv; assert message includes 'docs/erd_relationships.csv' and missing/unreadable wording; verify open called once; retain exit_code==1, correct error.code, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.7 requires path mention and boundary call verification."
+      },
+      {
+        "test_id": "7.2.2.8",
+        "category": "needs_improvement",
+        "instruction": "Keep csv.DictReader mock raising csv.Error; assert error.message mentions 'CSV' and parse error; verify csv reader called once; retain exit_code==1, correct error.code, and enforce 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.8 requires CSV parse error details and boundary call."
+      },
+      {
+        "test_id": "7.2.2.9",
+        "category": "needs_improvement",
+        "instruction": "Keep csv.DictReader mock and assert error.message mentions 'header' and expected names ['from','to','kind']; verify reader called once; maintain exit_code==1, correct error.code, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.9 requires header mismatch details."
+      },
+      {
+        "test_id": "7.2.2.10",
+        "category": "needs_improvement",
+        "instruction": "Keep FileNotFoundError mock for migrations/001_init.sql; assert message includes filename and missing/unreadable wording; verify open called once; retain exit_code==1, specific error.code, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.10 mandates filename presence and boundary assertion."
+      },
+      {
+        "test_id": "7.2.2.11",
+        "category": "needs_improvement",
+        "instruction": "Keep sql_executor mock raising tokenized error; assert error.message contains SQL token and 'sql'/'syntax'; verify execute called once; keep exit_code==1, correct error.code, and 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.11 requires executor boundary and SQL error details."
+      },
+      {
+        "test_id": "7.2.2.12",
+        "category": "needs_improvement",
+        "instruction": "Keep executor mock raising execution error; assert error.message includes execution keywords; assert executor called; retain exit_code==1, correct error.code, and strict absence of 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.12 mandates execution failure handling and boundary assertion."
+      },
+      {
+        "test_id": "7.2.2.13",
+        "category": "needs_improvement",
+        "instruction": "Keep missing migrations/002_constraints.sql mock; assert message includes path and missing/unreadable wording; verify open called once; retain exit_code==1 and no 'outputs' key with correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.13 requires path mention and boundary call."
+      },
+      {
+        "test_id": "7.2.2.14",
+        "category": "needs_improvement",
+        "instruction": "Keep sql_executor invalid SQL mock; assert message includes SQL parse/exec error; verify execute called once; keep exit_code==1, correct error.code, and 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.14 requires executor boundary verification."
+      },
+      {
+        "test_id": "7.2.2.15",
+        "category": "needs_improvement",
+        "instruction": "Keep executor failure mock; assert message includes executor failure; verify executor called; if spec mentions rollback behavior, assert it; retain exit_code==1 and 'outputs' key absent with correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.15 execution failure and potential rollback note."
+      },
+      {
+        "test_id": "7.2.2.16",
+        "category": "needs_improvement",
+        "instruction": "Keep missing migrations/003_indexes.sql mock; assert message includes filename and missing/unreadable; verify open called once; keep exit_code==1, correct error.code, and strict 'outputs' absence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.16."
+      },
+      {
+        "test_id": "7.2.2.17",
+        "category": "needs_improvement",
+        "instruction": "Keep sql_executor invalid index SQL mock; assert message contains SQL error token and 'sql'/'syntax'; verify execute called once; enforce exit_code==1 and no 'outputs' key with correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.17."
+      },
+      {
+        "test_id": "7.2.2.18",
+        "category": "needs_improvement",
+        "instruction": "Keep executor error for indexes; assert message includes execution failure; verify executor called; assert exit_code==1, correct error.code, and 'outputs' key absent; add rollback assertions if spec requires.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.18."
+      },
+      {
+        "test_id": "7.2.2.19",
+        "category": "needs_improvement",
+        "instruction": "Keep missing migrations/004_rollbacks.sql mock; assert message includes filename; verify open called once; assert exit_code==1, correct error.code, and 'outputs' key absent with no events recorded.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.19."
+      },
+      {
+        "test_id": "7.2.2.20",
+        "category": "needs_improvement",
+        "instruction": "Keep sql_executor invalid rollback SQL mock; assert message includes SQL error; verify execute called once; enforce exit_code==1, specific error.code, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.20."
+      },
+      {
+        "test_id": "7.2.2.21",
+        "category": "needs_improvement",
+        "instruction": "Keep executor failure for rollback; assert message includes rollback failure; verify executor called; ensure exit_code==1 and 'outputs' key absent; assert no downstream steps executed.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.21."
+      },
+      {
+        "test_id": "7.2.2.22",
+        "category": "needs_improvement",
+        "instruction": "Augment generator for 7.2.2.22: assert error.message indicates missing DB URL/DSN config key; verify no DB operations performed (no events); keep exit_code==1, correct error.code, and 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.22 'Assertions' specify config key and no outputs."
+      },
+      {
+        "test_id": "7.2.2.23",
+        "category": "needs_improvement",
+        "instruction": "For invalid DSN, assert error.message indicates DSN parsing failure; verify no DB calls; retain exit_code==1, correct error.code, and no 'outputs' key in result dict.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.23."
+      },
+      {
+        "test_id": "7.2.2.24",
+        "category": "needs_improvement",
+        "instruction": "Keep socket.getaddrinfo mock and assert message mentions 'host' and 'resolve'; assert m_dns called once; retain exit_code==1, proper error.code, and enforce 'outputs' absence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.24 requires DNS boundary and message content."
+      },
+      {
+        "test_id": "7.2.2.25",
+        "category": "needs_improvement",
+        "instruction": "Add assertions that TLS-required flag is missing; message should indicate requirement; ensure no DB operations recorded; retain exit_code==1, specific error.code, and 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.25."
+      },
+      {
+        "test_id": "7.2.2.26",
+        "category": "needs_improvement",
+        "instruction": "Assert TLS-required config is not boolean; message should indicate type error; no DB ops; keep exit_code==1, correct error.code, and strict 'outputs' absence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.26."
+      },
+      {
+        "test_id": "7.2.2.27",
+        "category": "needs_improvement",
+        "instruction": "Mock TLS materials unavailable; assert message indicates missing TLS materials; verify boundary called; retain exit_code==1, correct error.code, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.27."
+      },
+      {
+        "test_id": "7.2.2.28",
+        "category": "needs_improvement",
+        "instruction": "Assert encryption mode missing in config; message must mention 'encryption mode' missing; ensure no encryption ops; keep exit_code==1, correct error.code, and 'outputs' absence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.28."
+      },
+      {
+        "test_id": "7.2.2.29",
+        "category": "needs_improvement",
+        "instruction": "Assert invalid encryption mode value; message mentions allowed values; keep exit_code==1 and strict 'outputs' absence with correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.29."
+      },
+      {
+        "test_id": "7.2.2.30",
+        "category": "needs_improvement",
+        "instruction": "Assert KMS key alias required for column encryption; message mentions alias requirement; verify no encryption applied; retain exit_code==1 and 'outputs' key absent with correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.30."
+      },
+      {
+        "test_id": "7.2.2.31",
+        "category": "needs_improvement",
+        "instruction": "Mock alias not found from KMS boundary; assert message mentions alias not found; verify boundary called; keep exit_code==1 and 'outputs' key absent, error.code exact.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.31."
+      },
+      {
+        "test_id": "7.2.2.32",
+        "category": "needs_improvement",
+        "instruction": "Mock KMS get_key failure; assert message includes KMS error; verify boundary called; retain exit_code==1, correct error.code, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.32."
+      },
+      {
+        "test_id": "7.2.2.33",
+        "category": "needs_improvement",
+        "instruction": "Mock KMS get_key schema mismatch; assert message includes schema mismatch details; verify boundary called; retain exit_code==1 and no 'outputs' key with exact error.code per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.33."
+      },
+      {
+        "test_id": "7.2.2.34",
+        "category": "needs_improvement",
+        "instruction": "Mock KMS get_key returns mutable; assert message mentions immutability requirement; verify boundary called; keep exit_code==1 and 'outputs' key absent, with correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.34."
+      },
+      {
+        "test_id": "7.2.2.35",
+        "category": "needs_improvement",
+        "instruction": "Mock secret manager failure; assert message includes secret retrieval error; verify boundary called; retain exit_code==1, correct error.code, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.35."
+      },
+      {
+        "test_id": "7.2.2.36",
+        "category": "needs_improvement",
+        "instruction": "Mock secret schema mismatch; assert message includes schema details; verify boundary called; keep exit_code==1, correct error.code, and 'outputs' absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.36."
+      },
+      {
+        "test_id": "7.2.2.37",
+        "category": "needs_improvement",
+        "instruction": "Assert that secrets are not logged; add a check that error logs (if captured) do not include secret values; retain exit_code==1, correct error.code, and 'outputs' absence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.37."
+      },
+      {
+        "test_id": "7.2.2.38",
+        "category": "needs_improvement",
+        "instruction": "Retain ca_bundle.pem missing mock; assert message mentions ca bundle missing; verify open called once; keep exit_code==1, error.code from spec, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.38."
+      },
+      {
+        "test_id": "7.2.2.39",
+        "category": "needs_improvement",
+        "instruction": "Mock invalid PEM for CA bundle; assert message mentions invalid PEM; verify boundary called; keep exit_code==1, correct error.code, and 'outputs' absence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.39."
+      },
+      {
+        "test_id": "7.2.2.40",
+        "category": "needs_improvement",
+        "instruction": "Mock CA cert not valid; assert message mentions certificate validity; verify boundary called; retain exit_code==1, correct error.code, and absence of 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.40."
+      },
+      {
+        "test_id": "7.2.2.41",
+        "category": "needs_improvement",
+        "instruction": "Retain encrypted fields policy missing mock; assert message mentions policy path; verify open called once; keep exit_code==1, correct error.code, and 'outputs' absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.41."
+      },
+      {
+        "test_id": "7.2.2.42",
+        "category": "needs_improvement",
+        "instruction": "Assert encrypted fields pointers unresolved; message mentions pointer resolution; verify boundary interactions if any; retain exit_code==1, correct error.code, and no 'outputs' key.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.42."
+      },
+      {
+        "test_id": "7.2.2.43",
+        "category": "needs_improvement",
+        "instruction": "Assert encrypted field not in entity; message should include entity/field names; retain exit_code==1, correct error.code, and 'outputs' key absent; add boundary verification if specified.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.43."
+      },
+      {
+        "test_id": "7.2.2.44",
+        "category": "needs_improvement",
+        "instruction": "Assert migration timeout missing; message mentions timeout key; keep exit_code==1, correct error.code, and no 'outputs' key; verify no migration execution started (no events).",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.44."
+      },
+      {
+        "test_id": "7.2.2.45",
+        "category": "needs_improvement",
+        "instruction": "Assert migration timeout not positive integer; message mentions validation; keep exit_code==1, correct error.code, and 'outputs' absence; verify no execution attempted.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.45."
+      },
+      {
+        "test_id": "7.2.2.46",
+        "category": "needs_improvement",
+        "instruction": "Assert runtime migration execution failure; message includes failure; verify executor called; ensure exit_code==1 and 'outputs' key absent; check no further steps executed per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.46."
+      },
+      {
+        "test_id": "7.2.2.47",
+        "category": "needs_improvement",
+        "instruction": "Assert runtime constraint creation error; message includes constraint failure; verify boundary called; keep exit_code==1, correct error.code, and 'outputs' absence; assert rollback if specified.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.47."
+      },
+      {
+        "test_id": "7.2.2.48",
+        "category": "needs_improvement",
+        "instruction": "Assert runtime encryption apply error; message includes encryption failure; verify KMS boundary invoked; retain exit_code==1 and no 'outputs' key with correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.48."
+      },
+      {
+        "test_id": "7.2.2.49",
+        "category": "needs_improvement",
+        "instruction": "Assert runtime rollback error; message mentions rollback failure; verify rollback boundary invoked; keep exit_code==1, correct error.code, and 'outputs' absence; assert no further steps.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.49."
+      },
+      {
+        "test_id": "7.2.2.50",
+        "category": "needs_improvement",
+        "instruction": "Assert TLS connection error at runtime; message mentions TLS; verify SSL boundary invoked; retain exit_code==1, correct error.code, and 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.50."
+      },
+      {
+        "test_id": "7.2.2.51",
+        "category": "needs_improvement",
+        "instruction": "Assert row insertion error; message includes insertion failure; verify validator/executor boundary invoked; keep exit_code==1, correct error.code, and 'outputs' absence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.51."
+      },
+      {
+        "test_id": "7.2.2.52",
+        "category": "needs_improvement",
+        "instruction": "Assert join resolution error; message includes 'join'; verify join boundary invoked; retain exit_code==1 and no 'outputs' key with correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.52."
+      },
+      {
+        "test_id": "7.2.2.53",
+        "category": "needs_improvement",
+        "instruction": "Assert invalid encryption key; message mentions 'key'/'encryption'; verify KMS boundary invoked; keep exit_code==1, correct error.code, and enforce 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.53."
+      },
+      {
+        "test_id": "7.2.2.54",
+        "category": "needs_improvement",
+        "instruction": "Assert TLS materials unavailable at runtime; message mentions TLS materials; verify boundary invoked; retain exit_code==1 and 'outputs' key absent with correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.54."
+      },
+      {
+        "test_id": "7.2.2.55",
+        "category": "needs_improvement",
+        "instruction": "Assert unsupported data type; message mentions 'unsupported'/'type'; verify validator boundary invoked; keep exit_code==1, correct error.code, and no 'outputs' key in result.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.55."
+      },
+      {
+        "test_id": "7.2.2.56",
+        "category": "needs_improvement",
+        "instruction": "Assert migration out of order; message mentions ordering; verify planner boundary if present; keep exit_code==1, correct error.code, and no 'outputs' key in result.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.56."
+      },
+      {
+        "test_id": "7.2.2.57",
+        "category": "needs_improvement",
+        "instruction": "Assert unidentified error is caught; message non-empty; optionally assert generic handler invoked; retain exit_code==1, correct error.code, and 'outputs' key absent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.57."
+      },
+      {
+        "test_id": "7.2.2.58",
+        "category": "needs_improvement",
+        "instruction": "For outputs: entities incomplete, assert error indicates incomplete entity set; verify no partial outputs returned (key absent); retain exit_code==1 and specific error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.58."
+      },
+      {
+        "test_id": "7.2.2.59",
+        "category": "needs_improvement",
+        "instruction": "For entities order not deterministic, assert detection and error; no outputs key; retain exit_code==1 and error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.59."
+      },
+      {
+        "test_id": "7.2.2.60",
+        "category": "needs_improvement",
+        "instruction": "For entities mutable within step, assert detection; enforce no outputs key; retain exit_code==1 and error.code matching spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.60."
+      },
+      {
+        "test_id": "7.2.2.61",
+        "category": "needs_improvement",
+        "instruction": "For entity name empty, assert detection; enforce no outputs key; retain exit_code==1 and specific error.code; verify message includes hint.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.61."
+      },
+      {
+        "test_id": "7.2.2.62",
+        "category": "needs_improvement",
+        "instruction": "For entity name mismatch with ERD, assert detection; no outputs key; retain exit_code==1 and correct error.code; include expected vs actual in message checks if specified.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.62."
+      },
+      {
+        "test_id": "7.2.2.63",
+        "category": "needs_improvement",
+        "instruction": "For entity name missing, assert detection; enforce no outputs key; retain exit_code==1 and specific error.code; message must mention missing name.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.63."
+      },
+      {
+        "test_id": "7.2.2.64",
+        "category": "needs_improvement",
+        "instruction": "For fields set invalid, assert detection; no outputs key; retain exit_code==1 and error.code; optionally assert which entity affected in message.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.64."
+      },
+      {
+        "test_id": "7.2.2.65",
+        "category": "needs_improvement",
+        "instruction": "For fields order not deterministic, assert detection; no outputs key; retain exit_code==1 and error.code; message indicates order non-determinism.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.65."
+      },
+      {
+        "test_id": "7.2.2.66",
+        "category": "needs_improvement",
+        "instruction": "For fields array missing, assert detection; no outputs key; keep exit_code==1 and error.code; message mentions fields array missing.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.66."
+      },
+      {
+        "test_id": "7.2.2.67",
+        "category": "needs_improvement",
+        "instruction": "For field name mismatch with ERD, assert detection; no outputs key; exit_code==1 and error.code; include mismatch details if required by spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.67."
+      },
+      {
+        "test_id": "7.2.2.68",
+        "category": "needs_improvement",
+        "instruction": "For field name not unique, assert detection; no outputs key; exit_code==1 and error.code; message mentions duplicate name.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.68."
+      },
+      {
+        "test_id": "7.2.2.69",
+        "category": "needs_improvement",
+        "instruction": "For field name missing, assert detection; no outputs key; exit_code==1 with error.code; message mentions missing field name.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.69."
+      },
+      {
+        "test_id": "7.2.2.70",
+        "category": "needs_improvement",
+        "instruction": "For field type mismatch with ERD, assert detection; no outputs key; exit_code==1 and error.code; message includes expected vs actual type if specified.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.70."
+      },
+      {
+        "test_id": "7.2.2.71",
+        "category": "needs_improvement",
+        "instruction": "For field type missing, assert detection; no outputs key; exit_code==1 and error.code; message mentions missing type.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.71."
+      },
+      {
+        "test_id": "7.2.2.72",
+        "category": "needs_improvement",
+        "instruction": "For encrypted flag false when required, assert detection; no outputs key; exit_code==1 and error.code; message identifies field(s).",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.72."
+      },
+      {
+        "test_id": "7.2.2.73",
+        "category": "needs_improvement",
+        "instruction": "For encrypted flag true when not required, assert detection; no outputs key; exit_code==1 and error.code; message indicates erroneous flags.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.73."
+      },
+      {
+        "test_id": "7.2.2.74",
+        "category": "needs_improvement",
+        "instruction": "For encrypted flag missing, assert detection; no outputs key; exit_code==1 and error.code; message mentions missing flags list for affected fields/entities.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.74."
+      },
+      {
+        "test_id": "7.2.2.75",
+        "category": "needs_improvement",
+        "instruction": "Primary Key Columns Empty: assert detection; no outputs key; exit_code==1 and error.code; message mentions empty pk columns for entity.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.75."
+      },
+      {
+        "test_id": "7.2.2.76",
+        "category": "needs_improvement",
+        "instruction": "Primary Key Columns Unknown: assert detection; no outputs key; exit_code==1 and error.code; message indicates unknown pk columns found.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.76."
+      },
+      {
+        "test_id": "7.2.2.77",
+        "category": "needs_improvement",
+        "instruction": "Primary Key Columns Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message indicates order non-determinism for pk columns.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.77."
+      },
+      {
+        "test_id": "7.2.2.78",
+        "category": "needs_improvement",
+        "instruction": "Primary Key Columns Missing When PK Defined: assert detection; no outputs key; exit_code==1 and error.code; message indicates missing pk columns for entity with PK defined.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.78."
+      },
+      {
+        "test_id": "7.2.2.79",
+        "category": "needs_improvement",
+        "instruction": "Foreign Keys Set Invalid: assert detection; no outputs key; exit_code==1 and error.code; message indicates invalid FK set composition.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.79."
+      },
+      {
+        "test_id": "7.2.2.80",
+        "category": "needs_improvement",
+        "instruction": "Foreign Keys Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message mentions non-deterministic FK order.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.80."
+      },
+      {
+        "test_id": "7.2.2.81",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key Name Empty: assert detection; no outputs key; exit_code==1 and error.code; message mentions empty FK name entries.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.81."
+      },
+      {
+        "test_id": "7.2.2.82",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key Name Not Unique: assert detection; no outputs key; exit_code==1 and error.code; message mentions duplicate FK names encountered.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.82."
+      },
+      {
+        "test_id": "7.2.2.83",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key Name Missing When FKs Exist: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing FK names where FKs provided.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.83."
+      },
+      {
+        "test_id": "7.2.2.84",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key Columns Unknown: assert detection; no outputs key; exit_code==1 and error.code; message mentions unknown FK columns encountered.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.84."
+      },
+      {
+        "test_id": "7.2.2.85",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key Columns Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message mentions non-deterministic FK column order.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.85."
+      },
+      {
+        "test_id": "7.2.2.86",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key Columns Missing When FKs Exist: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing FK columns where FKs provided.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.86."
+      },
+      {
+        "test_id": "7.2.2.87",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key References Entity Missing: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing referenced entity in FK definition.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.87."
+      },
+      {
+        "test_id": "7.2.2.88",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key References Columns Missing: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing referenced columns in FK definition.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.88."
+      },
+      {
+        "test_id": "7.2.2.89",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key References Entity Unknown: assert detection; no outputs key; exit_code==1 and error.code; message mentions unknown referenced entity name in FK definition.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.89."
+      },
+      {
+        "test_id": "7.2.2.90",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key References Columns Unknown: assert detection; no outputs key; exit_code==1 and error.code; message mentions unknown referenced columns in FK definition.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.90."
+      },
+      {
+        "test_id": "7.2.2.91",
+        "category": "needs_improvement",
+        "instruction": "Foreign Key References Columns Count Mismatch: assert detection; no outputs key; exit_code==1 and error.code; message mentions count mismatch in FK column mapping.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.91."
+      },
+      {
+        "test_id": "7.2.2.92",
+        "category": "needs_improvement",
+        "instruction": "Unique Constraints Set Invalid: assert detection; no outputs key; exit_code==1 and error.code; message indicates invalid unique constraints set composition.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.92."
+      },
+      {
+        "test_id": "7.2.2.93",
+        "category": "needs_improvement",
+        "instruction": "Unique Constraints Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message mentions non-deterministic unique constraint ordering.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.93."
+      },
+      {
+        "test_id": "7.2.2.94",
+        "category": "needs_improvement",
+        "instruction": "Unique Constraint Name Empty: assert detection; no outputs key; exit_code==1 and error.code; message mentions empty unique constraint names present.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.94."
+      },
+      {
+        "test_id": "7.2.2.95",
+        "category": "needs_improvement",
+        "instruction": "Unique Constraint Name Not Unique: assert detection; no outputs key; exit_code==1 and error.code; message mentions duplicate unique constraint names present.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.95."
+      },
+      {
+        "test_id": "7.2.2.96",
+        "category": "needs_improvement",
+        "instruction": "Unique Constraint Name Missing When Uniques Exist: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing names for existing unique constraints.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.96."
+      },
+      {
+        "test_id": "7.2.2.97",
+        "category": "needs_improvement",
+        "instruction": "Unique Constraint Columns Unknown: assert detection; no outputs key; exit_code==1 and error.code; message mentions unknown columns referenced in unique constraints.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.97."
+      },
+      {
+        "test_id": "7.2.2.98",
+        "category": "needs_improvement",
+        "instruction": "Unique Constraint Columns Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message mentions non-deterministic column ordering in unique constraints.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.98."
+      },
+      {
+        "test_id": "7.2.2.99",
+        "category": "needs_improvement",
+        "instruction": "Unique Constraint Columns Missing When Uniques Exist: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing columns in unique constraints.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.99."
+      },
+      {
+        "test_id": "7.2.2.100",
+        "category": "needs_improvement",
+        "instruction": "Indexes Set Invalid: assert detection; no outputs key; exit_code==1 and error.code; message indicates invalid indexes set composition.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.100."
+      },
+      {
+        "test_id": "7.2.2.101",
+        "category": "needs_improvement",
+        "instruction": "Indexes Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message mentions non-deterministic index order detected.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.101."
+      },
+      {
+        "test_id": "7.2.2.102",
+        "category": "needs_improvement",
+        "instruction": "Index Name Empty: assert detection; no outputs key; exit_code==1 and error.code; message mentions empty index names present in outputs.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.102."
+      },
+      {
+        "test_id": "7.2.2.103",
+        "category": "needs_improvement",
+        "instruction": "Index Name Not Unique: assert detection; no outputs key; exit_code==1 and error.code; message mentions duplicate index names present in outputs.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.103."
+      },
+      {
+        "test_id": "7.2.2.104",
+        "category": "needs_improvement",
+        "instruction": "Index Name Missing When Indexes Exist: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing index names while indexes exist.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.104."
+      },
+      {
+        "test_id": "7.2.2.105",
+        "category": "needs_improvement",
+        "instruction": "Index Columns Unknown: assert detection; no outputs key; exit_code==1 and error.code; message mentions unknown index columns in outputs vs ERD.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.105."
+      },
+      {
+        "test_id": "7.2.2.106",
+        "category": "needs_improvement",
+        "instruction": "Index Columns Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message mentions non-deterministic index column order detected.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.106."
+      },
+      {
+        "test_id": "7.2.2.107",
+        "category": "needs_improvement",
+        "instruction": "Index Columns Missing When Indexes Exist: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing index columns where indexes exist.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.107."
+      },
+      {
+        "test_id": "7.2.2.108",
+        "category": "needs_improvement",
+        "instruction": "Enums Incomplete: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing enum definitions in outputs vs ERD.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.108."
+      },
+      {
+        "test_id": "7.2.2.109",
+        "category": "needs_improvement",
+        "instruction": "Enums Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message mentions non-deterministic enum order detected.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.109."
+      },
+      {
+        "test_id": "7.2.2.110",
+        "category": "needs_improvement",
+        "instruction": "Enum Name Empty: assert detection; no outputs key; exit_code==1 and error.code; message mentions empty enum names present in outputs.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.110."
+      },
+      {
+        "test_id": "7.2.2.111",
+        "category": "needs_improvement",
+        "instruction": "Enum Name Mismatch With ERD: assert detection; no outputs key; exit_code==1 and error.code; message mentions enum name mismatch vs ERD definition.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.111."
+      },
+      {
+        "test_id": "7.2.2.112",
+        "category": "needs_improvement",
+        "instruction": "Enum Name Missing When Enums Exist: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing enum names while enums exist.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.112."
+      },
+      {
+        "test_id": "7.2.2.113",
+        "category": "needs_improvement",
+        "instruction": "Enum Values Empty: assert detection; no outputs key; exit_code==1 and error.code; message mentions empty enum values detected.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.113."
+      },
+      {
+        "test_id": "7.2.2.114",
+        "category": "needs_improvement",
+        "instruction": "Enum Values Mismatch With ERD: assert detection; no outputs key; exit_code==1 and error.code; message indicates mismatch vs ERD values for enum(s).",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.114."
+      },
+      {
+        "test_id": "7.2.2.115",
+        "category": "needs_improvement",
+        "instruction": "Enum Values Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message mentions enum values order non-deterministic.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.115."
+      },
+      {
+        "test_id": "7.2.2.116",
+        "category": "needs_improvement",
+        "instruction": "Enum Values Missing When Enums Exist: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing enum values while enums exist.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.116."
+      },
+      {
+        "test_id": "7.2.2.117",
+        "category": "needs_improvement",
+        "instruction": "Encrypted Fields Incomplete: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing encrypted fields entries in outputs vs policy/ERD.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.117."
+      },
+      {
+        "test_id": "7.2.2.118",
+        "category": "needs_improvement",
+        "instruction": "Encrypted Fields Values Not Unique: assert detection; no outputs key; exit_code==1 and error.code; message mentions duplicate entries found in encrypted fields manifest.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.118."
+      },
+      {
+        "test_id": "7.2.2.119",
+        "category": "needs_improvement",
+        "instruction": "Encrypted Fields Present When ERD None: assert detection; no outputs key; exit_code==1 and error.code; message mentions encrypted fields present despite ERD specifying none.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.119."
+      },
+      {
+        "test_id": "7.2.2.120",
+        "category": "needs_improvement",
+        "instruction": "Constraints Applied Incomplete: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing entries in constraints_applied listing.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.120."
+      },
+      {
+        "test_id": "7.2.2.121",
+        "category": "needs_improvement",
+        "instruction": "Constraints Applied Value Empty: assert detection; no outputs key; exit_code==1 and error.code; message mentions empty identifiers detected in constraints_applied list.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.121."
+      },
+      {
+        "test_id": "7.2.2.122",
+        "category": "needs_improvement",
+        "instruction": "Constraints Applied Values Not Unique: assert detection; no outputs key; exit_code==1 and error.code; message mentions duplicates in constraints_applied list.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.122."
+      },
+      {
+        "test_id": "7.2.2.123",
+        "category": "needs_improvement",
+        "instruction": "Constraints Applied Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message indicates non-deterministic order in constraints_applied.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.123."
+      },
+      {
+        "test_id": "7.2.2.124",
+        "category": "needs_improvement",
+        "instruction": "Migration Journal Empty: assert detection; no outputs key; exit_code==1 and error.code; message mentions empty migration_journal produced.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.124."
+      },
+      {
+        "test_id": "7.2.2.125",
+        "category": "needs_improvement",
+        "instruction": "Migration Journal Order Not Deterministic: assert detection; no outputs key; exit_code==1 and error.code; message mentions non-deterministic journal order detected.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.125."
+      },
+      {
+        "test_id": "7.2.2.126",
+        "category": "needs_improvement",
+        "instruction": "Migration Journal Missing Required Fields: assert detection; no outputs key; exit_code==1 and error.code; message mentions missing fields (e.g., filename, applied_at) in migration_journal entries; verify ISO-8601 if applicable elsewhere.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.2.2.126."
+      },
+      {
+        "test_id": "7.3.2.1",
+        "category": "needs_improvement",
+        "instruction": "In _gen_732_prelude/_gen_732_post for sec_id=='1', keep executor mock and assert error.message mentions 'migration'; verify executor called; enforce result.events is empty and 'outputs' key absent; retain exit_code==1 and error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.1."
+      },
+      {
+        "test_id": "7.3.2.2",
+        "category": "needs_improvement",
+        "instruction": "Keep constraint executor mock; assert message mentions 'constraint'; verify boundary called; assert no events recorded, 'outputs' key absent, exit_code==1, and error.code exact.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.2."
+      },
+      {
+        "test_id": "7.3.2.3",
+        "category": "needs_improvement",
+        "instruction": "Keep kms client mock; assert message mentions 'encryption'; verify boundary called; assert no events recorded, no 'outputs' key, exit_code==1, and correct error.code per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.3."
+      },
+      {
+        "test_id": "7.3.2.4",
+        "category": "needs_improvement",
+        "instruction": "Keep rollback executor mock; assert message mentions 'rollback'; verify boundary called; assert no events, no 'outputs' key, exit_code==1, and correct error.code per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.4."
+      },
+      {
+        "test_id": "7.3.2.5",
+        "category": "needs_improvement",
+        "instruction": "Keep SSL wrap_socket mock raising SSLError; assert message mentions 'TLS'; verify boundary called once; assert no events and 'outputs' key absent; retain exit_code==1 and correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.5."
+      },
+      {
+        "test_id": "7.3.2.6",
+        "category": "needs_improvement",
+        "instruction": "Keep row validator mock; assert message mentions 'validation'/'type'; verify boundary called; assert no events, 'outputs' key absent; retain exit_code==1 and correct error.code per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.6."
+      },
+      {
+        "test_id": "7.3.2.7",
+        "category": "needs_improvement",
+        "instruction": "Keep join executor mock; assert message mentions 'join'; verify boundary called; assert no events and no 'outputs' key; keep exit_code==1 and specific error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.7."
+      },
+      {
+        "test_id": "7.3.2.8",
+        "category": "needs_improvement",
+        "instruction": "Keep kms client mock; assert message mentions 'key'/'encryption'; verify boundary called; assert no events and 'outputs' key absent; retain exit_code==1 and correct error.code per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.8."
+      },
+      {
+        "test_id": "7.3.2.9",
+        "category": "needs_improvement",
+        "instruction": "Keep FileNotFoundError mock for CA bundle; assert message mentions 'TLS' and 'material'; verify mock called once; assert no events and 'outputs' key absent; retain exit_code==1 and correct error.code per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.9."
+      },
+      {
+        "test_id": "7.3.2.10",
+        "category": "needs_improvement",
+        "instruction": "Keep type validator mock; assert message mentions 'unsupported'/'type'; verify boundary called; assert no events and 'outputs' key absent; retain exit_code==1 and correct error.code per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.10."
+      },
+      {
+        "test_id": "7.3.2.11",
+        "category": "needs_improvement",
+        "instruction": "Assert out-of-order migration execution halts sequence; verify planner/runner boundary behaviors per spec; assert no events after failure and no 'outputs' key; retain exit_code==1 and error.code exact.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.11."
+      },
+      {
+        "test_id": "7.3.2.12",
+        "category": "needs_improvement",
+        "instruction": "Assert unidentified runtime error halts STEP-3; message non-empty; assert no further events and 'outputs' key absent; retain exit_code==1 and error.code per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.12."
+      },
+      {
+        "test_id": "7.3.2.13",
+        "category": "needs_improvement",
+        "instruction": "Assert database connectivity failure halts STEP-3; mock DB connect failure; verify boundary called; assert no events and no 'outputs' key; retain exit_code==1 and error.code exact.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.13."
+      },
+      {
+        "test_id": "7.3.2.14",
+        "category": "needs_improvement",
+        "instruction": "Assert DB permission failure halts STEP-3; mock permission error; verify boundary called; assert no events and no 'outputs' key; retain exit_code==1 and error.code exact.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.14."
+      },
+      {
+        "test_id": "7.3.2.15",
+        "category": "needs_improvement",
+        "instruction": "Assert TLS certificate/handshake failure halts STEP-3; reuse SSL boundary mock; assert no events and 'outputs' key absent; retain exit_code==1 and specific error.code per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.15."
+      },
+      {
+        "test_id": "7.3.2.16",
+        "category": "needs_improvement",
+        "instruction": "Assert DB storage exhaustion halts STEP-3; mock storage error; verify boundary called; assert no events and 'outputs' key absent; keep exit_code==1 and error.code per spec.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.16."
+      },
+      {
+        "test_id": "7.3.2.17",
+        "category": "needs_improvement",
+        "instruction": "Assert filesystem/temp unavailability prevents continuation; mock temp FS error; verify boundary called; assert no events and 'outputs' key absent; retain exit_code==1 and correct error.code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.17."
+      },
+      {
+        "test_id": "7.3.2.18",
+        "category": "needs_improvement",
+        "instruction": "Assert KMS unavailability halts encryption operations; mock KMS unavailability; verify boundary called; assert no events and 'outputs' key absent; retain exit_code==1 and error.code exact.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.18."
+      },
+      {
+        "test_id": "7.3.2.19",
+        "category": "needs_improvement",
+        "instruction": "Assert policy/registry unavailability stops STEP-3 as specified; mock policy fetch failure; verify boundary called; assert no events and 'outputs' key absent; retain exit_code==1 and error.code exact.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.19."
+      },
+      {
+        "test_id": "7.3.2.20",
+        "category": "needs_improvement",
+        "instruction": "Assert cache/queue unavailability halts STEP-3 as specified; mock Redis queue failure; verify boundary called; assert no events and 'outputs' key absent; retain exit_code==1 and error.code exact.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Spec 7.3.2.20."
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

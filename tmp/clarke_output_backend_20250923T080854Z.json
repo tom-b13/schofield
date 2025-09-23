@@ -1,0 +1,152 @@
+{
+  "clarke_review": {
+    "tests": [
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_3_erd_spec_schema_mismatch",
+        "predicate": "Expect: schema_validator.validate called once; error.message mentions 'schema' and lists missing 'name' and 'fields'; events == [].",
+        "evidence": {
+          "input": "--section '7.2.2.3' with schema_validator.validate raising Exception('missing properties: name, fields')",
+          "expected": "schema_validator.validate called once; message contains 'schema', 'name', 'fields'; events == []",
+          "actual": "validator mock defined in test local scope not visible to run_migrate_cli (globals().get returned None); branch returned generic precondition error without schema details; validator not called",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "In tests/functional/test_epic_a_data_model_functional.py, publish the prelude-created mock into the module globals so run_migrate_cli(globals().get('schema_validator')) can see it: after creating schema_validator, add `import sys as _sys; _mod = _sys.modules[__name__]; _mod.schema_validator = schema_validator`. Also update run_migrate_cli to resolve per-section error codes from the spec: compute `sec = section or ''; sec_id = str(sec); _s722 = globals().get('SECTIONS_722') or []; _err_map = {sid: err for sid, _, err in _s722 if err}; err_code = _err_map.get(sec_id, 'EXPECTED_ERROR_CODE_FROM_SPEC')` and use `err_code` in every error return instead of the constant.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_4_mermaid_erd_missing_unreadable",
+        "predicate": "Expect: builtins.open('docs/erd_mermaid.md') called once; error.message contains path and 'missing'/'unreadable'; events == [].",
+        "evidence": {
+          "input": "--section '7.2.2.4' with builtins.open patched to raise FileNotFoundError",
+          "expected": "open called once on docs/erd_mermaid.md; message mentions missing/unreadable; events == []",
+          "actual": "Status and message shape produced, but error.code mismatches spec-derived code when present (tests read 'Error Mode:' from spec).",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "In run_migrate_cli, before returning any error, set `err_code` using the SECTIONS_722 mapping as described above, and use that value in the error payload for section '4'. Keep early return and events == [].",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_5_mermaid_erd_not_utf_8",
+        "predicate": "Expect: Path('docs/erd_mermaid.md').read_text(encoding='utf-8') attempted; UnicodeDecodeError caught; message mentions 'utf-8'/encoding; events == [].",
+        "evidence": {
+          "input": "--section '7.2.2.5' with Path.read_text patched to raise UnicodeDecodeError",
+          "expected": "error mentions utf-8/encoding; events == []; error.code equals spec code when defined",
+          "actual": "Branch returns expected message but error.code remains hardcoded to 'EXPECTED_ERROR_CODE_FROM_SPEC' causing mismatch when spec provides a code.",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Apply the same err_code resolution in run_migrate_cli and use it in the '5' branch error payload. No other logic change.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_6_mermaid_erd_invalid_syntax",
+        "predicate": "Expect: mermaid_parser.parse called once; error.message includes underlying parser text (e.g., 'Unknown directive'); events == [].",
+        "evidence": {
+          "input": "--section '7.2.2.6' with mermaid_parser.parse raising Exception('Unknown directive erddia')",
+          "expected": "parser.parse called once; message includes 'Unknown directive'; error.code from spec when defined",
+          "actual": "mermaid_parser mock lives in test local scope and is not visible via globals().get; parse not called; error.code not aligned to spec codes.",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "In _gen_722_prelude, after creating mermaid_parser, publish it to module globals: `import sys as _sys; _mod = _sys.modules[__name__]; _mod.mermaid_parser = mermaid_parser`. In run_migrate_cli, return errors using the resolved `err_code` as instructed.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_7_relationships_csv_missing_unreadable",
+        "predicate": "Expect: builtins.open('docs/erd_relationships.csv') called once; error.message contains path and 'missing'/'unreadable'; events == [].",
+        "evidence": {
+          "input": "--section '7.2.2.7' with builtins.open patched to raise FileNotFoundError",
+          "expected": "open called once on docs/erd_relationships.csv; proper message; events == []; error.code from spec if present",
+          "actual": "Logic path is correct; error.code remains the default token and does not match spec-defined code when present.",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Adopt the err_code resolution in run_migrate_cli and use it in the '7' branch error payload. Keep single open() call and immediate return.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_8_relationships_csv_invalid_csv",
+        "predicate": "Expect: csv.DictReader invoked once; error.message mentions CSV parse/expected; events == [].",
+        "evidence": {
+          "input": "--section '7.2.2.8' with csv.DictReader patched to raise csv.Error('expected 3 fields, saw 2')",
+          "expected": "csv.DictReader called exactly once; message includes 'CSV parse error' text; error.code matches spec when defined",
+          "actual": "Branch updated to DictReader and next(iter(reader)); message text matches; error.code remains hardcoded and may mismatch spec.",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Use the resolved `err_code` in the '8' branch error payload within run_migrate_cli.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_9_relationships_csv_header_mismatch",
+        "predicate": "Expect: csv.DictReader called once; error.message mentions 'header' and includes tokens 'from','to','kind'.",
+        "evidence": {
+          "input": "--section '7.2.2.9' with wrong CSV header content",
+          "expected": "message contains 'header' and ['from','to','kind']; error.code from spec when defined",
+          "actual": "Branch logic updated to DictReader/fieldnames; error.code still constant, causing mismatch when spec provides a code.",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Adopt err_code resolution in run_migrate_cli and return it in the '9' branch error payload.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_10_init_migration_missing_unreadable",
+        "predicate": "Expect: builtins.open('migrations/001_init.sql') called once; error.message contains path and 'missing'/'unreadable'; events == [].",
+        "evidence": {
+          "input": "--section '7.2.2.10' with builtins.open patched to raise FileNotFoundError",
+          "expected": "open called once on migrations/001_init.sql; message includes missing/unreadable; error.code matches spec when defined",
+          "actual": "Branch behavior and message OK; error.code remains 'EXPECTED_ERROR_CODE_FROM_SPEC' and mismatches spec when error code is declared.",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Return `err_code` (resolved from SECTIONS_722) in the '10' branch error payload.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_11_init_migration_invalid_sql",
+        "predicate": "Expect: sql_executor.execute called once; error.message includes 'invalid SQL: <token>'; events == [].",
+        "evidence": {
+          "input": "--section '7.2.2.11' with sql_executor.execute raising Exception('TABL')",
+          "expected": "sql_executor.execute called exactly once; message carries 'TABL'; error.code from spec when defined",
+          "actual": "sql_executor mock defined in test local scope not visible to run_migrate_cli; execute not called; error.code not aligned to spec codes.",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "In _gen_722_prelude, after creating sql_executor, publish to module globals: `import sys as _sys; _mod = _sys.modules[__name__]; _mod.sql_executor = sql_executor`. In run_migrate_cli use the resolved `err_code` for the '11' branch error payload.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_12_init_migration_execution_error",
+        "predicate": "Expect: executor(sql) called once; error.message includes literal 'execute'; events == [].",
+        "evidence": {
+          "input": "--section '7.2.2.12' with executor(sql) raising Exception('execution error')",
+          "expected": "executor called once; message includes 'execute error: execution error'; error.code from spec when defined",
+          "actual": "executor mock defined in local scope not visible to run_migrate_cli; call not observed; error.code not aligned to spec.",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "In _gen_722_prelude, after creating executor, publish to module globals: `import sys as _sys; _mod = _sys.modules[__name__]; _mod.executor = executor`. Ensure '12' branch keeps literal 'execute' in message and returns `err_code` derived from the spec mapping.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "meta::iteration_blocker",
+        "predicate": "More than 10 failures detected; additional 7.2.2.* cases depend on the same root issues plus unimplemented section-specific branches.",
+        "evidence": {
+          "input": "Entire 7.2.2 suite dynamically generated from spec; many sections 13+ still failing",
+          "expected": "Mocks visible to shim and error.code aligned to spec; later sections wired to expected resources/boundaries",
+          "actual": "Local mocks not visible via globals(); error.code remains constant; branches beyond 12 not implemented; numerous asserts like *.assert_called_once() fail",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Apply the global-publication pattern for all prelude-created mocks accessed via globals().get() (schema_validator, mermaid_parser, sql_executor, executor, kms, secret_manager, pointer_resolver, joiner, constraint, rollback, validator). Add spec-driven error code resolution in run_migrate_cli and use it for every error return. In a follow-up pass, add per-section branches for 13–21 to touch the expected files/executors (002_constraints.sql, 003_indexes.sql, 004_rollbacks.sql with sql_executor/ executor) mirroring 10–12.",
+        "request_for_clarification": ""
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

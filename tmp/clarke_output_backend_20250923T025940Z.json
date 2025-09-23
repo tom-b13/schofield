@@ -1,0 +1,379 @@
+{
+  "clarke_review": {
+    "acceptable_as_is": [
+      "7.2.1.1",
+      "7.2.1.2",
+      "7.2.1.3",
+      "7.2.1.4",
+      "7.2.1.5",
+      "7.2.1.6",
+      "7.2.1.7",
+      "7.2.1.8",
+      "7.2.1.9",
+      "7.2.1.10",
+      "7.2.1.11",
+      "7.2.1.12",
+      "7.2.1.13",
+      "7.2.1.14",
+      "7.2.1.15",
+      "7.2.1.16",
+      "7.2.1.17",
+      "7.2.2.1",
+      "7.2.2.2",
+      "7.2.2.3",
+      "7.2.2.4",
+      "7.2.2.5",
+      "7.2.2.6",
+      "7.2.2.7",
+      "7.2.2.8",
+      "7.2.2.9",
+      "7.2.2.10",
+      "7.2.2.11",
+      "7.2.2.12",
+      "7.2.2.13",
+      "7.2.2.14",
+      "7.2.2.15",
+      "7.2.2.16",
+      "7.2.2.17",
+      "7.2.2.18",
+      "7.2.2.19",
+      "7.2.2.20",
+      "7.2.2.21",
+      "7.2.2.22",
+      "7.2.2.23",
+      "7.2.2.24",
+      "7.2.2.25",
+      "7.2.2.26",
+      "7.2.2.27",
+      "7.2.2.28",
+      "7.2.2.29",
+      "7.2.2.30",
+      "7.2.2.31",
+      "7.2.2.32",
+      "7.2.2.33",
+      "7.2.2.34",
+      "7.2.2.35",
+      "7.2.2.36",
+      "7.2.2.37",
+      "7.2.2.38",
+      "7.2.2.39",
+      "7.2.2.40",
+      "7.2.2.41",
+      "7.2.2.42",
+      "7.2.2.43",
+      "7.2.2.44",
+      "7.2.2.45",
+      "7.2.2.46",
+      "7.2.2.47",
+      "7.2.2.48",
+      "7.2.2.49",
+      "7.2.2.50",
+      "7.2.2.51",
+      "7.2.2.52",
+      "7.2.2.53",
+      "7.2.2.54",
+      "7.2.2.55",
+      "7.2.2.56",
+      "7.2.2.57",
+      "7.2.2.58",
+      "7.2.2.59",
+      "7.2.2.60",
+      "7.2.2.61",
+      "7.2.2.62",
+      "7.2.2.63",
+      "7.2.2.64",
+      "7.2.2.65",
+      "7.2.2.66",
+      "7.2.2.67",
+      "7.2.2.68",
+      "7.2.2.69",
+      "7.2.2.70",
+      "7.2.2.71",
+      "7.2.2.72",
+      "7.2.2.73",
+      "7.2.2.74",
+      "7.2.2.79",
+      "7.2.2.83",
+      "7.2.2.86",
+      "7.2.2.87",
+      "7.2.2.88",
+      "7.2.2.89",
+      "7.2.2.90",
+      "7.2.2.91",
+      "7.2.2.92",
+      "7.2.2.96",
+      "7.2.2.99",
+      "7.2.2.100",
+      "7.2.2.104",
+      "7.2.2.107",
+      "7.2.2.108",
+      "7.2.2.109",
+      "7.2.2.110",
+      "7.2.2.111",
+      "7.2.2.112",
+      "7.2.2.113",
+      "7.2.2.116",
+      "7.2.2.117",
+      "7.2.2.118",
+      "7.2.2.119",
+      "7.2.2.120",
+      "7.2.2.121",
+      "7.2.2.122",
+      "7.2.2.123",
+      "7.2.2.124",
+      "7.2.2.125",
+      "7.2.2.126",
+      "7.3.1.1",
+      "7.3.1.2",
+      "7.3.1.3",
+      "7.3.1.4",
+      "7.3.1.5",
+      "7.3.1.6",
+      "7.3.1.7",
+      "7.3.1.8",
+      "7.3.1.9",
+      "7.3.1.10",
+      "7.3.1.11",
+      "7.3.1.12",
+      "7.3.2.1",
+      "7.3.2.2",
+      "7.3.2.3",
+      "7.3.2.4",
+      "7.3.2.5",
+      "7.3.2.6",
+      "7.3.2.7",
+      "7.3.2.8",
+      "7.3.2.9",
+      "7.3.2.10",
+      "7.3.2.11",
+      "7.3.2.12",
+      "7.3.2.13",
+      "7.3.2.14",
+      "7.3.2.15",
+      "7.3.2.16",
+      "7.3.2.17",
+      "7.3.2.18",
+      "7.3.2.19",
+      "7.3.2.20"
+    ],
+    "needs_improvement": [
+      "7.2.2.75",
+      "7.2.2.76",
+      "7.2.2.77",
+      "7.2.2.78",
+      "7.2.2.80",
+      "7.2.2.81",
+      "7.2.2.82",
+      "7.2.2.84",
+      "7.2.2.85",
+      "7.2.2.93",
+      "7.2.2.94",
+      "7.2.2.95",
+      "7.2.2.97",
+      "7.2.2.98",
+      "7.2.2.101",
+      "7.2.2.102",
+      "7.2.2.103",
+      "7.2.2.105",
+      "7.2.2.106",
+      "7.2.2.114",
+      "7.2.2.115"
+    ],
+    "required_missing_tests": [],
+    "suspicious_passing_tests": [],
+    "explicit_actions_for_ada": [
+      {
+        "test_id": "7.2.2.75",
+        "category": "needs_improvement",
+        "instruction": "In _gen_722_post, replace the multi-line post.append for PK checks with a properly indented block (use textwrap.indent on the entire block or convert to a single-line comprehension) so the generated function body is syntactically valid.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "IndentationError at import (tmp/raw_test_output_backend_20250923T025315Z.txt). Offending template string at ~line 942: post.append(\"for e in ents:\\n    pk = ...\\n    assert pk and all(pk)\") — inner lines lack function+block indentation."
+      },
+      {
+        "test_id": "7.2.2.76",
+        "category": "needs_improvement",
+        "instruction": "Fix indentation for the generated PK-known-fields loop in _gen_722_post by indenting all lines equally (e.g., wrap with textwrap.indent) so the block nests under the for-statement.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "See ~line 949: post.append(\"for e in ents:\\n    pk = ...\\n    assert set(pk).issubset(...)\") — IndentationError evidenced in tmp/raw_test_output_backend_20250923T025315Z.txt."
+      },
+      {
+        "test_id": "7.2.2.77",
+        "category": "needs_improvement",
+        "instruction": "Correct the generated PK ordering loop indentation in _gen_722_post (indent entire block or refactor to a comprehension) to avoid IndentationError.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 956 string starts with \"for e in ents:\\n    pk = ...\\n    assert pk == sorted(pk)\"; import fails before collection."
+      },
+      {
+        "test_id": "7.2.2.78",
+        "category": "needs_improvement",
+        "instruction": "Indent the entire multi-line block for ERD-PK presence in _gen_722_post so nested lines are 8 spaces (function + block) or use textwrap.indent to generate valid code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 963 block begins \"for e in ents:\" and includes nested lines; IndentationError reported in raw test output."
+      },
+      {
+        "test_id": "7.2.2.80",
+        "category": "needs_improvement",
+        "instruction": "Ensure the FK order validation loop is fully indented in _gen_722_post (indent all lines or refactor) to be valid Python.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 972: post.append(\"for e in ents:\\n    fks = ...\\n    assert names == sorted(names)\") — improper block indentation."
+      },
+      {
+        "test_id": "7.2.2.81",
+        "category": "needs_improvement",
+        "instruction": "Indent the FK non-empty name loop block in _gen_722_post using textwrap.indent or equivalent to fix syntax.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 979: multi-line string for 'for e in ents:' causes IndentationError during exec()."
+      },
+      {
+        "test_id": "7.2.2.82",
+        "category": "needs_improvement",
+        "instruction": "Indent the FK unique-name loop block in _gen_722_post so nested lines are correctly scoped under the for-statement.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 986: multi-line post.append with 'for e in ents:' not fully indented."
+      },
+      {
+        "test_id": "7.2.2.84",
+        "category": "needs_improvement",
+        "instruction": "Indent both the outer 'for e in ents' and inner 'for fk in fks' blocks in _gen_722_post (use textwrap.indent on the whole snippet) to eliminate import-time IndentationError.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 993: nested loops emitted as flat lines; raw_test_output shows IndentationError."
+      },
+      {
+        "test_id": "7.2.2.85",
+        "category": "needs_improvement",
+        "instruction": "Apply proper indentation to the FK columns order loop(s) in _gen_722_post to generate valid Python within the function body.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1000: 'for e in ents' then 'for fk in fks' lines lack additional indent."
+      },
+      {
+        "test_id": "7.2.2.93",
+        "category": "needs_improvement",
+        "instruction": "Indent the uniques ordering loop in _gen_722_post or refactor into a single-line assertion to avoid indentation issues.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1009: 'for e in ents' block string leads to IndentationError."
+      },
+      {
+        "test_id": "7.2.2.94",
+        "category": "needs_improvement",
+        "instruction": "Indent the uniques non-empty name loop in _gen_722_post using textwrap.indent so nested lines are correctly scoped.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1016 shows unindented nested lines after 'for e in ents:'."
+      },
+      {
+        "test_id": "7.2.2.95",
+        "category": "needs_improvement",
+        "instruction": "Indent the uniques unique-name loop block in _gen_722_post to fix the import-time IndentationError.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1023: multi-line string beginning with 'for e in ents:' not fully indented."
+      },
+      {
+        "test_id": "7.2.2.97",
+        "category": "needs_improvement",
+        "instruction": "Indent the uniques known-fields nested loops in _gen_722_post (or rewrite using comprehensions) so code is syntactically valid.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1030: nested 'for e in ents' / 'for uc in ucs' emitted without proper indentation."
+      },
+      {
+        "test_id": "7.2.2.98",
+        "category": "needs_improvement",
+        "instruction": "Indent the uniques columns-order loops in _gen_722_post to resolve the IndentationError during exec().",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1037: 'for e in ents' then 'for uc in ucs' not indented enough for nested block."
+      },
+      {
+        "test_id": "7.2.2.101",
+        "category": "needs_improvement",
+        "instruction": "Indent the indexes ordering loop in _gen_722_post or refactor to a one-liner assertion to maintain valid syntax.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1046: multi-line 'for e in ents' string causes IndentationError."
+      },
+      {
+        "test_id": "7.2.2.102",
+        "category": "needs_improvement",
+        "instruction": "Indent the indexes non-empty names loop in _gen_722_post using textwrap.indent for all lines inside the generated function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1053: nested lines for 'for e in ents' block not indented."
+      },
+      {
+        "test_id": "7.2.2.103",
+        "category": "needs_improvement",
+        "instruction": "Indent the indexes unique-name loop in _gen_722_post so the generated code parses correctly under the 'for' statement.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1060: block begins with 'for e in ents:' and lacks proper nested indentation."
+      },
+      {
+        "test_id": "7.2.2.105",
+        "category": "needs_improvement",
+        "instruction": "Indent the indexes known-fields nested loops in _gen_722_post (apply textwrap.indent to the entire multi-line string) to avoid syntax errors.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1067: nested 'for e in ents' / 'for ix in idxs' block not indented correctly."
+      },
+      {
+        "test_id": "7.2.2.106",
+        "category": "needs_improvement",
+        "instruction": "Indent the indexes columns-order nested loops in _gen_722_post so the generated test function is valid Python.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1074: 'for e in ents' + 'for ix in idxs' block missing nested indentation."
+      },
+      {
+        "test_id": "7.2.2.114",
+        "category": "needs_improvement",
+        "instruction": "Indent the enums value-subset loop in _gen_722_post (wrap multi-line snippet with textwrap.indent), or rewrite to a comprehension, to fix the IndentationError.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1104: multi-line string begins with \"for e in enums:\"; import fails per tmp/raw_test_output_backend_20250923T025315Z.txt."
+      },
+      {
+        "test_id": "7.2.2.115",
+        "category": "needs_improvement",
+        "instruction": "Indent the enums values-ordered loop in _gen_722_post so nested lines are indented under the 'for' block correctly (or collapse into a vectorised assertion).",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "~line 1108: 'for e in enums' block emitted without sufficient indentation."
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

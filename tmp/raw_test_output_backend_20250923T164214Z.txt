@@ -1,0 +1,31 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-8.4.1, pluggy-1.6.0
+rootdir: /home/codex/schofield
+plugins: mock-3.14.1, anyio-4.9.0, cov-6.2.1, langsmith-0.4.1
+collected 190 items
+
+tests/architectural/test_epic_a_data_model_architecture.py ............. [  6%]
+..............                                                           [ 14%]
+tests/functional/test_epic_a_data_model_functional.py .................. [ 23%]
+.................x...................................................... [ 61%]
+.................................................................F...... [ 99%]
+.                                                                        [100%]
+
+=================================== FAILURES ===================================
+____________ test_7_2_2_119_encrypted_fields_present_when_erd_none _____________
+
+    def test_7_2_2_119_encrypted_fields_present_when_erd_none():
+        """Verifies 7.2.2.119 — Encrypted Fields Present When ERD None."""
+        outputs = _get_outputs_for_contract()
+        # When ERD defines none, manifest must be empty
+>       assert outputs.get("encrypted_fields") in ([], None)
+E       AssertionError: assert ['Company.legal_name', 'Company.registered_office_address', 'GeneratedDocument.output_uri', 'Response.value_json'] in ([], None)
+E        +  where ['Company.legal_name', 'Company.registered_office_address', 'GeneratedDocument.output_uri', 'Response.value_json'] = <built-in method get of dict object at 0x7f20593a83c0>('encrypted_fields')
+E        +    where <built-in method get of dict object at 0x7f20593a83c0> = {'config': {'database': {'ssl': {'required': True}}}, 'constraints_applied': ['fk_response_set', 'pk_response', 'uq_re...ame': 'q2fg_id', 'type': 'uuid'}, {'name': 'question_id', 'type': 'uuid'}], 'name': 'QuestionToFieldGroup'}, ...], ...}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2823: AssertionError
+=========================== short test summary info ============================
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_119_encrypted_fields_present_when_erd_none - AssertionError: assert ['Company.legal_name', 'Company.registered_office_address', 'GeneratedDocument.output_uri', 'Response.value_json'] in ([], None)
+ +  where ['Company.legal_name', 'Company.registered_office_address', 'GeneratedDocument.output_uri', 'Response.value_json'] = <built-in method get of dict object at 0x7f20593a83c0>('encrypted_fields')
+ +    where <built-in method get of dict object at 0x7f20593a83c0> = {'config': {'database': {'ssl': {'required': True}}}, 'constraints_applied': ['fk_response_set', 'pk_response', 'uq_re...ame': 'q2fg_id', 'type': 'uuid'}, {'name': 'question_id', 'type': 'uuid'}], 'name': 'QuestionToFieldGroup'}, ...], ...}.get
+=================== 1 failed, 188 passed, 1 xfailed in 1.49s ===================

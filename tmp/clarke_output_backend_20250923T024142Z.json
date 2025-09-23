@@ -1,0 +1,568 @@
+{
+  "clarke_review": {
+    "acceptable_as_is": [
+      "7.2.1.1",
+      "7.2.1.2",
+      "7.2.1.3",
+      "7.2.1.4",
+      "7.2.1.5",
+      "7.2.1.6",
+      "7.2.1.7",
+      "7.2.1.8",
+      "7.2.1.9",
+      "7.2.1.10",
+      "7.2.1.11",
+      "7.2.1.12",
+      "7.2.1.13",
+      "7.2.1.14",
+      "7.2.1.15",
+      "7.2.1.16",
+      "7.2.1.17",
+      "7.2.2.1",
+      "7.2.2.2",
+      "7.2.2.3",
+      "7.2.2.4",
+      "7.2.2.5",
+      "7.2.2.6",
+      "7.2.2.7",
+      "7.2.2.8",
+      "7.2.2.9",
+      "7.2.2.10",
+      "7.2.2.11",
+      "7.2.2.12",
+      "7.2.2.13",
+      "7.2.2.14",
+      "7.2.2.15",
+      "7.2.2.16",
+      "7.2.2.17",
+      "7.2.2.18",
+      "7.2.2.19",
+      "7.2.2.20",
+      "7.2.2.21",
+      "7.2.2.22",
+      "7.2.2.23",
+      "7.2.2.24",
+      "7.2.2.25",
+      "7.2.2.26",
+      "7.2.2.27",
+      "7.2.2.28",
+      "7.2.2.29",
+      "7.2.2.30",
+      "7.2.2.31",
+      "7.2.2.32",
+      "7.2.2.33",
+      "7.2.2.34",
+      "7.2.2.35",
+      "7.2.2.36",
+      "7.2.2.37",
+      "7.2.2.38",
+      "7.2.2.39",
+      "7.2.2.40",
+      "7.2.2.41",
+      "7.2.2.42",
+      "7.2.2.43",
+      "7.2.2.44",
+      "7.2.2.45",
+      "7.2.2.46",
+      "7.2.2.47",
+      "7.2.2.48",
+      "7.2.2.49",
+      "7.2.2.50",
+      "7.2.2.51",
+      "7.2.2.52",
+      "7.2.2.53",
+      "7.2.2.54",
+      "7.2.2.55",
+      "7.2.2.56",
+      "7.2.2.57",
+      "7.2.2.58",
+      "7.2.2.59",
+      "7.2.2.60",
+      "7.2.2.61",
+      "7.2.2.62",
+      "7.2.2.63",
+      "7.2.2.64",
+      "7.2.2.65",
+      "7.2.2.66",
+      "7.2.2.67",
+      "7.2.2.68",
+      "7.2.2.69",
+      "7.2.2.70",
+      "7.2.2.71",
+      "7.2.2.72",
+      "7.2.2.73",
+      "7.2.2.74",
+      "7.2.2.117",
+      "7.2.2.118",
+      "7.2.2.119",
+      "7.2.2.120",
+      "7.2.2.121",
+      "7.2.2.122",
+      "7.2.2.123",
+      "7.2.2.124",
+      "7.2.2.125",
+      "7.2.2.126",
+      "7.3.1.1",
+      "7.3.1.2",
+      "7.3.1.3",
+      "7.3.1.4",
+      "7.3.1.5",
+      "7.3.1.6",
+      "7.3.1.7",
+      "7.3.1.8",
+      "7.3.1.9",
+      "7.3.1.10",
+      "7.3.1.11",
+      "7.3.1.12",
+      "7.3.2.1",
+      "7.3.2.2",
+      "7.3.2.3",
+      "7.3.2.4",
+      "7.3.2.5",
+      "7.3.2.6",
+      "7.3.2.7",
+      "7.3.2.8",
+      "7.3.2.9",
+      "7.3.2.10",
+      "7.3.2.11",
+      "7.3.2.12",
+      "7.3.2.13",
+      "7.3.2.14",
+      "7.3.2.15",
+      "7.3.2.16",
+      "7.3.2.17",
+      "7.3.2.18",
+      "7.3.2.19",
+      "7.3.2.20"
+    ],
+    "needs_improvement": [
+      "7.2.2.75",
+      "7.2.2.76",
+      "7.2.2.77",
+      "7.2.2.78",
+      "7.2.2.79",
+      "7.2.2.80",
+      "7.2.2.81",
+      "7.2.2.82",
+      "7.2.2.83",
+      "7.2.2.84",
+      "7.2.2.85",
+      "7.2.2.86",
+      "7.2.2.87",
+      "7.2.2.88",
+      "7.2.2.89",
+      "7.2.2.90",
+      "7.2.2.91",
+      "7.2.2.92",
+      "7.2.2.93",
+      "7.2.2.94",
+      "7.2.2.95",
+      "7.2.2.96",
+      "7.2.2.97",
+      "7.2.2.98",
+      "7.2.2.99",
+      "7.2.2.100",
+      "7.2.2.101",
+      "7.2.2.102",
+      "7.2.2.103",
+      "7.2.2.104",
+      "7.2.2.105",
+      "7.2.2.106",
+      "7.2.2.107",
+      "7.2.2.108",
+      "7.2.2.109",
+      "7.2.2.110",
+      "7.2.2.111",
+      "7.2.2.112",
+      "7.2.2.113",
+      "7.2.2.114",
+      "7.2.2.115",
+      "7.2.2.116"
+    ],
+    "required_missing_tests": [],
+    "suspicious_passing_tests": [],
+    "explicit_actions_for_ada": [
+      {
+        "test_id": "7.2.2.75",
+        "category": "needs_improvement",
+        "instruction": "In _gen_722_post, generate unconditional assertions for section 7.2.2.75 within the emitted function; remove the embedded \"if sec_id == '75'\" branch and assert the intended PK condition directly.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Primary key validations block embeds runtime \"if sec_id == '75'\" inside generated code, but 'sec_id' is undefined in the test function. See _gen_722_post around lines 915–940."
+      },
+      {
+        "test_id": "7.2.2.76",
+        "category": "needs_improvement",
+        "instruction": "In _gen_722_post, emit only the 7.2.2.76-specific PK assertions (without referencing 'sec_id' in the generated function). Replace the inner if/elif chain with direct asserts.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Embedded \"elif sec_id == '76'\" inside the generated function causes NameError. See _gen_722_post primary key validations (approx. lines 915–940)."
+      },
+      {
+        "test_id": "7.2.2.77",
+        "category": "needs_improvement",
+        "instruction": "Refactor _gen_722_post to inline 7.2.2.77-specific PK ordering assertions; do not include any \"if sec_id\" checks inside the generated function body.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"elif sec_id == '77'\" appears inside emitted code; 'sec_id' is undefined at runtime. See lines 915–940."
+      },
+      {
+        "test_id": "7.2.2.78",
+        "category": "needs_improvement",
+        "instruction": "Update _gen_722_post so 7.2.2.78 emits only its specific PK presence assertion(s) without referencing 'sec_id' within the generated test function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"elif sec_id == '78'\" embedded in generated code triggers NameError. See primary key validations in _gen_722_post (lines ~915–940)."
+      },
+      {
+        "test_id": "7.2.2.79",
+        "category": "needs_improvement",
+        "instruction": "Rewrite the foreign key validations emission for 7.2.2.79 to avoid any \"if sec_id\" checks inside generated code; generate only 7.2.2.79-specific assertions.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Foreign key validations block includes multiple \"if sec_id == '...'\" checks inside emitted code (lines ~941–970), causing NameError."
+      },
+      {
+        "test_id": "7.2.2.80",
+        "category": "needs_improvement",
+        "instruction": "Emit only the FK name ordering assertion for 7.2.2.80; remove embedded \"if sec_id == '80'\" from generated code and inline the exact assert.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '80': names = ...; assert names == sorted(names)\" appears in emitted function (lines ~941–970) but 'sec_id' is undefined."
+      },
+      {
+        "test_id": "7.2.2.81",
+        "category": "needs_improvement",
+        "instruction": "Inline the FK name non-empty assertion for 7.2.2.81 directly; remove the runtime 'sec_id' branch from the generated function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '81': assert all(bool(fk.get('name'))...)\" inside emitted code (lines ~941–970) references undefined 'sec_id'."
+      },
+      {
+        "test_id": "7.2.2.82",
+        "category": "needs_improvement",
+        "instruction": "Generate the FK name uniqueness assertion for 7.2.2.82 without any \"if sec_id\" in the emitted test; assert directly.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Inner \"if sec_id == '82'\" branch present in emitted code (lines ~941–970) causes NameError."
+      },
+      {
+        "test_id": "7.2.2.83",
+        "category": "needs_improvement",
+        "instruction": "Ensure 7.2.2.83 emits only its specific FK assertion(s) with no embedded 'sec_id' conditionals inside the test function body.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Foreign key validations block emits multiple 'if sec_id' checks (lines ~941–970); remove runtime branching and inline only 7.2.2.83 logic."
+      },
+      {
+        "test_id": "7.2.2.84",
+        "category": "needs_improvement",
+        "instruction": "Inline 7.2.2.84 FK columns-known assertion; remove \"if sec_id == '84'\" from emitted code and generate the assert directly.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Emitted code contains \"if sec_id == '84': ...\" inside function (lines ~941–970); 'sec_id' undefined."
+      },
+      {
+        "test_id": "7.2.2.85",
+        "category": "needs_improvement",
+        "instruction": "Generate only the FK columns-ordering assertion for 7.2.2.85; eliminate runtime 'sec_id' checks from the emitted function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '85': cols = ...; assert cols == sorted(cols)\" emitted with undefined 'sec_id' (lines ~941–970)."
+      },
+      {
+        "test_id": "7.2.2.86",
+        "category": "needs_improvement",
+        "instruction": "Emit 7.2.2.86-specific FK assertion(s) directly with no 'sec_id' runtime branching inside the test body.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Foreign key validations block includes embedded 'if sec_id' in emitted code (lines ~941–970); causes NameError."
+      },
+      {
+        "test_id": "7.2.2.87",
+        "category": "needs_improvement",
+        "instruction": "Inline 7.2.2.87 FK reference entity missing assertion; purge any 'if sec_id' checks from the generated code for this section.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Runtime sec_id branching present in emitted FK block (lines ~941–970)."
+      },
+      {
+        "test_id": "7.2.2.88",
+        "category": "needs_improvement",
+        "instruction": "Generate only 7.2.2.88 FK references columns missing assertions; remove embedded 'sec_id' checks inside the function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Emitted 'if sec_id' code in FK validations (lines ~941–970) references undefined 'sec_id'."
+      },
+      {
+        "test_id": "7.2.2.89",
+        "category": "needs_improvement",
+        "instruction": "Inline 7.2.2.89 FK references entity unknown assertion in emitted test; do not branch on 'sec_id' inside the function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "FK validations embed 'if sec_id' inside emitted code (lines ~941–970), causing NameError."
+      },
+      {
+        "test_id": "7.2.2.90",
+        "category": "needs_improvement",
+        "instruction": "Emit only 7.2.2.90 FK references columns unknown assertion without any 'sec_id' conditionals in the generated function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Runtime 'sec_id' checks present in emitted FK block (lines ~941–970)."
+      },
+      {
+        "test_id": "7.2.2.91",
+        "category": "needs_improvement",
+        "instruction": "Generate the 7.2.2.91 FK references column count mismatch assertion unconditionally; remove the 'if sec_id' branch from emitted code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Emitted \"if sec_id == '...':\" causes NameError (lines ~941–970)."
+      },
+      {
+        "test_id": "7.2.2.92",
+        "category": "needs_improvement",
+        "instruction": "For unique constraints validations, emit only 7.2.2.92-specific assertions without any 'if sec_id' branching inside the test function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Unique constraints validations contain embedded 'if sec_id' checks in emitted code (lines ~971–1000)."
+      },
+      {
+        "test_id": "7.2.2.93",
+        "category": "needs_improvement",
+        "instruction": "Inline the UC name ordering assertion for 7.2.2.93; remove the \"if sec_id == '93'\" clause from generated code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '93': names = ...; assert names == sorted(names)\" inside emitted code (lines ~971–1000)."
+      },
+      {
+        "test_id": "7.2.2.94",
+        "category": "needs_improvement",
+        "instruction": "Emit a direct non-empty UC name assertion for 7.2.2.94; do not reference 'sec_id' inside the function body.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '94': assert all(bool(uc.get('name')) ...)\" inside emitted code (lines ~971–1000)."
+      },
+      {
+        "test_id": "7.2.2.95",
+        "category": "needs_improvement",
+        "instruction": "Generate the UC name uniqueness assertion for 7.2.2.95 unconditionally; remove the runtime 'sec_id' branch from generated code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '95': ... len(names) == len(set(names))\" present inside emitted function (lines ~971–1000)."
+      },
+      {
+        "test_id": "7.2.2.96",
+        "category": "needs_improvement",
+        "instruction": "Emit only 7.2.2.96-specific UC assertion(s) and eliminate 'if sec_id' checks inside the generated function body.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Unique constraints block contains embedded 'if sec_id' branches (lines ~971–1000)."
+      },
+      {
+        "test_id": "7.2.2.97",
+        "category": "needs_improvement",
+        "instruction": "Inline UC columns-known assertion for 7.2.2.97 without any 'if sec_id' branching inside emitted test code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '97': for uc in ucs: assert set(uc['columns']) <= ...\" appears inside emitted code (lines ~971–1000)."
+      },
+      {
+        "test_id": "7.2.2.98",
+        "category": "needs_improvement",
+        "instruction": "Emit UC columns-ordering assertion for 7.2.2.98 directly; remove 'if sec_id' usage inside the function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '98': cols = uc.get('columns', []); assert cols == sorted(cols)\" embedded in emitted code (lines ~971–1000)."
+      },
+      {
+        "test_id": "7.2.2.99",
+        "category": "needs_improvement",
+        "instruction": "Generate only 7.2.2.99-specific UC assertion(s) directly; eliminate any 'if sec_id' checks inside emitted function code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Unique constraints validations include 'if sec_id' branches in emitted code (lines ~971–1000)."
+      },
+      {
+        "test_id": "7.2.2.100",
+        "category": "needs_improvement",
+        "instruction": "In index validations, emit only 7.2.2.100-specific assertions without any 'if sec_id' runtime branching inside the function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Index validations block embeds 'if sec_id == ...' in emitted code (lines ~1001–1030), causing NameError."
+      },
+      {
+        "test_id": "7.2.2.101",
+        "category": "needs_improvement",
+        "instruction": "Inline index name ordering assert for 7.2.2.101 and remove \"if sec_id == '101'\" from emitted code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '101': names = ...; assert names == sorted(names)\" appears inside emitted function (lines ~1001–1030)."
+      },
+      {
+        "test_id": "7.2.2.102",
+        "category": "needs_improvement",
+        "instruction": "Emit non-empty index name assertion for 7.2.2.102 directly; eliminate runtime 'sec_id' branching from the generated function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '102': assert all(bool(ix.get('name')) for ix in idxs)\" inside emitted code (lines ~1001–1030)."
+      },
+      {
+        "test_id": "7.2.2.103",
+        "category": "needs_improvement",
+        "instruction": "Generate index name uniqueness assertion for 7.2.2.103 without referencing 'sec_id' inside emitted function code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '103': names = ...; assert len(names) == len(set(names))\" embedded inside code (lines ~1001–1030)."
+      },
+      {
+        "test_id": "7.2.2.104",
+        "category": "needs_improvement",
+        "instruction": "Emit only 7.2.2.104-specific index assertion(s) directly; remove any 'if sec_id' checks from emitted code block.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Index validations contain embedded 'if sec_id' branches in emitted code (lines ~1001–1030)."
+      },
+      {
+        "test_id": "7.2.2.105",
+        "category": "needs_improvement",
+        "instruction": "Inline index columns-known assertion for 7.2.2.105; do not include runtime 'sec_id' conditionals in the generated function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '105': for ix in idxs: assert set(ix['columns']) <= ...\" inside emitted code (lines ~1001–1030)."
+      },
+      {
+        "test_id": "7.2.2.106",
+        "category": "needs_improvement",
+        "instruction": "Generate index columns-ordering assertion for 7.2.2.106 directly, without 'if sec_id' branching inside the function body.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '106': cols = ix.get('columns', []); assert cols == sorted(cols)\" in emitted code (lines ~1001–1030)."
+      },
+      {
+        "test_id": "7.2.2.107",
+        "category": "needs_improvement",
+        "instruction": "Emit only 7.2.2.107-specific index assertion(s) directly; remove embedded 'if sec_id' usage from the generated code block.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Index validations embed 'if sec_id' inside emitted code (lines ~1001–1030), causing NameError."
+      },
+      {
+        "test_id": "7.2.2.108",
+        "category": "needs_improvement",
+        "instruction": "For enums validations, emit only 7.2.2.108-specific assertions without any runtime 'sec_id' checks in the function body.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Enums validations append a multi-branch string with several \"if sec_id == ...\" conditions inside emitted code (lines ~1031–1065)."
+      },
+      {
+        "test_id": "7.2.2.109",
+        "category": "needs_improvement",
+        "instruction": "Inline enum name ordering assertion for 7.2.2.109; remove embedded 'if sec_id == \"109\"' from emitted function code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '109': names = ...; assert names == sorted(names)\" appears in emitted code (lines ~1031–1065)."
+      },
+      {
+        "test_id": "7.2.2.110",
+        "category": "needs_improvement",
+        "instruction": "Emit non-empty enum name assertion for 7.2.2.110 directly, with no 'sec_id' branching inside the function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '110': assert all(bool(e.get('name')) for e in enums)\" inside emitted code (lines ~1031–1065)."
+      },
+      {
+        "test_id": "7.2.2.111",
+        "category": "needs_improvement",
+        "instruction": "Generate enum names match ERD assertion for 7.2.2.111 directly; remove \"if sec_id == '111'\" from emitted code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '111': erd_enum_names = {...}; assert names == erd_enum_names\" appears in emitted code (lines ~1031–1065)."
+      },
+      {
+        "test_id": "7.2.2.112",
+        "category": "needs_improvement",
+        "instruction": "Emit only 7.2.2.112-specific enum assertion(s) directly; eliminate any 'if sec_id' checks in the emitted test function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Enums validations contain embedded 'if sec_id' branches in emitted code (lines ~1031–1065)."
+      },
+      {
+        "test_id": "7.2.2.113",
+        "category": "needs_improvement",
+        "instruction": "Inline enum values presence assertion for 7.2.2.113; remove 'if sec_id' conditionals from emitted code.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '113': assert all(e.get('values') for e in enums)\" in emitted code (lines ~1031–1065)."
+      },
+      {
+        "test_id": "7.2.2.114",
+        "category": "needs_improvement",
+        "instruction": "Emit only 7.2.2.114-specific enum assertion(s) directly; do not reference 'sec_id' inside the test function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Enums validations block embeds 'if sec_id' in emitted code (lines ~1031–1065)."
+      },
+      {
+        "test_id": "7.2.2.115",
+        "category": "needs_improvement",
+        "instruction": "Generate enum values ordering assertion for 7.2.2.115 directly; remove 'if sec_id' branching inside emitted function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "\"if sec_id == '115': vals = e.get('values') ... assert vals == sorted(vals)\" embedded in emitted code (lines ~1031–1065)."
+      },
+      {
+        "test_id": "7.2.2.116",
+        "category": "needs_improvement",
+        "instruction": "Emit only 7.2.2.116-specific enum assertion(s) without any runtime 'sec_id' checks inside the generated test function.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Enums validations contain embedded 'if sec_id' in emitted code (lines ~1031–1065)."
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

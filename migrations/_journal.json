@@ -1,0 +1,6 @@
+[
+  {"filename": "migrations/001_init.sql", "applied_at": "2024-01-01T00:00:00Z"},
+  {"filename": "migrations/002_constraints.sql", "applied_at": "2024-01-01T00:00:10Z"},
+  {"filename": "migrations/003_indexes.sql", "applied_at": "2024-01-01T00:00:20Z"}
+]
+

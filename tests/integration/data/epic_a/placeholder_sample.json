@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "conventions": {
+    "db_case": "snake_case",
+    "entities_case": "CamelCase",
+    "placeholder_format": "UPPERCASE_UNDERSCORE",
+    "enums": {
+      "answer_kind": ["TEXT"]
+    }
+  },
+  "entities": [
+    {
+      "name": "QuestionnaireQuestion",
+      "pk": {
+        "id": "uuid"
+      },
+      "fields": {
+        "placeholder_code": "varchar(64)",
+        "question_text": "text"
+      },
+      "uniques": [
+        "placeholder_code"
+      ]
+    }
+  ]
+}
+

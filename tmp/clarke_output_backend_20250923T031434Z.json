@@ -1,0 +1,95 @@
+{
+  "clarke_review": {
+    "acceptable_as_is": [
+      "feature::EpicA_HappyPath::scenario::Constraint Creation Follows Table Creation",
+      "feature::EpicA_HappyPath::scenario::Encryption Application Follows Constraint Creation",
+      "feature::EpicA_HappyPath::scenario::Placeholder Resolution Follows Direct Lookup",
+      "feature::EpicA_HappyPath::scenario::Rollback Follows Migration Failure"
+    ],
+    "needs_improvement": [
+      "feature::EpicA_HappyPath::scenario::Migration Initiates Schema Creation",
+      "feature::EpicA_HappyPath::scenario::TLS Enforcement Follows Database Connection Request",
+      "feature::EpicA_HappyPath::scenario::Row Validation Follows Connection Establishment",
+      "feature::EpicA_HappyPath::scenario::Direct Lookup Follows Row Validation",
+      "feature::EpicA_HappyPath::scenario::Deterministic State Ensured After Step Completion"
+    ],
+    "required_missing_tests": [],
+    "suspicious_passing_tests": [
+      "feature::EpicA_HappyPath::scenario::New Template Introduction Triggers Schema Reuse",
+      "feature::EpicA_HappyPath::scenario::New Policy Introduction Triggers Schema Reuse"
+    ],
+    "explicit_actions_for_ada": [
+      {
+        "test_id": "feature::EpicA_HappyPath::scenario::Migration Initiates Schema Creation",
+        "category": "needs_improvement",
+        "instruction": "Adjust the Then-step to assert that `create_tables` is the first schema-setup event (before `create_constraints`/`apply_encryption`) rather than index 0 of all events, and assert migration outputs schema validation succeeded. Also add this Scenario to `tests/integration/features/epic_a_behaviour.feature` if missing.",
+        "files": [
+          "tests/integration/features/steps/epic_a_behaviour_steps.py",
+          "tests/integration/features/epic_a_behaviour.feature",
+          "schemas/migration_outputs.schema.json"
+        ],
+        "evidence": "Spec §6.3.1.1 (lines ~1456–1463) requires table creation as the first step in schema setup; current step `step_then_table_creation_first` asserts index 0 despite `runner.start` being appended in `step_given_runner_starts`. See tests/integration/features/steps/epic_a_behaviour_steps.py: given `step_given_runner_starts` adds 'runner.start'; then `step_then_table_creation_first` enforces index 0."
+      },
+      {
+        "test_id": "feature::EpicA_HappyPath::scenario::TLS Enforcement Follows Database Connection Request",
+        "category": "needs_improvement",
+        "instruction": "Modify the Then-step to require `tls.established` occurs after `db.connect.request` and before any subsequent DB operations (exclude the initial `db.connect.request` from the comparison). Add an explicit presence check for `db.connect.request`.",
+        "files": [
+          "tests/integration/features/steps/epic_a_behaviour_steps.py"
+        ],
+        "evidence": "Spec §6.3.1.4 (lines ~1475–1483) states TLS must be established before subsequent operations after connection initiation. Current step `step_then_tls_before_ops` requires TLS before any `db.*` including the initial `db.connect.request`, which contradicts the Given-step `step_given_db_connection_initiated`."
+      },
+      {
+        "test_id": "feature::EpicA_HappyPath::scenario::Row Validation Follows Connection Establishment",
+        "category": "needs_improvement",
+        "instruction": "Strengthen the Then-step to assert `validate.row` occurs before `db.insert.attempt` in addition to being after `tls.established`.",
+        "files": [
+          "tests/integration/features/steps/epic_a_behaviour_steps.py"
+        ],
+        "evidence": "Spec §6.3.1.5 (lines ~1485–1491) requires validation before insertion proceeds. Current `step_then_row_validation_before_insert` only checks ordering relative to TLS, not relative to the insert attempt."
+      },
+      {
+        "test_id": "feature::EpicA_HappyPath::scenario::Direct Lookup Follows Row Validation",
+        "category": "needs_improvement",
+        "instruction": "Add ERD/runtime inputs schema validation for the lookup context using `schemas/erd_and_runtime_inputs.schema.json` (e.g., validate a minimal ERD fixture with `QuestionnaireQuestion.placeholder_code` and its format). Load a small sample from integration data and assert the lookup key is `placeholder_code`. Also ensure this Scenario exists in the feature file.",
+        "files": [
+          "tests/integration/features/steps/epic_a_behaviour_steps.py",
+          "tests/integration/data/epic_a/placeholder_sample.json",
+          "schemas/erd_and_runtime_inputs.schema.json",
+          "tests/integration/features/epic_a_behaviour.feature"
+        ],
+        "evidence": "Spec §6.3.1.6 (lines ~1487–1495) explicitly calls for direct lookup by `QuestionnaireQuestion.placeholder_code` (unique when present). Current Then-step `step_then_direct_lookup` only checks an event; no inputs schema validation is performed."
+      },
+      {
+        "test_id": "feature::EpicA_HappyPath::scenario::Deterministic State Ensured After Step Completion",
+        "category": "needs_improvement",
+        "instruction": "Augment the Then-step to assert presence of `step.next`, and verify determinism by capturing a digest of `context.result` (or relevant state) on first completion and comparing it after a repeated step with identical inputs. Include a clear failure message on mismatch.",
+        "files": [
+          "tests/integration/features/steps/epic_a_behaviour_steps.py"
+        ],
+        "evidence": "Spec §6.3.1.9 (lines ~1505–1513) requires deterministic results before proceeding to the next step. Current `step_then_determinism_gate` references `step.next` without presence check and only asserts event ordering, not output stability."
+      },
+      {
+        "test_id": "feature::EpicA_HappyPath::scenario::New Template Introduction Triggers Schema Reuse",
+        "category": "suspicious_passing_tests",
+        "instruction": "Harden the Then-step to assert no schema-change events occurred: ensure none of `create_tables`, `create_constraints`, or `apply_encryption` appear in `context.events`. If `context.result.entities` is present, assert it is unchanged across registration. Keep the existing check that `runner.start` is absent.",
+        "files": [
+          "tests/integration/features/steps/epic_a_behaviour_steps.py"
+        ],
+        "evidence": "Spec §6.3.1.11 (lines ~1514–1522) says registration reuses existing schema. Current Then-step `step_then_registration_reuses_schema` only asserts absence of `runner.start` and single registration event; this will pass trivially and won’t catch unintended schema changes."
+      },
+      {
+        "test_id": "feature::EpicA_HappyPath::scenario::New Policy Introduction Triggers Schema Reuse",
+        "category": "suspicious_passing_tests",
+        "instruction": "Mirror the hardening from the template scenario: assert no `create_tables`, `create_constraints`, or `apply_encryption` events and (if available) that `context.result.entities` is unchanged. Maintain the single-registration and no-runner-start checks.",
+        "files": [
+          "tests/integration/features/steps/epic_a_behaviour_steps.py"
+        ],
+        "evidence": "Spec §6.3.1.12 (lines ~1520–1526) requires policy registration to reuse schema. Current Then-step shares the same weakness as 6.3.1.11 and can pass trivially."
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

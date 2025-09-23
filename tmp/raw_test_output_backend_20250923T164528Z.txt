@@ -1,0 +1,55 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-8.4.1, pluggy-1.6.0
+rootdir: /home/codex/schofield
+plugins: mock-3.14.1, anyio-4.9.0, cov-6.2.1, langsmith-0.4.1
+collected 190 items
+
+tests/architectural/test_epic_a_data_model_architecture.py ............. [  6%]
+..............                                                           [ 14%]
+tests/functional/test_epic_a_data_model_functional.py .................. [ 23%]
+.................x...................................................... [ 61%]
+.................................................................F...... [ 99%]
+.                                                                        [100%]
+
+=================================== FAILURES ===================================
+____________ test_7_2_2_119_encrypted_fields_present_when_erd_none _____________
+
+    def test_7_2_2_119_encrypted_fields_present_when_erd_none():
+        """Verifies 7.2.2.119 — Encrypted fields parity with ERD manifest.
+    
+        Validates that the produced encrypted_fields exactly matches the ERD
+        specification (empty when ERD defines none; identical when present).
+        """
+        outputs = _get_outputs_for_contract()
+        spec = json.loads((Path("docs") / "erd_spec.json").read_text(encoding="utf-8"))
+        spec_manifest = spec.get("encrypted_fields") or []
+        actual = outputs.get("encrypted_fields") or []
+>       assert actual == spec_manifest
+E       AssertionError: assert ['Company.leg...e.value_json'] == ['Company.leg...t.output_uri']
+E         
+E         At index 2 diff: 'GeneratedDocument.output_uri' != 'Response.value_json'
+E         
+E         Full diff:
+E           [
+E               'Company.legal_name',
+E               'Company.registered_office_address',
+E         +     'GeneratedDocument.output_uri',
+E               'Response.value_json',
+E         -     'GeneratedDocument.output_uri',
+E           ]
+
+tests/functional/test_epic_a_data_model_functional.py:2829: AssertionError
+=========================== short test summary info ============================
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_119_encrypted_fields_present_when_erd_none - AssertionError: assert ['Company.leg...e.value_json'] == ['Company.leg...t.output_uri']
+  
+  At index 2 diff: 'GeneratedDocument.output_uri' != 'Response.value_json'
+  
+  Full diff:
+    [
+        'Company.legal_name',
+        'Company.registered_office_address',
+  +     'GeneratedDocument.output_uri',
+        'Response.value_json',
+  -     'GeneratedDocument.output_uri',
+    ]
+=================== 1 failed, 188 passed, 1 xfailed in 1.53s ===================

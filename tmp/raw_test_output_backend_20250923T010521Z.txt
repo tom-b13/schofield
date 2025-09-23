@@ -1,0 +1,7 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-8.4.1, pluggy-1.6.0
+rootdir: /home/codex/schofield
+plugins: mock-3.14.1, anyio-4.9.0, cov-6.2.1, langsmith-0.4.1
+collected 0 items
+
+============================ no tests ran in 0.01s =============================

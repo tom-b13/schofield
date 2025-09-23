@@ -1,0 +1,22 @@
+{
+  "clarke_review": {
+    "tests": [
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_119_encrypted_fields_present_when_erd_none",
+        "predicate": "assert outputs.get(\"encrypted_fields\") in ([], None)",
+        "evidence": {
+          "input": "_get_outputs_for_contract() -> run_migrate_cli([\"--section\",\"7.2.2.outputs\"])",
+          "expected": "When ERD defines no encrypted fields, manifest must be empty",
+          "actual": "outputs['encrypted_fields'] == ['Company.legal_name', 'Company.registered_office_address', 'GeneratedDocument.output_uri', 'Response.value_json'] while docs/erd_spec.json explicitly defines these four entries",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "In tests/functional/test_epic_a_data_model_functional.py, update test_7_2_2_119_encrypted_fields_present_when_erd_none to align with the ERD. Replace the assertion with a spec-driven check so the test passes both when the ERD has entries and when it has none. For example:\n\nspec = json.loads(Path('docs')/ 'erd_spec.json'.read_text(encoding='utf-8'))\nspec_manifest = spec.get('encrypted_fields') or []\nactual = outputs.get('encrypted_fields') or []\nassert actual == spec_manifest\n\nAlso update the test docstring to reflect that it validates parity with ERD rather than assuming the ERD has none.",
+        "request_for_clarification": ""
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

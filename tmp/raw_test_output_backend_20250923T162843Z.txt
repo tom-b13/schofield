@@ -1,0 +1,1315 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-8.4.1, pluggy-1.6.0
+rootdir: /home/codex/schofield
+plugins: mock-3.14.1, anyio-4.9.0, cov-6.2.1, langsmith-0.4.1
+collected 190 items
+
+tests/architectural/test_epic_a_data_model_architecture.py ............. [  6%]
+..............                                                           [ 14%]
+tests/functional/test_epic_a_data_model_functional.py .................. [ 23%]
+.................x........................F......FF..F.F...........F.... [ 61%]
+F..FF.F.F.F..F..F.F.....FFFFFFFFFFFFFFFFFFFFFF........F..F..F..F..F...F. [ 99%]
+.                                                                        [100%]
+
+=================================== FAILURES ===================================
+____________________ test_7_2_2_24_enhanced_error_semantics ____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7faa40df77f0>
+
+    def _t(mocker) -> None:
+        # Apply boundary patch using object-based strategy where possible
+        patch_path = _cfg["patch"]
+        mocked = None
+        try:
+            if patch_path.startswith("app.db.base."):
+                import app.db.base as base  # type: ignore
+                obj = base
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                # Ensure container exists for attribute
+                container = getattr(base, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(base, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(base, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            elif patch_path.startswith("app.db.migrations_runner."):
+                import app.db.migrations_runner as mr  # type: ignore
+                obj = mr
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                container = getattr(mr, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(mr, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(mr, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            else:
+                import tests.functional.test_epic_a_data_model_functional as mod
+                mapping = {
+                    "app.resolution.engine.Resolver.resolve_placeholders": (mod.Resolver, "resolve_placeholders"),
+                    "app.net.resolver.resolve_host": (mod.resolver, "resolve_host"),
+                    "app.encryption.accessor.read_encrypted_field": (mod.accessor, "read_encrypted_field"),
+                    "app.encryption.kms.get_key": (mod.kms, "get_key"),
+                    "app.encryption.decrypt": (mod.encryption, "decrypt"),
+                    "app.cache.store.save": (mod.cache.store, "save"),
+                    "app.secrets.manager.get": (mod.secrets.manager, "get"),
+                    "app.logging.logger.error": (mod.logger, "error"),
+                    "app.fs.tmp.allocate": (mod.fs.tmp, "allocate"),
+                    "app.telemetry.emit_error": (mod.telemetry, "emit_error"),
+                }
+                if patch_path in mapping:
+                    obj, attr = mapping[patch_path]
+                    mocked = mocker.patch.object(obj, attr, create=True)
+                else:
+                    # Fallback to string-based patch as last resort
+                    mocked = mocker.patch(patch_path, create=True)
+        except Exception:
+            # Ensure a mocked object exists to preserve call count assertions
+            mocked = mocker.patch(patch_path, create=True)
+        res = run_migrate_cli(["--section", _sid])
+        # Standard error assertions via mapping
+        code = SECTIONS_722.get(_sid, "EXPECTED_ERROR_CODE_FROM_SPEC")
+        assert res.get("status") == "error"
+        assert (res.get("error", {}) or {}).get("code") == code
+        assert res.get("exit_code") == 1
+        # Message fragments present
+        if code != "EXPECTED_ERROR_CODE_FROM_SPEC":
+            msg = (res.get("error", {}) or {}).get("message", "").lower()
+            for frag in _cfg.get("msg_contains", []):
+                assert frag.lower() in msg
+        # Call count semantics per spec guidance
+>       assert mocked.call_count == _cfg.get("expected_calls", 0)
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <MagicMock name='resolve_host' id='140369227215968'>.call_count
+E        +  and   1 = <built-in method get of dict object at 0x7faa420c1cc0>('expected_calls', 0)
+E        +    where <built-in method get of dict object at 0x7faa420c1cc0> = {'expected_calls': 1, 'msg_contains': ['unresolved', 'host'], 'patch': 'app.net.resolver.resolve_host'}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2153: AssertionError
+____________________ test_7_2_2_31_enhanced_error_semantics ____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7faa420e1d80>
+
+    def _t(mocker) -> None:
+        # Apply boundary patch using object-based strategy where possible
+        patch_path = _cfg["patch"]
+        mocked = None
+        try:
+            if patch_path.startswith("app.db.base."):
+                import app.db.base as base  # type: ignore
+                obj = base
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                # Ensure container exists for attribute
+                container = getattr(base, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(base, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(base, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            elif patch_path.startswith("app.db.migrations_runner."):
+                import app.db.migrations_runner as mr  # type: ignore
+                obj = mr
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                container = getattr(mr, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(mr, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(mr, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            else:
+                import tests.functional.test_epic_a_data_model_functional as mod
+                mapping = {
+                    "app.resolution.engine.Resolver.resolve_placeholders": (mod.Resolver, "resolve_placeholders"),
+                    "app.net.resolver.resolve_host": (mod.resolver, "resolve_host"),
+                    "app.encryption.accessor.read_encrypted_field": (mod.accessor, "read_encrypted_field"),
+                    "app.encryption.kms.get_key": (mod.kms, "get_key"),
+                    "app.encryption.decrypt": (mod.encryption, "decrypt"),
+                    "app.cache.store.save": (mod.cache.store, "save"),
+                    "app.secrets.manager.get": (mod.secrets.manager, "get"),
+                    "app.logging.logger.error": (mod.logger, "error"),
+                    "app.fs.tmp.allocate": (mod.fs.tmp, "allocate"),
+                    "app.telemetry.emit_error": (mod.telemetry, "emit_error"),
+                }
+                if patch_path in mapping:
+                    obj, attr = mapping[patch_path]
+                    mocked = mocker.patch.object(obj, attr, create=True)
+                else:
+                    # Fallback to string-based patch as last resort
+                    mocked = mocker.patch(patch_path, create=True)
+        except Exception:
+            # Ensure a mocked object exists to preserve call count assertions
+            mocked = mocker.patch(patch_path, create=True)
+        res = run_migrate_cli(["--section", _sid])
+        # Standard error assertions via mapping
+        code = SECTIONS_722.get(_sid, "EXPECTED_ERROR_CODE_FROM_SPEC")
+        assert res.get("status") == "error"
+        assert (res.get("error", {}) or {}).get("code") == code
+        assert res.get("exit_code") == 1
+        # Message fragments present
+        if code != "EXPECTED_ERROR_CODE_FROM_SPEC":
+            msg = (res.get("error", {}) or {}).get("message", "").lower()
+            for frag in _cfg.get("msg_contains", []):
+                assert frag.lower() in msg
+        # Call count semantics per spec guidance
+>       assert mocked.call_count == _cfg.get("expected_calls", 0)
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <MagicMock name='get_key' id='140369229389760'>.call_count
+E        +  and   1 = <built-in method get of dict object at 0x7faa420c1180>('expected_calls', 0)
+E        +    where <built-in method get of dict object at 0x7faa420c1180> = {'expected_calls': 1, 'msg_contains': ['alias', 'not found'], 'patch': 'app.encryption.kms.get_key'}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2153: AssertionError
+____________________ test_7_2_2_32_enhanced_error_semantics ____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7faa40f52410>
+
+    def _t(mocker) -> None:
+        # Apply boundary patch using object-based strategy where possible
+        patch_path = _cfg["patch"]
+        mocked = None
+        try:
+            if patch_path.startswith("app.db.base."):
+                import app.db.base as base  # type: ignore
+                obj = base
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                # Ensure container exists for attribute
+                container = getattr(base, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(base, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(base, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            elif patch_path.startswith("app.db.migrations_runner."):
+                import app.db.migrations_runner as mr  # type: ignore
+                obj = mr
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                container = getattr(mr, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(mr, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(mr, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            else:
+                import tests.functional.test_epic_a_data_model_functional as mod
+                mapping = {
+                    "app.resolution.engine.Resolver.resolve_placeholders": (mod.Resolver, "resolve_placeholders"),
+                    "app.net.resolver.resolve_host": (mod.resolver, "resolve_host"),
+                    "app.encryption.accessor.read_encrypted_field": (mod.accessor, "read_encrypted_field"),
+                    "app.encryption.kms.get_key": (mod.kms, "get_key"),
+                    "app.encryption.decrypt": (mod.encryption, "decrypt"),
+                    "app.cache.store.save": (mod.cache.store, "save"),
+                    "app.secrets.manager.get": (mod.secrets.manager, "get"),
+                    "app.logging.logger.error": (mod.logger, "error"),
+                    "app.fs.tmp.allocate": (mod.fs.tmp, "allocate"),
+                    "app.telemetry.emit_error": (mod.telemetry, "emit_error"),
+                }
+                if patch_path in mapping:
+                    obj, attr = mapping[patch_path]
+                    mocked = mocker.patch.object(obj, attr, create=True)
+                else:
+                    # Fallback to string-based patch as last resort
+                    mocked = mocker.patch(patch_path, create=True)
+        except Exception:
+            # Ensure a mocked object exists to preserve call count assertions
+            mocked = mocker.patch(patch_path, create=True)
+        res = run_migrate_cli(["--section", _sid])
+        # Standard error assertions via mapping
+        code = SECTIONS_722.get(_sid, "EXPECTED_ERROR_CODE_FROM_SPEC")
+        assert res.get("status") == "error"
+        assert (res.get("error", {}) or {}).get("code") == code
+        assert res.get("exit_code") == 1
+        # Message fragments present
+        if code != "EXPECTED_ERROR_CODE_FROM_SPEC":
+            msg = (res.get("error", {}) or {}).get("message", "").lower()
+            for frag in _cfg.get("msg_contains", []):
+                assert frag.lower() in msg
+        # Call count semantics per spec guidance
+>       assert mocked.call_count == _cfg.get("expected_calls", 0)
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <MagicMock name='get_key' id='140369210973760'>.call_count
+E        +  and   1 = <built-in method get of dict object at 0x7faa40decd00>('expected_calls', 0)
+E        +    where <built-in method get of dict object at 0x7faa40decd00> = {'expected_calls': 1, 'msg_contains': ['provider', 'failed'], 'patch': 'app.encryption.kms.get_key'}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2153: AssertionError
+____________________ test_7_2_2_35_enhanced_error_semantics ____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7faa41e7f460>
+
+    def _t(mocker) -> None:
+        # Apply boundary patch using object-based strategy where possible
+        patch_path = _cfg["patch"]
+        mocked = None
+        try:
+            if patch_path.startswith("app.db.base."):
+                import app.db.base as base  # type: ignore
+                obj = base
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                # Ensure container exists for attribute
+                container = getattr(base, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(base, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(base, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            elif patch_path.startswith("app.db.migrations_runner."):
+                import app.db.migrations_runner as mr  # type: ignore
+                obj = mr
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                container = getattr(mr, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(mr, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(mr, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            else:
+                import tests.functional.test_epic_a_data_model_functional as mod
+                mapping = {
+                    "app.resolution.engine.Resolver.resolve_placeholders": (mod.Resolver, "resolve_placeholders"),
+                    "app.net.resolver.resolve_host": (mod.resolver, "resolve_host"),
+                    "app.encryption.accessor.read_encrypted_field": (mod.accessor, "read_encrypted_field"),
+                    "app.encryption.kms.get_key": (mod.kms, "get_key"),
+                    "app.encryption.decrypt": (mod.encryption, "decrypt"),
+                    "app.cache.store.save": (mod.cache.store, "save"),
+                    "app.secrets.manager.get": (mod.secrets.manager, "get"),
+                    "app.logging.logger.error": (mod.logger, "error"),
+                    "app.fs.tmp.allocate": (mod.fs.tmp, "allocate"),
+                    "app.telemetry.emit_error": (mod.telemetry, "emit_error"),
+                }
+                if patch_path in mapping:
+                    obj, attr = mapping[patch_path]
+                    mocked = mocker.patch.object(obj, attr, create=True)
+                else:
+                    # Fallback to string-based patch as last resort
+                    mocked = mocker.patch(patch_path, create=True)
+        except Exception:
+            # Ensure a mocked object exists to preserve call count assertions
+            mocked = mocker.patch(patch_path, create=True)
+        res = run_migrate_cli(["--section", _sid])
+        # Standard error assertions via mapping
+        code = SECTIONS_722.get(_sid, "EXPECTED_ERROR_CODE_FROM_SPEC")
+        assert res.get("status") == "error"
+        assert (res.get("error", {}) or {}).get("code") == code
+        assert res.get("exit_code") == 1
+        # Message fragments present
+        if code != "EXPECTED_ERROR_CODE_FROM_SPEC":
+            msg = (res.get("error", {}) or {}).get("message", "").lower()
+            for frag in _cfg.get("msg_contains", []):
+                assert frag.lower() in msg
+        # Call count semantics per spec guidance
+>       assert mocked.call_count == _cfg.get("expected_calls", 0)
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <MagicMock name='get' id='140369226876576'>.call_count
+E        +  and   1 = <built-in method get of dict object at 0x7faa40dc7b40>('expected_calls', 0)
+E        +    where <built-in method get of dict object at 0x7faa40dc7b40> = {'expected_calls': 1, 'msg_contains': ['CALL_FAILED'], 'patch': 'app.secrets.manager.get'}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2153: AssertionError
+____________________ test_7_2_2_37_enhanced_error_semantics ____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7faa420e2bf0>
+
+    def _t(mocker) -> None:
+        # Apply boundary patch using object-based strategy where possible
+        patch_path = _cfg["patch"]
+        mocked = None
+        try:
+            if patch_path.startswith("app.db.base."):
+                import app.db.base as base  # type: ignore
+                obj = base
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                # Ensure container exists for attribute
+                container = getattr(base, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(base, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(base, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            elif patch_path.startswith("app.db.migrations_runner."):
+                import app.db.migrations_runner as mr  # type: ignore
+                obj = mr
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                container = getattr(mr, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(mr, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(mr, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            else:
+                import tests.functional.test_epic_a_data_model_functional as mod
+                mapping = {
+                    "app.resolution.engine.Resolver.resolve_placeholders": (mod.Resolver, "resolve_placeholders"),
+                    "app.net.resolver.resolve_host": (mod.resolver, "resolve_host"),
+                    "app.encryption.accessor.read_encrypted_field": (mod.accessor, "read_encrypted_field"),
+                    "app.encryption.kms.get_key": (mod.kms, "get_key"),
+                    "app.encryption.decrypt": (mod.encryption, "decrypt"),
+                    "app.cache.store.save": (mod.cache.store, "save"),
+                    "app.secrets.manager.get": (mod.secrets.manager, "get"),
+                    "app.logging.logger.error": (mod.logger, "error"),
+                    "app.fs.tmp.allocate": (mod.fs.tmp, "allocate"),
+                    "app.telemetry.emit_error": (mod.telemetry, "emit_error"),
+                }
+                if patch_path in mapping:
+                    obj, attr = mapping[patch_path]
+                    mocked = mocker.patch.object(obj, attr, create=True)
+                else:
+                    # Fallback to string-based patch as last resort
+                    mocked = mocker.patch(patch_path, create=True)
+        except Exception:
+            # Ensure a mocked object exists to preserve call count assertions
+            mocked = mocker.patch(patch_path, create=True)
+        res = run_migrate_cli(["--section", _sid])
+        # Standard error assertions via mapping
+        code = SECTIONS_722.get(_sid, "EXPECTED_ERROR_CODE_FROM_SPEC")
+        assert res.get("status") == "error"
+        assert (res.get("error", {}) or {}).get("code") == code
+        assert res.get("exit_code") == 1
+        # Message fragments present
+        if code != "EXPECTED_ERROR_CODE_FROM_SPEC":
+            msg = (res.get("error", {}) or {}).get("message", "").lower()
+            for frag in _cfg.get("msg_contains", []):
+                assert frag.lower() in msg
+        # Call count semantics per spec guidance
+>       assert mocked.call_count == _cfg.get("expected_calls", 0)
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <MagicMock name='error' id='140369229383712'>.call_count
+E        +  and   1 = <built-in method get of dict object at 0x7faa40e092c0>('expected_calls', 0)
+E        +    where <built-in method get of dict object at 0x7faa40e092c0> = {'expected_calls': 1, 'msg_contains': ['LOGGED', 'secret'], 'patch': 'app.logging.logger.error'}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2153: AssertionError
+____________________ test_7_2_2_49_enhanced_error_semantics ____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7faa40e78b80>
+
+    def _t(mocker) -> None:
+        # Apply boundary patch using object-based strategy where possible
+        patch_path = _cfg["patch"]
+        mocked = None
+        try:
+            if patch_path.startswith("app.db.base."):
+                import app.db.base as base  # type: ignore
+                obj = base
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                # Ensure container exists for attribute
+                container = getattr(base, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(base, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(base, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            elif patch_path.startswith("app.db.migrations_runner."):
+                import app.db.migrations_runner as mr  # type: ignore
+                obj = mr
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                container = getattr(mr, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(mr, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(mr, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            else:
+                import tests.functional.test_epic_a_data_model_functional as mod
+                mapping = {
+                    "app.resolution.engine.Resolver.resolve_placeholders": (mod.Resolver, "resolve_placeholders"),
+                    "app.net.resolver.resolve_host": (mod.resolver, "resolve_host"),
+                    "app.encryption.accessor.read_encrypted_field": (mod.accessor, "read_encrypted_field"),
+                    "app.encryption.kms.get_key": (mod.kms, "get_key"),
+                    "app.encryption.decrypt": (mod.encryption, "decrypt"),
+                    "app.cache.store.save": (mod.cache.store, "save"),
+                    "app.secrets.manager.get": (mod.secrets.manager, "get"),
+                    "app.logging.logger.error": (mod.logger, "error"),
+                    "app.fs.tmp.allocate": (mod.fs.tmp, "allocate"),
+                    "app.telemetry.emit_error": (mod.telemetry, "emit_error"),
+                }
+                if patch_path in mapping:
+                    obj, attr = mapping[patch_path]
+                    mocked = mocker.patch.object(obj, attr, create=True)
+                else:
+                    # Fallback to string-based patch as last resort
+                    mocked = mocker.patch(patch_path, create=True)
+        except Exception:
+            # Ensure a mocked object exists to preserve call count assertions
+            mocked = mocker.patch(patch_path, create=True)
+        res = run_migrate_cli(["--section", _sid])
+        # Standard error assertions via mapping
+        code = SECTIONS_722.get(_sid, "EXPECTED_ERROR_CODE_FROM_SPEC")
+        assert res.get("status") == "error"
+        assert (res.get("error", {}) or {}).get("code") == code
+        assert res.get("exit_code") == 1
+        # Message fragments present
+        if code != "EXPECTED_ERROR_CODE_FROM_SPEC":
+            msg = (res.get("error", {}) or {}).get("message", "").lower()
+            for frag in _cfg.get("msg_contains", []):
+                assert frag.lower() in msg
+        # Call count semantics per spec guidance
+>       assert mocked.call_count == _cfg.get("expected_calls", 0)
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <MagicMock name='rollback' id='140369210090704'>.call_count
+E        +  and   1 = <built-in method get of dict object at 0x7faa420c3240>('expected_calls', 0)
+E        +    where <built-in method get of dict object at 0x7faa420c3240> = {'expected_calls': 1, 'msg_contains': ['rollback', 'error'], 'patch': 'app.db.migrations_runner.MigrationRunner.rollback'}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2153: AssertionError
+____________________ test_7_2_2_54_enhanced_error_semantics ____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7faa41020340>
+
+    def _t(mocker) -> None:
+        # Apply boundary patch using object-based strategy where possible
+        patch_path = _cfg["patch"]
+        mocked = None
+        try:
+            if patch_path.startswith("app.db.base."):
+                import app.db.base as base  # type: ignore
+                obj = base
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                # Ensure container exists for attribute
+                container = getattr(base, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(base, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(base, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            elif patch_path.startswith("app.db.migrations_runner."):
+                import app.db.migrations_runner as mr  # type: ignore
+                obj = mr
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                container = getattr(mr, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(mr, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(mr, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            else:
+                import tests.functional.test_epic_a_data_model_functional as mod
+                mapping = {
+                    "app.resolution.engine.Resolver.resolve_placeholders": (mod.Resolver, "resolve_placeholders"),
+                    "app.net.resolver.resolve_host": (mod.resolver, "resolve_host"),
+                    "app.encryption.accessor.read_encrypted_field": (mod.accessor, "read_encrypted_field"),
+                    "app.encryption.kms.get_key": (mod.kms, "get_key"),
+                    "app.encryption.decrypt": (mod.encryption, "decrypt"),
+                    "app.cache.store.save": (mod.cache.store, "save"),
+                    "app.secrets.manager.get": (mod.secrets.manager, "get"),
+                    "app.logging.logger.error": (mod.logger, "error"),
+                    "app.fs.tmp.allocate": (mod.fs.tmp, "allocate"),
+                    "app.telemetry.emit_error": (mod.telemetry, "emit_error"),
+                }
+                if patch_path in mapping:
+                    obj, attr = mapping[patch_path]
+                    mocked = mocker.patch.object(obj, attr, create=True)
+                else:
+                    # Fallback to string-based patch as last resort
+                    mocked = mocker.patch(patch_path, create=True)
+        except Exception:
+            # Ensure a mocked object exists to preserve call count assertions
+            mocked = mocker.patch(patch_path, create=True)
+        res = run_migrate_cli(["--section", _sid])
+        # Standard error assertions via mapping
+        code = SECTIONS_722.get(_sid, "EXPECTED_ERROR_CODE_FROM_SPEC")
+        assert res.get("status") == "error"
+        assert (res.get("error", {}) or {}).get("code") == code
+        assert res.get("exit_code") == 1
+        # Message fragments present
+        if code != "EXPECTED_ERROR_CODE_FROM_SPEC":
+            msg = (res.get("error", {}) or {}).get("message", "").lower()
+            for frag in _cfg.get("msg_contains", []):
+                assert frag.lower() in msg
+        # Call count semantics per spec guidance
+>       assert mocked.call_count == _cfg.get("expected_calls", 0)
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <MagicMock name='connect_tls' id='140369211830000'>.call_count
+E        +  and   1 = <built-in method get of dict object at 0x7faa420c22c0>('expected_calls', 0)
+E        +    where <built-in method get of dict object at 0x7faa420c22c0> = {'expected_calls': 1, 'msg_contains': ['tls materials', 'unavailable'], 'patch': 'app.db.base.DB.connect_tls'}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2153: AssertionError
+____________________ test_7_2_2_57_enhanced_error_semantics ____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7faa40e78af0>
+
+    def _t(mocker) -> None:
+        # Apply boundary patch using object-based strategy where possible
+        patch_path = _cfg["patch"]
+        mocked = None
+        try:
+            if patch_path.startswith("app.db.base."):
+                import app.db.base as base  # type: ignore
+                obj = base
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                # Ensure container exists for attribute
+                container = getattr(base, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(base, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(base, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            elif patch_path.startswith("app.db.migrations_runner."):
+                import app.db.migrations_runner as mr  # type: ignore
+                obj = mr
+                for part in patch_path.split(".")[3:-1]:
+                    obj = getattr(obj, part, obj)
+                attr = patch_path.split(".")[-1]
+                container = getattr(mr, patch_path.split(".")[2], None)
+                if container is None:
+                    setattr(mr, patch_path.split(".")[2], types.SimpleNamespace())
+                target = getattr(mr, patch_path.split(".")[2])
+                mocked = mocker.patch.object(target, attr, create=True)
+            else:
+                import tests.functional.test_epic_a_data_model_functional as mod
+                mapping = {
+                    "app.resolution.engine.Resolver.resolve_placeholders": (mod.Resolver, "resolve_placeholders"),
+                    "app.net.resolver.resolve_host": (mod.resolver, "resolve_host"),
+                    "app.encryption.accessor.read_encrypted_field": (mod.accessor, "read_encrypted_field"),
+                    "app.encryption.kms.get_key": (mod.kms, "get_key"),
+                    "app.encryption.decrypt": (mod.encryption, "decrypt"),
+                    "app.cache.store.save": (mod.cache.store, "save"),
+                    "app.secrets.manager.get": (mod.secrets.manager, "get"),
+                    "app.logging.logger.error": (mod.logger, "error"),
+                    "app.fs.tmp.allocate": (mod.fs.tmp, "allocate"),
+                    "app.telemetry.emit_error": (mod.telemetry, "emit_error"),
+                }
+                if patch_path in mapping:
+                    obj, attr = mapping[patch_path]
+                    mocked = mocker.patch.object(obj, attr, create=True)
+                else:
+                    # Fallback to string-based patch as last resort
+                    mocked = mocker.patch(patch_path, create=True)
+        except Exception:
+            # Ensure a mocked object exists to preserve call count assertions
+            mocked = mocker.patch(patch_path, create=True)
+        res = run_migrate_cli(["--section", _sid])
+        # Standard error assertions via mapping
+        code = SECTIONS_722.get(_sid, "EXPECTED_ERROR_CODE_FROM_SPEC")
+        assert res.get("status") == "error"
+        assert (res.get("error", {}) or {}).get("code") == code
+        assert res.get("exit_code") == 1
+        # Message fragments present
+        if code != "EXPECTED_ERROR_CODE_FROM_SPEC":
+            msg = (res.get("error", {}) or {}).get("message", "").lower()
+            for frag in _cfg.get("msg_contains", []):
+                assert frag.lower() in msg
+        # Call count semantics per spec guidance
+>       assert mocked.call_count == _cfg.get("expected_calls", 0)
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <MagicMock name='emit_error' id='140369210086576'>.call_count
+E        +  and   1 = <built-in method get of dict object at 0x7faa420c3640>('expected_calls', 0)
+E        +    where <built-in method get of dict object at 0x7faa420c3640> = {'expected_calls': 1, 'msg_contains': ['unidentified', 'error'], 'patch': 'app.telemetry.emit_error'}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2153: AssertionError
+__________________ test_7_2_2_58_outputs_entities_incomplete ___________________
+
+    def test_7_2_2_58_outputs_entities_incomplete():
+        """Verifies 7.2.2.58 — Outputs: entities incomplete."""
+        outputs = _get_outputs_for_contract()
+        entities = outputs.get("entities")
+>       assert entities is not None  # ensure presence
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:2188: AssertionError
+______________ test_7_2_2_60_outputs_entities_mutable_within_step ______________
+
+    def test_7_2_2_60_outputs_entities_mutable_within_step():
+        """Verifies 7.2.2.60 — Outputs: entities mutable within step."""
+        outputs1 = _get_outputs_for_contract()
+        outputs2 = _get_outputs_for_contract()
+        # Both snapshots must be present and equal within the same step
+>       assert outputs1 and outputs2 and outputs1 == outputs2
+E       assert ({})
+
+tests/functional/test_epic_a_data_model_functional.py:2205: AssertionError
+_____________ test_7_2_2_62_outputs_entity_name_mismatch_with_erd ______________
+
+    def test_7_2_2_62_outputs_entity_name_mismatch_with_erd():
+        """Verifies 7.2.2.62 — Outputs: entity name mismatch with ERD."""
+        outputs = _get_outputs_for_contract()
+        names = {e.get("name") for e in (outputs.get("entities") or [])}
+>       assert names == _EXPECTED_ENTITY_NAMES
+E       AssertionError: assert set() == {'AnswerOptio...ldGroup', ...}
+E         
+E         Extra items in the right set:
+E         'FieldGroup'
+E         'QuestionnaireQuestion'
+E         'QuestionToFieldGroup'
+E         'GeneratedDocument'
+E         'Response'
+E         'GroupValue'
+E         'ResponseSet'
+E         'AnswerOption'
+E         'Company'
+E         
+E         Full diff:
+E         + set()
+E         - {
+E         -     'AnswerOption',
+E         -     'Company',
+E         -     'FieldGroup',
+E         -     'GeneratedDocument',
+E         -     'GroupValue',
+E         -     'QuestionToFieldGroup',
+E         -     'QuestionnaireQuestion',
+E         -     'Response',
+E         -     'ResponseSet',
+E         - }
+
+tests/functional/test_epic_a_data_model_functional.py:2219: AssertionError
+___________________ test_7_2_2_64_outputs_fields_set_invalid ___________________
+
+    def test_7_2_2_64_outputs_fields_set_invalid():
+        """Verifies 7.2.2.64 — Outputs: fields set invalid."""
+        outputs = _get_outputs_for_contract()
+        resp = next((e for e in (outputs.get("entities") or []) if e.get("name") == "Response"), {})
+        fields = {f.get("name"): f.get("type") for f in (resp.get("fields") or [])}
+>       assert fields == {"response_id": "uuid", "response_set_id": "uuid", "question_id": "uuid", "value_json": "jsonb"}
+E       AssertionError: assert {} == {'question_id...son': 'jsonb'}
+E         
+E         Right contains 4 more items:
+E         {'question_id': 'uuid',
+E          'response_id': 'uuid',
+E          'response_set_id': 'uuid',
+E          'value_json': 'jsonb'}
+E         
+E         Full diff:
+E         + {}
+E         - {
+E         -     'question_id': 'uuid',
+E         -     'response_id': 'uuid',
+E         -     'response_set_id': 'uuid',
+E         -     'value_json': 'jsonb',
+E         - }
+
+tests/functional/test_epic_a_data_model_functional.py:2234: AssertionError
+______________ test_7_2_2_67_outputs_field_name_mismatch_with_erd ______________
+
+    def test_7_2_2_67_outputs_field_name_mismatch_with_erd():
+        """Verifies 7.2.2.67 — Outputs: field name mismatch with ERD."""
+        outputs = _get_outputs_for_contract()
+        resp = next((e for e in (outputs.get("entities") or []) if e.get("name") == "Response"), {})
+        names = {f.get("name") for f in (resp.get("fields") or [])}
+>       assert names == {"response_id", "response_set_id", "question_id", "value_json"}
+E       AssertionError: assert set() == {'question_id... 'value_json'}
+E         
+E         Extra items in the right set:
+E         'value_json'
+E         'response_set_id'
+E         'question_id'
+E         'response_id'
+E         
+E         Full diff:
+E         + set()
+E         - {
+E         -     'question_id',
+E         -     'response_id',
+E         -     'response_set_id',
+E         -     'value_json',
+E         - }
+
+tests/functional/test_epic_a_data_model_functional.py:2257: AssertionError
+______________ test_7_2_2_70_outputs_field_type_mismatch_with_erd ______________
+
+    def test_7_2_2_70_outputs_field_type_mismatch_with_erd():
+        """Verifies 7.2.2.70 — Outputs: field type mismatch with ERD."""
+        outputs = _get_outputs_for_contract()
+        resp = next((e for e in (outputs.get("entities") or []) if e.get("name") == "Response"), {})
+        types = {f.get("name"): f.get("type") for f in (resp.get("fields") or [])}
+>       assert types == {"response_id": "uuid", "response_set_id": "uuid", "question_id": "uuid", "value_json": "jsonb"}
+E       AssertionError: assert {} == {'question_id...son': 'jsonb'}
+E         
+E         Right contains 4 more items:
+E         {'question_id': 'uuid',
+E          'response_id': 'uuid',
+E          'response_set_id': 'uuid',
+E          'value_json': 'jsonb'}
+E         
+E         Full diff:
+E         + {}
+E         - {
+E         -     'question_id': 'uuid',
+E         -     'response_id': 'uuid',
+E         -     'response_set_id': 'uuid',
+E         -     'value_json': 'jsonb',
+E         - }
+
+tests/functional/test_epic_a_data_model_functional.py:2281: AssertionError
+___________ test_7_2_2_72_outputs_encrypted_flag_false_when_required ___________
+
+    def test_7_2_2_72_outputs_encrypted_flag_false_when_required():
+        """Verifies 7.2.2.72 — Outputs: encrypted flag false when required."""
+        outputs = _get_outputs_for_contract()
+        resp = next((e for e in (outputs.get("entities") or []) if e.get("name") == "Response"), {})
+        fld = next((f for f in (resp.get("fields") or []) if f.get("name") == "value_json"), {})
+>       assert fld.get("encrypted") is True
+E       AssertionError: assert None is True
+E        +  where None = <built-in method get of dict object at 0x7faa41f4dc40>('encrypted')
+E        +    where <built-in method get of dict object at 0x7faa41f4dc40> = {}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2297: AssertionError
+__________ test_7_2_2_78_primary_key_columns_missing_when_pk_defined ___________
+
+    def test_7_2_2_78_primary_key_columns_missing_when_pk_defined():
+        """Verifies 7.2.2.78 — Primary Key Columns Missing When PK Defined."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure at least one entity declares a primary_key
+>       assert any(ent.get("primary_key") is not None for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_78_primary_key_columns_missing_when_pk_defined.<locals>.<genexpr> at 0x7faa4129eff0>)
+
+tests/functional/test_epic_a_data_model_functional.py:2347: AssertionError
+____________________ test_7_2_2_79_foreign_keys_set_invalid ____________________
+
+    def test_7_2_2_79_foreign_keys_set_invalid():
+        """Verifies 7.2.2.79 — Foreign Keys Set Invalid."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: assert presence of at least one foreign key overall
+>       assert any((ent.get("foreign_keys") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_79_foreign_keys_set_invalid.<locals>.<genexpr> at 0x7faa40ff7680>)
+
+tests/functional/test_epic_a_data_model_functional.py:2359: AssertionError
+______________ test_7_2_2_80_foreign_keys_order_not_deterministic ______________
+
+    def test_7_2_2_80_foreign_keys_order_not_deterministic():
+        """Verifies 7.2.2.80 — Foreign Keys Order Not Deterministic."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure foreign keys exist before order/uniqueness checks
+>       assert any((ent.get("foreign_keys") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_80_foreign_keys_order_not_deterministic.<locals>.<genexpr> at 0x7faa4129e810>)
+
+tests/functional/test_epic_a_data_model_functional.py:2374: AssertionError
+_____________________ test_7_2_2_81_foreign_key_name_empty _____________________
+
+    def test_7_2_2_81_foreign_key_name_empty():
+        """Verifies 7.2.2.81 — Foreign Key Name Empty."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure at least one FK exists
+>       assert any((ent.get("foreign_keys") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_81_foreign_key_name_empty.<locals>.<genexpr> at 0x7faa4129d7e0>)
+
+tests/functional/test_epic_a_data_model_functional.py:2386: AssertionError
+__________________ test_7_2_2_82_foreign_key_name_not_unique ___________________
+
+    def test_7_2_2_82_foreign_key_name_not_unique():
+        """Verifies 7.2.2.82 — Foreign Key Name Not Unique."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure foreign keys exist before uniqueness check
+>       assert any((ent.get("foreign_keys") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_82_foreign_key_name_not_unique.<locals>.<genexpr> at 0x7faa40d63990>)
+
+tests/functional/test_epic_a_data_model_functional.py:2397: AssertionError
+____________ test_7_2_2_83_foreign_key_name_missing_when_fks_exist _____________
+
+    def test_7_2_2_83_foreign_key_name_missing_when_fks_exist():
+        """Verifies 7.2.2.83 — Foreign Key Name Missing When FKs Exist."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure at least one non-empty FK list exists
+>       assert any(ent.get("foreign_keys") for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_83_foreign_key_name_missing_when_fks_exist.<locals>.<genexpr> at 0x7faa40e4fd80>)
+
+tests/functional/test_epic_a_data_model_functional.py:2408: AssertionError
+__________________ test_7_2_2_84_foreign_key_columns_unknown ___________________
+
+    def test_7_2_2_84_foreign_key_columns_unknown():
+        """Verifies 7.2.2.84 — Foreign Key Columns Unknown."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: assert fields and fks are present prior to subset checks
+>       assert any((ent.get("fields") and ent.get("foreign_keys")) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_84_foreign_key_columns_unknown.<locals>.<genexpr> at 0x7faa40ff5af0>)
+
+tests/functional/test_epic_a_data_model_functional.py:2421: AssertionError
+__________ test_7_2_2_85_foreign_key_columns_order_not_deterministic ___________
+
+    def test_7_2_2_85_foreign_key_columns_order_not_deterministic():
+        """Verifies 7.2.2.85 — Foreign Key Columns Order Not Deterministic."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure at least one FK has columns before ordering assertion
+>       assert any((fk.get("columns") or []) for ent in entities for fk in (ent.get("foreign_keys") or []))
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_85_foreign_key_columns_order_not_deterministic.<locals>.<genexpr> at 0x7faa40ff5bd0>)
+
+tests/functional/test_epic_a_data_model_functional.py:2433: AssertionError
+___________ test_7_2_2_86_foreign_key_columns_missing_when_fks_exist ___________
+
+    def test_7_2_2_86_foreign_key_columns_missing_when_fks_exist():
+        """Verifies 7.2.2.86 — Foreign Key Columns Missing When FKs Exist."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure FKs exist before asserting columns presence
+>       assert any((ent.get("foreign_keys") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_86_foreign_key_columns_missing_when_fks_exist.<locals>.<genexpr> at 0x7faa40ff70d0>)
+
+tests/functional/test_epic_a_data_model_functional.py:2445: AssertionError
+_____________ test_7_2_2_87_foreign_key_references_entity_missing ______________
+
+    def test_7_2_2_87_foreign_key_references_entity_missing():
+        """Verifies 7.2.2.87 — Foreign Key References Entity Missing."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: assert entities and fks exist prior to reference checks
+>       assert entities
+E       assert []
+
+tests/functional/test_epic_a_data_model_functional.py:2456: AssertionError
+_____________ test_7_2_2_88_foreign_key_references_columns_missing _____________
+
+    def test_7_2_2_88_foreign_key_references_columns_missing():
+        """Verifies 7.2.2.88 — Foreign Key References Columns Missing."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure at least one FK exists and references populated
+>       assert any((ent.get("foreign_keys") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_88_foreign_key_references_columns_missing.<locals>.<genexpr> at 0x7faa40ff7760>)
+
+tests/functional/test_epic_a_data_model_functional.py:2469: AssertionError
+_____________ test_7_2_2_89_foreign_key_references_entity_unknown ______________
+
+    def test_7_2_2_89_foreign_key_references_entity_unknown():
+        """Verifies 7.2.2.89 — Foreign Key References Entity Unknown."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: assert entities and fks exist prior to membership checks
+>       assert entities
+E       assert []
+
+tests/functional/test_epic_a_data_model_functional.py:2481: AssertionError
+_____________ test_7_2_2_90_foreign_key_references_columns_unknown _____________
+
+    def test_7_2_2_90_foreign_key_references_columns_unknown():
+        """Verifies 7.2.2.90 — Foreign Key References Columns Unknown."""
+        outputs = _get_outputs_for_contract()
+        # This requires cross-entity column validation; ensure presence first
+        entities = (outputs.get("entities") or [])
+>       assert any((ent.get("foreign_keys") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_90_foreign_key_references_columns_unknown.<locals>.<genexpr> at 0x7faa4129f840>)
+
+tests/functional/test_epic_a_data_model_functional.py:2494: AssertionError
+_________ test_7_2_2_91_foreign_key_references_columns_count_mismatch __________
+
+    def test_7_2_2_91_foreign_key_references_columns_count_mismatch():
+        """Verifies 7.2.2.91 — Foreign Key References Columns Count Mismatch."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: assert both fk and referenced columns exist before length compare
+>       assert any((fk.get("columns") and (fk.get("references") or {}).get("columns"))
+                   for ent in entities for fk in (ent.get("foreign_keys") or []))
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_91_foreign_key_references_columns_count_mismatch.<locals>.<genexpr> at 0x7faa4129e0a0>)
+
+tests/functional/test_epic_a_data_model_functional.py:2506: AssertionError
+_________________ test_7_2_2_92_unique_constraints_set_invalid _________________
+
+    def test_7_2_2_92_unique_constraints_set_invalid():
+        """Verifies 7.2.2.92 — Unique Constraints Set Invalid."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: assert unique_constraints exist before inner structure checks
+>       assert any((ent.get("unique_constraints") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_92_unique_constraints_set_invalid.<locals>.<genexpr> at 0x7faa4102c270>)
+
+tests/functional/test_epic_a_data_model_functional.py:2520: AssertionError
+___________ test_7_2_2_93_unique_constraints_order_not_deterministic ___________
+
+    def test_7_2_2_93_unique_constraints_order_not_deterministic():
+        """Verifies 7.2.2.93 — Unique Constraints Order Not Deterministic."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure unique constraints exist before order check
+>       assert any((ent.get("unique_constraints") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_93_unique_constraints_order_not_deterministic.<locals>.<genexpr> at 0x7faa4102c890>)
+
+tests/functional/test_epic_a_data_model_functional.py:2532: AssertionError
+__________________ test_7_2_2_94_unique_constraint_name_empty __________________
+
+    def test_7_2_2_94_unique_constraint_name_empty():
+        """Verifies 7.2.2.94 — Unique Constraint Name Empty."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure unique constraints exist before name checks
+>       assert any((ent.get("unique_constraints") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_94_unique_constraint_name_empty.<locals>.<genexpr> at 0x7faa4102cdd0>)
+
+tests/functional/test_epic_a_data_model_functional.py:2543: AssertionError
+_______________ test_7_2_2_95_unique_constraint_name_not_unique ________________
+
+    def test_7_2_2_95_unique_constraint_name_not_unique():
+        """Verifies 7.2.2.95 — Unique Constraint Name Not Unique."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure unique constraints exist before uniqueness check
+>       assert any((ent.get("unique_constraints") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_95_unique_constraint_name_not_unique.<locals>.<genexpr> at 0x7faa40ff68f0>)
+
+tests/functional/test_epic_a_data_model_functional.py:2554: AssertionError
+_______ test_7_2_2_96_unique_constraint_name_missing_when_uniques_exist ________
+
+    def test_7_2_2_96_unique_constraint_name_missing_when_uniques_exist():
+        """Verifies 7.2.2.96 — Unique Constraint Name Missing When Uniques Exist."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure at least one entity exposes unique_constraints
+>       assert any((ent.get("unique_constraints") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_96_unique_constraint_name_missing_when_uniques_exist.<locals>.<genexpr> at 0x7faa40ff5a80>)
+
+tests/functional/test_epic_a_data_model_functional.py:2565: AssertionError
+_______________ test_7_2_2_97_unique_constraint_columns_unknown ________________
+
+    def test_7_2_2_97_unique_constraint_columns_unknown():
+        """Verifies 7.2.2.97 — Unique Constraint Columns Unknown."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: assert fields and unique_constraints exist before subset checks
+>       assert any((ent.get("fields") and ent.get("unique_constraints")) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_97_unique_constraint_columns_unknown.<locals>.<genexpr> at 0x7faa40ff4820>)
+
+tests/functional/test_epic_a_data_model_functional.py:2578: AssertionError
+_______ test_7_2_2_98_unique_constraint_columns_order_not_deterministic ________
+
+    def test_7_2_2_98_unique_constraint_columns_order_not_deterministic():
+        """Verifies 7.2.2.98 — Unique Constraint Columns Order Not Deterministic."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure columns exist before ordering assert
+>       assert any((uq.get("columns") or []) for ent in entities for uq in (ent.get("unique_constraints") or []))
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_98_unique_constraint_columns_order_not_deterministic.<locals>.<genexpr> at 0x7faa4129d380>)
+
+tests/functional/test_epic_a_data_model_functional.py:2590: AssertionError
+______ test_7_2_2_99_unique_constraint_columns_missing_when_uniques_exist ______
+
+    def test_7_2_2_99_unique_constraint_columns_missing_when_uniques_exist():
+        """Verifies 7.2.2.99 — Unique Constraint Columns Missing When Uniques Exist."""
+        outputs = _get_outputs_for_contract()
+        entities = (outputs.get("entities") or [])
+        # Clarke: ensure unique constraints exist before asserting columns presence
+>       assert any((ent.get("unique_constraints") or []) for ent in entities)
+E       assert False
+E        +  where False = any(<generator object test_7_2_2_99_unique_constraint_columns_missing_when_uniques_exist.<locals>.<genexpr> at 0x7faa40ff70d0>)
+
+tests/functional/test_epic_a_data_model_functional.py:2602: AssertionError
+_______________________ test_7_2_2_108_enums_incomplete ________________________
+
+    def test_7_2_2_108_enums_incomplete():
+        """Verifies 7.2.2.108 — Enums Incomplete."""
+        outputs = _get_outputs_for_contract()
+        enums = outputs.get("enums") or []
+        ak = next((e for e in enums if e.get("name") == "answer_kind"), None)
+>       assert ak is not None and ak.get("values") == ["boolean", "enum_single", "long_text", "number", "short_string"]
+E       assert (None is not None)
+
+tests/functional/test_epic_a_data_model_functional.py:2682: AssertionError
+__________________ test_7_2_2_111_enum_name_mismatch_with_erd __________________
+
+    def test_7_2_2_111_enum_name_mismatch_with_erd():
+        """Verifies 7.2.2.111 — Enum Name Mismatch With ERD."""
+        outputs = _get_outputs_for_contract()
+        names = {e.get("name") for e in (outputs.get("enums") or [])}
+>       assert {"answer_kind"}.issubset(names)
+E       AssertionError: assert False
+E        +  where False = <built-in method issubset of set object at 0x7faa40ee65e0>(set())
+E        +    where <built-in method issubset of set object at 0x7faa40ee65e0> = {'answer_kind'}.issubset
+
+tests/functional/test_epic_a_data_model_functional.py:2704: AssertionError
+_________________ test_7_2_2_114_enum_values_mismatch_with_erd _________________
+
+    def test_7_2_2_114_enum_values_mismatch_with_erd():
+        """Verifies 7.2.2.114 — Enum Values Mismatch With ERD."""
+        outputs = _get_outputs_for_contract()
+        ak = next((e for e in (outputs.get("enums") or []) if e.get("name") == "answer_kind"), {})
+>       assert set(ak.get("values") or []) == {"boolean", "enum_single", "long_text", "number", "short_string"}
+E       AssertionError: assert set() == {'boolean', '...short_string'}
+E         
+E         Extra items in the right set:
+E         'enum_single'
+E         'long_text'
+E         'boolean'
+E         'number'
+E         'short_string'
+E         
+E         Full diff:
+E         + set()
+E         - {
+E         -     'boolean',
+E         -     'enum_single',
+E         -     'long_text',
+E         -     'number',
+E         -     'short_string',
+E         - }
+
+tests/functional/test_epic_a_data_model_functional.py:2727: AssertionError
+__________________ test_7_2_2_117_encrypted_fields_incomplete __________________
+
+    def test_7_2_2_117_encrypted_fields_incomplete():
+        """Verifies 7.2.2.117 — Encrypted Fields Incomplete."""
+        outputs = _get_outputs_for_contract()
+        manifest = set(outputs.get("encrypted_fields") or [])
+        expected = {"Company.legal_name", "Company.registered_office_address", "Response.value_json", "GeneratedDocument.output_uri"}
+>       assert manifest == expected
+E       AssertionError: assert set() == {'Company.leg...e.value_json'}
+E         
+E         Extra items in the right set:
+E         'Company.registered_office_address'
+E         'Response.value_json'
+E         'Company.legal_name'
+E         'GeneratedDocument.output_uri'
+E         
+E         Full diff:
+E         + set()
+E         - {
+E         -     'Company.legal_name',
+E         -     'Company.registered_office_address',
+E         -     'GeneratedDocument.output_uri',
+E         -     'Response.value_json',
+E         - }
+
+tests/functional/test_epic_a_data_model_functional.py:2750: AssertionError
+________________ test_7_2_2_120_constraints_applied_incomplete _________________
+
+    def test_7_2_2_120_constraints_applied_incomplete():
+        """Verifies 7.2.2.120 — Constraints Applied Incomplete."""
+        outputs = _get_outputs_for_contract()
+        constraints = set(outputs.get("constraints_applied") or [])
+        required = {"pk_response", "fk_response_set", "uq_response_set_question"}
+>       assert required.issubset(constraints)
+E       AssertionError: assert False
+E        +  where False = <built-in method issubset of set object at 0x7faa40ee5c40>(set())
+E        +    where <built-in method issubset of set object at 0x7faa40ee5c40> = {'fk_response_set', 'pk_response', 'uq_response_set_question'}.issubset
+
+tests/functional/test_epic_a_data_model_functional.py:2772: AssertionError
+____________________ test_7_2_2_124_migration_journal_empty ____________________
+
+    def test_7_2_2_124_migration_journal_empty():
+        """Verifies 7.2.2.124 — Migration Journal Empty."""
+        outputs = _get_outputs_for_contract()
+>       assert (outputs.get("migration_journal") or [])
+E       AssertionError: assert (None or [])
+E        +  where None = <built-in method get of dict object at 0x7faa40e296c0>('migration_journal')
+E        +    where <built-in method get of dict object at 0x7faa40e296c0> = {}.get
+
+tests/functional/test_epic_a_data_model_functional.py:2799: AssertionError
+=========================== short test summary info ============================
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_24_enhanced_error_semantics - AssertionError: assert 0 == 1
+ +  where 0 = <MagicMock name='resolve_host' id='140369227215968'>.call_count
+ +  and   1 = <built-in method get of dict object at 0x7faa420c1cc0>('expected_calls', 0)
+ +    where <built-in method get of dict object at 0x7faa420c1cc0> = {'expected_calls': 1, 'msg_contains': ['unresolved', 'host'], 'patch': 'app.net.resolver.resolve_host'}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_31_enhanced_error_semantics - AssertionError: assert 0 == 1
+ +  where 0 = <MagicMock name='get_key' id='140369229389760'>.call_count
+ +  and   1 = <built-in method get of dict object at 0x7faa420c1180>('expected_calls', 0)
+ +    where <built-in method get of dict object at 0x7faa420c1180> = {'expected_calls': 1, 'msg_contains': ['alias', 'not found'], 'patch': 'app.encryption.kms.get_key'}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_32_enhanced_error_semantics - AssertionError: assert 0 == 1
+ +  where 0 = <MagicMock name='get_key' id='140369210973760'>.call_count
+ +  and   1 = <built-in method get of dict object at 0x7faa40decd00>('expected_calls', 0)
+ +    where <built-in method get of dict object at 0x7faa40decd00> = {'expected_calls': 1, 'msg_contains': ['provider', 'failed'], 'patch': 'app.encryption.kms.get_key'}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_35_enhanced_error_semantics - AssertionError: assert 0 == 1
+ +  where 0 = <MagicMock name='get' id='140369226876576'>.call_count
+ +  and   1 = <built-in method get of dict object at 0x7faa40dc7b40>('expected_calls', 0)
+ +    where <built-in method get of dict object at 0x7faa40dc7b40> = {'expected_calls': 1, 'msg_contains': ['CALL_FAILED'], 'patch': 'app.secrets.manager.get'}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_37_enhanced_error_semantics - AssertionError: assert 0 == 1
+ +  where 0 = <MagicMock name='error' id='140369229383712'>.call_count
+ +  and   1 = <built-in method get of dict object at 0x7faa40e092c0>('expected_calls', 0)
+ +    where <built-in method get of dict object at 0x7faa40e092c0> = {'expected_calls': 1, 'msg_contains': ['LOGGED', 'secret'], 'patch': 'app.logging.logger.error'}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_49_enhanced_error_semantics - AssertionError: assert 0 == 1
+ +  where 0 = <MagicMock name='rollback' id='140369210090704'>.call_count
+ +  and   1 = <built-in method get of dict object at 0x7faa420c3240>('expected_calls', 0)
+ +    where <built-in method get of dict object at 0x7faa420c3240> = {'expected_calls': 1, 'msg_contains': ['rollback', 'error'], 'patch': 'app.db.migrations_runner.MigrationRunner.rollback'}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_54_enhanced_error_semantics - AssertionError: assert 0 == 1
+ +  where 0 = <MagicMock name='connect_tls' id='140369211830000'>.call_count
+ +  and   1 = <built-in method get of dict object at 0x7faa420c22c0>('expected_calls', 0)
+ +    where <built-in method get of dict object at 0x7faa420c22c0> = {'expected_calls': 1, 'msg_contains': ['tls materials', 'unavailable'], 'patch': 'app.db.base.DB.connect_tls'}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_57_enhanced_error_semantics - AssertionError: assert 0 == 1
+ +  where 0 = <MagicMock name='emit_error' id='140369210086576'>.call_count
+ +  and   1 = <built-in method get of dict object at 0x7faa420c3640>('expected_calls', 0)
+ +    where <built-in method get of dict object at 0x7faa420c3640> = {'expected_calls': 1, 'msg_contains': ['unidentified', 'error'], 'patch': 'app.telemetry.emit_error'}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_58_outputs_entities_incomplete - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_60_outputs_entities_mutable_within_step - assert ({})
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_62_outputs_entity_name_mismatch_with_erd - AssertionError: assert set() == {'AnswerOptio...ldGroup', ...}
+  
+  Extra items in the right set:
+  'FieldGroup'
+  'QuestionnaireQuestion'
+  'QuestionToFieldGroup'
+  'GeneratedDocument'
+  'Response'
+  'GroupValue'
+  'ResponseSet'
+  'AnswerOption'
+  'Company'
+  
+  Full diff:
+  + set()
+  - {
+  -     'AnswerOption',
+  -     'Company',
+  -     'FieldGroup',
+  -     'GeneratedDocument',
+  -     'GroupValue',
+  -     'QuestionToFieldGroup',
+  -     'QuestionnaireQuestion',
+  -     'Response',
+  -     'ResponseSet',
+  - }
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_64_outputs_fields_set_invalid - AssertionError: assert {} == {'question_id...son': 'jsonb'}
+  
+  Right contains 4 more items:
+  {'question_id': 'uuid',
+   'response_id': 'uuid',
+   'response_set_id': 'uuid',
+   'value_json': 'jsonb'}
+  
+  Full diff:
+  + {}
+  - {
+  -     'question_id': 'uuid',
+  -     'response_id': 'uuid',
+  -     'response_set_id': 'uuid',
+  -     'value_json': 'jsonb',
+  - }
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_67_outputs_field_name_mismatch_with_erd - AssertionError: assert set() == {'question_id... 'value_json'}
+  
+  Extra items in the right set:
+  'value_json'
+  'response_set_id'
+  'question_id'
+  'response_id'
+  
+  Full diff:
+  + set()
+  - {
+  -     'question_id',
+  -     'response_id',
+  -     'response_set_id',
+  -     'value_json',
+  - }
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_70_outputs_field_type_mismatch_with_erd - AssertionError: assert {} == {'question_id...son': 'jsonb'}
+  
+  Right contains 4 more items:
+  {'question_id': 'uuid',
+   'response_id': 'uuid',
+   'response_set_id': 'uuid',
+   'value_json': 'jsonb'}
+  
+  Full diff:
+  + {}
+  - {
+  -     'question_id': 'uuid',
+  -     'response_id': 'uuid',
+  -     'response_set_id': 'uuid',
+  -     'value_json': 'jsonb',
+  - }
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_72_outputs_encrypted_flag_false_when_required - AssertionError: assert None is True
+ +  where None = <built-in method get of dict object at 0x7faa41f4dc40>('encrypted')
+ +    where <built-in method get of dict object at 0x7faa41f4dc40> = {}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_78_primary_key_columns_missing_when_pk_defined - assert False
+ +  where False = any(<generator object test_7_2_2_78_primary_key_columns_missing_when_pk_defined.<locals>.<genexpr> at 0x7faa4129eff0>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_79_foreign_keys_set_invalid - assert False
+ +  where False = any(<generator object test_7_2_2_79_foreign_keys_set_invalid.<locals>.<genexpr> at 0x7faa40ff7680>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_80_foreign_keys_order_not_deterministic - assert False
+ +  where False = any(<generator object test_7_2_2_80_foreign_keys_order_not_deterministic.<locals>.<genexpr> at 0x7faa4129e810>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_81_foreign_key_name_empty - assert False
+ +  where False = any(<generator object test_7_2_2_81_foreign_key_name_empty.<locals>.<genexpr> at 0x7faa4129d7e0>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_82_foreign_key_name_not_unique - assert False
+ +  where False = any(<generator object test_7_2_2_82_foreign_key_name_not_unique.<locals>.<genexpr> at 0x7faa40d63990>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_83_foreign_key_name_missing_when_fks_exist - assert False
+ +  where False = any(<generator object test_7_2_2_83_foreign_key_name_missing_when_fks_exist.<locals>.<genexpr> at 0x7faa40e4fd80>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_84_foreign_key_columns_unknown - assert False
+ +  where False = any(<generator object test_7_2_2_84_foreign_key_columns_unknown.<locals>.<genexpr> at 0x7faa40ff5af0>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_85_foreign_key_columns_order_not_deterministic - assert False
+ +  where False = any(<generator object test_7_2_2_85_foreign_key_columns_order_not_deterministic.<locals>.<genexpr> at 0x7faa40ff5bd0>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_86_foreign_key_columns_missing_when_fks_exist - assert False
+ +  where False = any(<generator object test_7_2_2_86_foreign_key_columns_missing_when_fks_exist.<locals>.<genexpr> at 0x7faa40ff70d0>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_87_foreign_key_references_entity_missing - assert []
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_88_foreign_key_references_columns_missing - assert False
+ +  where False = any(<generator object test_7_2_2_88_foreign_key_references_columns_missing.<locals>.<genexpr> at 0x7faa40ff7760>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_89_foreign_key_references_entity_unknown - assert []
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_90_foreign_key_references_columns_unknown - assert False
+ +  where False = any(<generator object test_7_2_2_90_foreign_key_references_columns_unknown.<locals>.<genexpr> at 0x7faa4129f840>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_91_foreign_key_references_columns_count_mismatch - assert False
+ +  where False = any(<generator object test_7_2_2_91_foreign_key_references_columns_count_mismatch.<locals>.<genexpr> at 0x7faa4129e0a0>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_92_unique_constraints_set_invalid - assert False
+ +  where False = any(<generator object test_7_2_2_92_unique_constraints_set_invalid.<locals>.<genexpr> at 0x7faa4102c270>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_93_unique_constraints_order_not_deterministic - assert False
+ +  where False = any(<generator object test_7_2_2_93_unique_constraints_order_not_deterministic.<locals>.<genexpr> at 0x7faa4102c890>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_94_unique_constraint_name_empty - assert False
+ +  where False = any(<generator object test_7_2_2_94_unique_constraint_name_empty.<locals>.<genexpr> at 0x7faa4102cdd0>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_95_unique_constraint_name_not_unique - assert False
+ +  where False = any(<generator object test_7_2_2_95_unique_constraint_name_not_unique.<locals>.<genexpr> at 0x7faa40ff68f0>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_96_unique_constraint_name_missing_when_uniques_exist - assert False
+ +  where False = any(<generator object test_7_2_2_96_unique_constraint_name_missing_when_uniques_exist.<locals>.<genexpr> at 0x7faa40ff5a80>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_97_unique_constraint_columns_unknown - assert False
+ +  where False = any(<generator object test_7_2_2_97_unique_constraint_columns_unknown.<locals>.<genexpr> at 0x7faa40ff4820>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_98_unique_constraint_columns_order_not_deterministic - assert False
+ +  where False = any(<generator object test_7_2_2_98_unique_constraint_columns_order_not_deterministic.<locals>.<genexpr> at 0x7faa4129d380>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_99_unique_constraint_columns_missing_when_uniques_exist - assert False
+ +  where False = any(<generator object test_7_2_2_99_unique_constraint_columns_missing_when_uniques_exist.<locals>.<genexpr> at 0x7faa40ff70d0>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_108_enums_incomplete - assert (None is not None)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_111_enum_name_mismatch_with_erd - AssertionError: assert False
+ +  where False = <built-in method issubset of set object at 0x7faa40ee65e0>(set())
+ +    where <built-in method issubset of set object at 0x7faa40ee65e0> = {'answer_kind'}.issubset
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_114_enum_values_mismatch_with_erd - AssertionError: assert set() == {'boolean', '...short_string'}
+  
+  Extra items in the right set:
+  'enum_single'
+  'long_text'
+  'boolean'
+  'number'
+  'short_string'
+  
+  Full diff:
+  + set()
+  - {
+  -     'boolean',
+  -     'enum_single',
+  -     'long_text',
+  -     'number',
+  -     'short_string',
+  - }
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_117_encrypted_fields_incomplete - AssertionError: assert set() == {'Company.leg...e.value_json'}
+  
+  Extra items in the right set:
+  'Company.registered_office_address'
+  'Response.value_json'
+  'Company.legal_name'
+  'GeneratedDocument.output_uri'
+  
+  Full diff:
+  + set()
+  - {
+  -     'Company.legal_name',
+  -     'Company.registered_office_address',
+  -     'GeneratedDocument.output_uri',
+  -     'Response.value_json',
+  - }
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_120_constraints_applied_incomplete - AssertionError: assert False
+ +  where False = <built-in method issubset of set object at 0x7faa40ee5c40>(set())
+ +    where <built-in method issubset of set object at 0x7faa40ee5c40> = {'fk_response_set', 'pk_response', 'uq_response_set_question'}.issubset
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_124_migration_journal_empty - AssertionError: assert (None or [])
+ +  where None = <built-in method get of dict object at 0x7faa40e296c0>('migration_journal')
+ +    where <built-in method get of dict object at 0x7faa40e296c0> = {}.get
+================== 43 failed, 146 passed, 1 xfailed in 5.77s ===================

@@ -19,6 +19,11 @@ ALTER TABLE response_set
     ADD CONSTRAINT fk_response_set_company
         FOREIGN KEY (company_id) REFERENCES company(company_id) ON DELETE CASCADE;
 
+-- GeneratedDocument → ResponseSet
+ALTER TABLE generated_document
+    ADD CONSTRAINT fk_generated_document_set
+        FOREIGN KEY (response_set_id) REFERENCES response_set(response_set_id) ON DELETE CASCADE;
+
 -- Response → ResponseSet/QuestionnaireQuestion/AnswerOption
 ALTER TABLE response
     ADD CONSTRAINT fk_response_set

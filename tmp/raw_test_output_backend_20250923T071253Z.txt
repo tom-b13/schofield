@@ -1,0 +1,1877 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-8.4.1, pluggy-1.6.0
+rootdir: /home/codex/schofield
+plugins: mock-3.14.1, anyio-4.9.0, cov-6.2.1, langsmith-0.4.1
+collected 202 items
+
+tests/architectural/test_epic_a_data_model_architecture.py ............. [  6%]
+..............                                                           [ 13%]
+tests/functional/test_epic_a_data_model_functional.py FFFFFFFFFFFFFFFFFF [ 22%]
+FFFFFFFFsFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF [ 57%]
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF [ 93%]
+FFFFFFFFFFFFF                                                            [100%]
+
+=================================== FAILURES ===================================
+_____________ test_contract_7_2_1_1_entities_have_canonical_names ______________
+
+    def test_contract_7_2_1_1_entities_have_canonical_names():
+        """Verifies 7.2.1.1 — Entities are persisted with canonical names."""
+        outputs = get_outputs_snapshot()["outputs"]
+        expected_names = [
+            "AnswerOption",
+            "Company",
+            "FieldGroup",
+            "GeneratedDocument",
+            "GroupValue",
+            "QuestionToFieldGroup",
+            "QuestionnaireQuestion",
+            "Response",
+            "ResponseSet",
+        ]
+        # Assert: all expected names appear exactly once (set equality)
+>       assert outputs is not None and "entities" in outputs  # structural presence
+E       assert (None is not None)
+
+tests/functional/test_epic_a_data_model_functional.py:223: AssertionError
+_______ test_contract_7_2_1_2_entity_fields_exposed_with_declared_types ________
+
+    def test_contract_7_2_1_2_entity_fields_exposed_with_declared_types():
+        """Verifies 7.2.1.2 — All entities expose exact field sets and SQL types."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None and "entities" in outputs
+E       assert (None is not None)
+
+tests/functional/test_epic_a_data_model_functional.py:235: AssertionError
+____________ test_contract_7_2_1_3_primary_key_externally_declared _____________
+
+    def test_contract_7_2_1_3_primary_key_externally_declared():
+        """Verifies 7.2.1.3 — Primary keys declared for all entities with exact columns."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None and "entities" in outputs
+E       assert (None is not None)
+
+tests/functional/test_epic_a_data_model_functional.py:255: AssertionError
+__________________ test_contract_7_2_1_4_foreign_keys_present __________________
+
+    def test_contract_7_2_1_4_foreign_keys_present():
+        """Verifies 7.2.1.4 — All required foreign keys are present across entities."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None and "entities" in outputs
+E       assert (None is not None)
+
+tests/functional/test_epic_a_data_model_functional.py:273: AssertionError
+_______________ test_contract_7_2_1_5_unique_constraints_present _______________
+
+    def test_contract_7_2_1_5_unique_constraints_present():
+        """Verifies 7.2.1.5 — Required unique constraints exist across entities."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None and "entities" in outputs
+E       assert (None is not None)
+
+tests/functional/test_epic_a_data_model_functional.py:296: AssertionError
+____________________ test_contract_7_2_1_6_indexes_present _____________________
+
+    def test_contract_7_2_1_6_indexes_present():
+        """Verifies 7.2.1.6 — Partial unique on QuestionnaireQuestion.placeholder_code (non-null)."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None and "entities" in outputs
+E       assert (None is not None)
+
+tests/functional/test_epic_a_data_model_functional.py:315: AssertionError
+_____________________ test_contract_7_2_1_7_enums_declared _____________________
+
+    def test_contract_7_2_1_7_enums_declared():
+        """Verifies 7.2.1.7 — answer_kind enum is exposed with values."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:332: AssertionError
+________________ test_contract_7_2_1_8_encrypted_fields_flagged ________________
+
+    def test_contract_7_2_1_8_encrypted_fields_flagged():
+        """Verifies 7.2.1.8 — All fields reflect ERD encryption flags exactly."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:343: AssertionError
+____________ test_contract_7_2_1_9_global_encrypted_manifest_exists ____________
+
+    def test_contract_7_2_1_9_global_encrypted_manifest_exists():
+        """Verifies 7.2.1.9 — outputs.encrypted_fields lists fully-qualified columns."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:365: AssertionError
+______________ test_contract_7_2_1_10_constraints_listed_globally ______________
+
+    def test_contract_7_2_1_10_constraints_listed_globally():
+        """Verifies 7.2.1.10 — outputs.constraints_applied includes key identifiers."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:381: AssertionError
+_________ test_contract_7_2_1_11_migration_journal_includes_filenames __________
+
+    def test_contract_7_2_1_11_migration_journal_includes_filenames():
+        """Verifies 7.2.1.11 — outputs.migration_journal[].filename correctness."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:391: AssertionError
+_________ test_contract_7_2_1_12_migration_journal_includes_timestamps _________
+
+    def test_contract_7_2_1_12_migration_journal_includes_timestamps():
+        """Verifies 7.2.1.12 — outputs.migration_journal[].applied_at timestamps."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:404: AssertionError
+_______ test_contract_7_2_1_13_one_response_per_question_per_submission ________
+
+    def test_contract_7_2_1_13_one_response_per_question_per_submission():
+        """Verifies 7.2.1.13 — unique constraint projects the rule for Response."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:416: AssertionError
+____ test_contract_7_2_1_14_duplicate_placeholders_rejected_via_uniqueness _____
+
+    def test_contract_7_2_1_14_duplicate_placeholders_rejected_via_uniqueness():
+        """Verifies 7.2.1.14 — placeholder_code unique when present; no join entity."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:430: AssertionError
+__________ test_contract_7_2_1_15_direct_lookup_structural_visibility __________
+
+    def test_contract_7_2_1_15_direct_lookup_structural_visibility():
+        """Verifies 7.2.1.15 — direct lookup via placeholder_code without join entities."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:447: AssertionError
+__________ test_contract_7_2_1_16_tls_enforcement_externally_visible ___________
+
+    def test_contract_7_2_1_16_tls_enforcement_externally_visible():
+        """Verifies 7.2.1.16 — TLS enforcement surfaced in configuration outputs."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:460: AssertionError
+__________ test_contract_7_2_1_17_deterministic_ordering_of_artefacts __________
+
+    def test_contract_7_2_1_17_deterministic_ordering_of_artefacts():
+        """Verifies 7.2.1.17 — deterministic ordering across entities, fields, and journal."""
+        outputs = get_outputs_snapshot()["outputs"]
+>       assert outputs is not None
+E       assert None is not None
+
+tests/functional/test_epic_a_data_model_functional.py:469: AssertionError
+___________ test_behaviour_7_3_1_1_tables_created_after_runner_start ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae24c610>
+
+    def test_behaviour_7_3_1_1_tables_created_after_runner_start(mocker):
+        """Verifies 7.3.1.1 — table creation is invoked after migration runner starts."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: create_tables occurs once and only after runner.start
+>       assert events.count("create_tables") == 1  # exactly once
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61adebfa00>('create_tables')
+E        +    where <built-in method count of list object at 0x7f61adebfa00> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:492: AssertionError
+_______________ test_behaviour_7_3_1_2_constraints_follow_tables _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae2170d0>
+
+    def test_behaviour_7_3_1_2_constraints_follow_tables(mocker):
+        """Verifies 7.3.1.2 — constraint creation follows table creation."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: create_constraints occurs once and after create_tables
+>       assert events.count("create_constraints") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61adeaed40>('create_constraints')
+E        +    where <built-in method count of list object at 0x7f61adeaed40> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:501: AssertionError
+____________ test_behaviour_7_3_1_3_encryption_follows_constraints _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca72e0>
+
+    def test_behaviour_7_3_1_3_encryption_follows_constraints(mocker):
+        """Verifies 7.3.1.3 — encryption application follows constraint creation."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: apply_encryption occurs once and after create_constraints
+>       assert events.count("apply_encryption") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61adfb00c0>('apply_encryption')
+E        +    where <built-in method count of list object at 0x7f61adfb00c0> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:510: AssertionError
+___________________ test_behaviour_7_3_1_4_tls_before_db_ops ___________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae272a70>
+
+    def test_behaviour_7_3_1_4_tls_before_db_ops(mocker):
+        """Verifies 7.3.1.4 — TLS session established before any DB operation."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: tls.established appears before any db.* operation (e.g., db.execute)
+        first_db_op = min((i for i, e in enumerate(events) if e.startswith("db.")), default=-1)
+>       assert events.count("tls.established") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61adf1f180>('tls.established')
+E        +    where <built-in method count of list object at 0x7f61adf1f180> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:520: AssertionError
+_______________ test_behaviour_7_3_1_5_row_validation_after_tls ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae24cd60>
+
+    def test_behaviour_7_3_1_5_row_validation_after_tls(mocker):
+        """Verifies 7.3.1.5 — row validation is performed after secure connection."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: validate.row occurs once and after tls.established
+>       assert events.count("validate.row") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61adf97480>('validate.row')
+E        +    where <built-in method count of list object at 0x7f61adf97480> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:529: AssertionError
+____________ test_behaviour_7_3_1_6_direct_lookup_after_validation _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc6c640>
+
+    def test_behaviour_7_3_1_6_direct_lookup_after_validation(mocker):
+        """Verifies 7.3.1.6 — direct placeholder lookup follows row validation."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: lookup.placeholder occurs once and after validate.row
+>       assert events.count("lookup.placeholder") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61adfbec00>('lookup.placeholder')
+E        +    where <built-in method count of list object at 0x7f61adfbec00> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:538: AssertionError
+________________ test_behaviour_7_3_1_7_resolution_after_lookup ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae250c10>
+
+    def test_behaviour_7_3_1_7_resolution_after_lookup(mocker):
+        """Verifies 7.3.1.7 — placeholder resolution follows direct lookup."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: resolve.placeholders occurs once and after lookup.placeholder
+>       assert events.count("resolve.placeholders") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61adf66ec0>('resolve.placeholders')
+E        +    where <built-in method count of list object at 0x7f61adf66ec0> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:547: AssertionError
+__________ test_behaviour_7_3_1_8_rollback_immediately_after_failure ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae23f4f0>
+
+    def test_behaviour_7_3_1_8_rollback_immediately_after_failure(mocker):
+        """Verifies 7.3.1.8 — rollback initiated immediately after migration failure."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: rollback occurs once and immediately after failure.migration
+>       assert events.count("rollback") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61adefe2c0>('rollback')
+E        +    where <built-in method count of list object at 0x7f61adefe2c0> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:556: AssertionError
+__________ test_behaviour_7_3_1_9_determinism_gate_precedes_next_step __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae217d90>
+
+    def test_behaviour_7_3_1_9_determinism_gate_precedes_next_step(mocker):
+        """Verifies 7.3.1.9 — determinism check before transitioning to next step."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: determinism.verify occurs once and before step.next
+>       assert events.count("determinism.verify") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61ade58f80>('determinism.verify')
+E        +    where <built-in method count of list object at 0x7f61ade58f80> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:565: AssertionError
+_______ test_behaviour_7_3_1_11_template_registration_without_migrations _______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca4f70>
+
+    def test_behaviour_7_3_1_11_template_registration_without_migrations(mocker):
+        """Verifies 7.3.1.11 — template registration does not invoke migration runner."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: template.register occurs once; migration runner start not present
+>       assert events.count("template.register") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61ade81780>('template.register')
+E        +    where <built-in method count of list object at 0x7f61ade81780> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:581: AssertionError
+________ test_behaviour_7_3_1_12_policy_registration_without_migrations ________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae27ec80>
+
+    def test_behaviour_7_3_1_12_policy_registration_without_migrations(mocker):
+        """Verifies 7.3.1.12 — policy registration does not invoke migration runner."""
+        seq = run_step3_sequence()
+        events = seq["events"]
+        # Assert: policy.register occurs once; migration runner start not present
+>       assert events.count("policy.register") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x7f61add1e440>('policy.register')
+E        +    where <built-in method count of list object at 0x7f61add1e440> = [].count
+
+tests/functional/test_epic_a_data_model_functional.py:590: AssertionError
+__________ test_contract_7_2_2_1_erd_spec_file_missing_or_unreadable ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae23eb60>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_____________ test_contract_7_2_2_2_erd_spec_contains_invalid_json _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca4520>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+________________ test_contract_7_2_2_3_erd_spec_schema_mismatch ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae23c340>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+_____________ test_contract_7_2_2_4_mermaid_erd_missing_unreadable _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae27f340>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_________________ test_contract_7_2_2_5_mermaid_erd_not_utf_8 __________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae216d10>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_______________ test_contract_7_2_2_6_mermaid_erd_invalid_syntax _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae2723b0>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+__________ test_contract_7_2_2_7_relationships_csv_missing_unreadable __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae2739a0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_____________ test_contract_7_2_2_8_relationships_csv_invalid_csv ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcb2c50>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+___________ test_contract_7_2_2_9_relationships_csv_header_mismatch ____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcbb520>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+___________ test_contract_7_2_2_10_init_migration_missing_unreadable ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcb3b80>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+______________ test_contract_7_2_2_11_init_migration_invalid_sql _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae2707c0>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+____________ test_contract_7_2_2_12_init_migration_execution_error _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae273fa0>
+
+>   ???
+E   AssertionError
+
+<string>:12: AssertionError
+_______ test_contract_7_2_2_13_constraints_migration_missing_unreadable ________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae2715d0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+___________ test_contract_7_2_2_14_constraints_migration_invalid_sql ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae273d30>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+_________ test_contract_7_2_2_15_constraints_migration_execution_error _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae215240>
+
+>   ???
+E   AssertionError
+
+<string>:12: AssertionError
+_________ test_contract_7_2_2_16_indexes_migration_missing_unreadable __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae24fbb0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_____________ test_contract_7_2_2_17_indexes_migration_invalid_sql _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae23df30>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+___________ test_contract_7_2_2_18_indexes_migration_execution_error ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc6d150>
+
+>   ???
+E   AssertionError
+
+<string>:12: AssertionError
+________ test_contract_7_2_2_19_rollbacks_migration_missing_unreadable _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc6c190>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+____________ test_contract_7_2_2_20_rollbacks_migration_invalid_sql ____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcf9810>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+__________ test_contract_7_2_2_21_rollbacks_migration_execution_error __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfa4a0>
+
+>   ???
+E   AssertionError
+
+<string>:12: AssertionError
+_________________ test_contract_7_2_2_22_database_url_missing __________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfb100>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_______________ test_contract_7_2_2_23_database_url_invalid_dsn ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfa2c0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_______________ test_contract_7_2_2_24_database_host_unresolved ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfb640>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_______________ test_contract_7_2_2_25_tls_required_flag_missing _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcffc40>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_______________ test_contract_7_2_2_26_tls_required_not_boolean ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfb670>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_______ test_contract_7_2_2_27_tls_materials_unavailable_while_required ________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcff910>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+________________ test_contract_7_2_2_28_encryption_mode_missing ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfab60>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_____________ test_contract_7_2_2_29_encryption_mode_invalid_value _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3d270>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_contract_7_2_2_30_kms_key_alias_required_for_column_mode _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3df90>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________________ test_contract_7_2_2_31_kms_key_alias_not_found ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3eaa0>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+________________ test_contract_7_2_2_32_kms_get_key_call_failed ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfdc90>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+______________ test_contract_7_2_2_33_kms_get_key_schema_mismatch ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3e200>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+_______________ test_contract_7_2_2_34_kms_get_key_not_immutable _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3d120>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+______________ test_contract_7_2_2_35_secret_manager_call_failed _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccc1f0>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+________________ test_contract_7_2_2_36_secret_schema_mismatch _________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcccf70>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+___________________ test_contract_7_2_2_37_secret_was_logged ___________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3dfc0>
+
+>   ???
+E   AssertionError
+
+<string>:11: AssertionError
+_____________ test_contract_7_2_2_38_ca_bundle_missing_unreadable ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcf9ba0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_________________ test_contract_7_2_2_39_ca_bundle_invalid_pem _________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcff370>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_______________ test_contract_7_2_2_40_ca_certificate_not_valid ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc58940>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+______ test_contract_7_2_2_41_encrypted_fields_policy_missing_unreadable _______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc89510>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_________ test_contract_7_2_2_42_encrypted_fields_pointers_unresolved __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc4d4b0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_____________ test_contract_7_2_2_43_encrypted_field_not_in_entity _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc5b250>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_______________ test_contract_7_2_2_44_migration_timeout_missing _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc58820>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_contract_7_2_2_45_migration_timeout_not_positive_integer _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc5a0e0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+__________ test_contract_7_2_2_46_runtime_migration_execution_failure __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc593f0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+___________ test_contract_7_2_2_47_runtime_constraint_creation_error ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc89900>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+____________ test_contract_7_2_2_48_runtime_encryption_apply_error _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc594e0>
+
+>   ???
+E   AssertionError
+
+<string>:12: AssertionError
+________________ test_contract_7_2_2_49_runtime_rollback_error _________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc5a950>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_____________ test_contract_7_2_2_50_runtime_tls_connection_error ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc5b250>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+______________ test_contract_7_2_2_51_runtime_row_insertion_error ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc8a0b0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_____________ test_contract_7_2_2_52_runtime_join_resolution_error _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccfb50>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+____________ test_contract_7_2_2_53_runtime_invalid_encryption_key _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccef80>
+
+>   ???
+E   AssertionError
+
+<string>:12: AssertionError
+___________ test_contract_7_2_2_54_runtime_tls_materials_unavailable ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccff10>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_____________ test_contract_7_2_2_55_runtime_unsupported_data_type _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3eb60>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+____________ test_contract_7_2_2_56_runtime_migration_out_of_order _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3c2b0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______________ test_contract_7_2_2_57_runtime_unidentified_error _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccd060>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______________ test_contract_7_2_2_58_outputs_entities_incomplete ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccde10>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_______ test_contract_7_2_2_59_outputs_entities_order_not_deterministic ________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccec80>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_________ test_contract_7_2_2_60_outputs_entities_mutable_within_step __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3f160>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_______________ test_contract_7_2_2_61_outputs_entity_name_empty _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcce050>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_________ test_contract_7_2_2_62_outputs_entity_name_mismatch_with_erd _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccd780>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______________ test_contract_7_2_2_63_outputs_entity_name_missing ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcced40>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______________ test_contract_7_2_2_64_outputs_fields_set_invalid _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3d870>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_contract_7_2_2_65_outputs_fields_order_not_deterministic _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfd660>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_____________ test_contract_7_2_2_66_outputs_fields_array_missing ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3d030>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_________ test_contract_7_2_2_67_outputs_field_name_mismatch_with_erd __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccd360>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_____________ test_contract_7_2_2_68_outputs_field_name_not_unique _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcce620>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______________ test_contract_7_2_2_69_outputs_field_name_missing _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfc280>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_________ test_contract_7_2_2_70_outputs_field_type_mismatch_with_erd __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfdc00>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______________ test_contract_7_2_2_71_outputs_field_type_missing _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccca00>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______ test_contract_7_2_2_72_outputs_encrypted_flag_false_when_required _______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3e2f0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_____ test_contract_7_2_2_73_outputs_encrypted_flag_true_when_not_required _____
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfefb0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+____________ test_contract_7_2_2_74_outputs_encrypted_flag_missing _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfe440>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_______________ test_contract_7_2_2_75_primary_key_columns_empty _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcffd90>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______________ test_contract_7_2_2_76_primary_key_columns_unknown ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3ffa0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______ test_contract_7_2_2_77_primary_key_columns_order_not_deterministic ______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccf340>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______ test_contract_7_2_2_78_primary_key_columns_missing_when_pk_defined ______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfee00>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_______________ test_contract_7_2_2_79_foreign_keys_set_invalid ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae0259c0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_________ test_contract_7_2_2_80_foreign_keys_order_not_deterministic __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcf80d0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________________ test_contract_7_2_2_81_foreign_key_name_empty _________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfe7d0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______________ test_contract_7_2_2_82_foreign_key_name_not_unique ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccded0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_contract_7_2_2_83_foreign_key_name_missing_when_fks_exist ________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3cd30>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______________ test_contract_7_2_2_84_foreign_key_columns_unknown ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfbd90>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______ test_contract_7_2_2_85_foreign_key_columns_order_not_deterministic ______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfae90>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______ test_contract_7_2_2_86_foreign_key_columns_missing_when_fks_exist _______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfa440>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_________ test_contract_7_2_2_87_foreign_key_references_entity_missing _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3dae0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_contract_7_2_2_88_foreign_key_references_columns_missing _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcff700>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_________ test_contract_7_2_2_89_foreign_key_references_entity_unknown _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca62c0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_contract_7_2_2_90_foreign_key_references_columns_unknown _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca4160>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_____ test_contract_7_2_2_91_foreign_key_references_columns_count_mismatch _____
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfd1b0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+____________ test_contract_7_2_2_92_unique_constraints_set_invalid _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3fb50>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______ test_contract_7_2_2_93_unique_constraints_order_not_deterministic _______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae27c8b0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_____________ test_contract_7_2_2_94_unique_constraint_name_empty ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca4c70>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+___________ test_contract_7_2_2_95_unique_constraint_name_not_unique ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca4910>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+___ test_contract_7_2_2_96_unique_constraint_name_missing_when_uniques_exist ___
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca7580>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+___________ test_contract_7_2_2_97_unique_constraint_columns_unknown ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca66e0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+___ test_contract_7_2_2_98_unique_constraint_columns_order_not_deterministic ___
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccdba0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_ test_contract_7_2_2_99_unique_constraint_columns_missing_when_uniques_exist __
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc6cac0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_________________ test_contract_7_2_2_100_indexes_set_invalid __________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc6ccd0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+___________ test_contract_7_2_2_101_indexes_order_not_deterministic ____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc6d4b0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+___________________ test_contract_7_2_2_102_index_name_empty ___________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca6140>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________________ test_contract_7_2_2_103_index_name_not_unique _________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca7c70>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_contract_7_2_2_104_index_name_missing_when_indexes_exist _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfbf40>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________________ test_contract_7_2_2_105_index_columns_unknown _________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcf8370>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_contract_7_2_2_106_index_columns_order_not_deterministic _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcff850>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_______ test_contract_7_2_2_107_index_columns_missing_when_indexes_exist _______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca4160>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+___________________ test_contract_7_2_2_108_enums_incomplete ___________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca66e0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+____________ test_contract_7_2_2_109_enums_order_not_deterministic _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfd000>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+___________________ test_contract_7_2_2_110_enum_name_empty ____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfd3f0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_____________ test_contract_7_2_2_111_enum_name_mismatch_with_erd ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfc700>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+__________ test_contract_7_2_2_112_enum_name_missing_when_enums_exist __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca7c70>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+__________________ test_contract_7_2_2_113_enum_values_empty ___________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcf9900>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+____________ test_contract_7_2_2_114_enum_values_mismatch_with_erd _____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfd450>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_________ test_contract_7_2_2_115_enum_values_order_not_deterministic __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3fb20>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_________ test_contract_7_2_2_116_enum_values_missing_when_enums_exist _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccd2a0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_____________ test_contract_7_2_2_117_encrypted_fields_incomplete ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3cb20>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+__________ test_contract_7_2_2_118_encrypted_fields_values_not_unique __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcfda50>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_contract_7_2_2_119_encrypted_fields_present_when_erd_none ________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adca6980>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+____________ test_contract_7_2_2_120_constraints_applied_incomplete ____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccf0d0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+___________ test_contract_7_2_2_121_constraints_applied_value_empty ____________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc8b1c0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_contract_7_2_2_122_constraints_applied_values_not_unique _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccef50>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_____ test_contract_7_2_2_123_constraints_applied_order_not_deterministic ______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcff940>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+_______________ test_contract_7_2_2_124_migration_journal_empty ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc3e4d0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______ test_contract_7_2_2_125_migration_journal_order_not_deterministic _______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc8b7f0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+______ test_contract_7_2_2_126_migration_journal_missing_required_fields _______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc8bee0>
+
+>   ???
+E   AssertionError
+
+<string>:9: AssertionError
+________ test_behaviour_7_3_2_1_halt_on_migration_execution_error_e1_e2 ________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc5be80>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_____ test_behaviour_7_3_2_2_halt_on_constraint_creation_error_e2_indexes ______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc8a740>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+___ test_behaviour_7_3_2_3_halt_on_encryption_application_error_e3_remainder ___
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adcff8e0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+______________ test_behaviour_7_3_2_4_halt_on_rollback_failure_e8 ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adccf1c0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+__________ test_behaviour_7_3_2_5_halt_on_tls_connection_error_e4_e5 ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61adc58d90>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_____ test_behaviour_7_3_2_6_halt_on_row_insertion_validation_error_e5_e6 ______
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae217370>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+__________ test_behaviour_7_3_2_7_halt_on_join_resolution_error_e6_e7 __________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae23d360>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_ test_behaviour_7_3_2_8_halt_on_invalid_encryption_key_during_field_access_s3 _
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae23c460>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+________ test_behaviour_7_3_2_9_halt_when_tls_materials_unavailable_e4 _________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae23f610>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+____ test_behaviour_7_3_2_10_halt_on_unsupported_data_type_at_validation_e5 ____
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae24d540>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+__ test_behaviour_7_3_2_11_halt_on_out_of_order_migration_execution_e1_e2_e8 ___
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae253940>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_____ test_behaviour_7_3_2_12_halt_on_unidentified_runtime_error_catch_all _____
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae24e4d0>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_ test_behaviour_7_3_2_13_database_connectivity_failure_halts_step_3_and_prevents_downstream_operations _
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae24ff10>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_ test_behaviour_7_3_2_14_database_permission_failure_halts_step_3_and_prevents_schema_creation _
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae253730>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_ test_behaviour_7_3_2_15_tls_certificate_handshake_failure_halts_step_3_and_prevents_inserts _
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae23fc10>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_ test_behaviour_7_3_2_16_database_storage_exhaustion_halts_step_3_and_prevents_journal_updates _
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae251450>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_ test_behaviour_7_3_2_17_filesystem_temp_unavailability_prevents_step_3_continuation_degraded_stop _
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae24f520>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_ test_behaviour_7_3_2_18_kms_unavailability_halts_step_3_encryption_operations_and_prevents_access _
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae251120>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+_ test_behaviour_7_3_2_19_time_synchronisation_failure_halts_step_3_where_timestamps_are_required _
+
+self = <unittest.mock._patch object at 0x7f61ae2702b0>
+
+    def __enter__(self):
+        """Perform the patch."""
+        new, spec, spec_set = self.new, self.spec, self.spec_set
+        autospec, kwargs = self.autospec, self.kwargs
+        new_callable = self.new_callable
+        self.target = self.getter()
+    
+        # normalise False to None
+        if spec is False:
+            spec = None
+        if spec_set is False:
+            spec_set = None
+        if autospec is False:
+            autospec = None
+    
+        if spec is not None and autospec is not None:
+            raise TypeError("Can't specify spec and autospec")
+        if ((spec is not None or autospec is not None) and
+            spec_set not in (True, None)):
+            raise TypeError("Can't provide explicit spec_set *and* spec or autospec")
+    
+        original, local = self.get_original()
+    
+        if new is DEFAULT and autospec is None:
+            inherit = False
+            if spec is True:
+                # set spec to the object we are replacing
+                spec = original
+                if spec_set is True:
+                    spec_set = original
+                    spec = None
+            elif spec is not None:
+                if spec_set is True:
+                    spec_set = spec
+                    spec = None
+            elif spec_set is True:
+                spec_set = original
+    
+            if spec is not None or spec_set is not None:
+                if original is DEFAULT:
+                    raise TypeError("Can't use 'spec' with create=True")
+                if isinstance(original, type):
+                    # If we're patching out a class and there is a spec
+                    inherit = True
+            if spec is None and _is_async_obj(original):
+                Klass = AsyncMock
+            else:
+                Klass = MagicMock
+            _kwargs = {}
+            if new_callable is not None:
+                Klass = new_callable
+            elif spec is not None or spec_set is not None:
+                this_spec = spec
+                if spec_set is not None:
+                    this_spec = spec_set
+                if _is_list(this_spec):
+                    not_callable = '__call__' not in this_spec
+                else:
+                    not_callable = not callable(this_spec)
+                if _is_async_obj(this_spec):
+                    Klass = AsyncMock
+                elif not_callable:
+                    Klass = NonCallableMagicMock
+    
+            if spec is not None:
+                _kwargs['spec'] = spec
+            if spec_set is not None:
+                _kwargs['spec_set'] = spec_set
+    
+            # add a name to mocks
+            if (isinstance(Klass, type) and
+                issubclass(Klass, NonCallableMock) and self.attribute):
+                _kwargs['name'] = self.attribute
+    
+            _kwargs.update(kwargs)
+            new = Klass(**_kwargs)
+    
+            if inherit and _is_instance_mock(new):
+                # we can only tell if the instance should be callable if the
+                # spec is not a list
+                this_spec = spec
+                if spec_set is not None:
+                    this_spec = spec_set
+                if (not _is_list(this_spec) and not
+                    _instance_callable(this_spec)):
+                    Klass = NonCallableMagicMock
+    
+                _kwargs.pop('name')
+                new.return_value = Klass(_new_parent=new, _new_name='()',
+                                         **_kwargs)
+        elif autospec is not None:
+            # spec is ignored, new *must* be default, spec_set is treated
+            # as a boolean. Should we check spec is not None and that spec_set
+            # is a bool?
+            if new is not DEFAULT:
+                raise TypeError(
+                    "autospec creates the mock for you. Can't specify "
+                    "autospec and new."
+                )
+            if original is DEFAULT:
+                raise TypeError("Can't use 'autospec' with create=True")
+            spec_set = bool(spec_set)
+            if autospec is True:
+                autospec = original
+    
+            if _is_instance_mock(self.target):
+                raise InvalidSpecError(
+                    f'Cannot autospec attr {self.attribute!r} as the patch '
+                    f'target has already been mocked out. '
+                    f'[target={self.target!r}, attr={autospec!r}]')
+            if _is_instance_mock(autospec):
+                target_name = getattr(self.target, '__name__', self.target)
+                raise InvalidSpecError(
+                    f'Cannot autospec attr {self.attribute!r} from target '
+                    f'{target_name!r} as it has already been mocked out. '
+                    f'[target={self.target!r}, attr={autospec!r}]')
+    
+            new = create_autospec(autospec, spec_set=spec_set,
+                                  _name=self.attribute, **kwargs)
+        elif kwargs:
+            # can't set keyword args when we aren't creating the mock
+            # XXXX If new is a Mock we could call new.configure_mock(**kwargs)
+            raise TypeError("Can't pass kwargs to a mock we aren't creating")
+    
+        new_attr = new
+    
+        self.temp_original = original
+        self.is_local = local
+        self._exit_stack = contextlib.ExitStack()
+        try:
+>           setattr(self.target, self.attribute, new_attr)
+E           TypeError: cannot set 'utcnow' attribute of immutable type 'datetime.datetime'
+
+/usr/lib/python3.10/unittest/mock.py:1556: TypeError
+
+During handling of the above exception, another exception occurred:
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae2712d0>
+
+>   ???
+
+<string>:7: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1569: in __enter__
+    if not self.__exit__(*sys.exc_info()):
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <unittest.mock._patch object at 0x7f61ae2702b0>
+exc_info = (<class 'TypeError'>, TypeError("cannot set 'utcnow' attribute of immutable type 'datetime.datetime'"), <traceback object at 0x7f61adf714c0>)
+
+    def __exit__(self, *exc_info):
+        """Undo the patch."""
+        if self.is_local and self.temp_original is not DEFAULT:
+>           setattr(self.target, self.attribute, self.temp_original)
+E           TypeError: cannot set 'utcnow' attribute of immutable type 'datetime.datetime'
+
+/usr/lib/python3.10/unittest/mock.py:1575: TypeError
+_ test_behaviour_7_3_2_20_configuration_dependency_unavailability_prevents_step_3_initiation _
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f61ae24dc60>
+
+>   ???
+E   AssertionError
+
+<string>:10: AssertionError
+=============================== warnings summary ===============================
+<string>:3
+<string>:3
+<string>:3
+  <string>:3: DeprecationWarning: invalid escape sequence '\_'
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_1_entities_have_canonical_names - assert (None is not None)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_2_entity_fields_exposed_with_declared_types - assert (None is not None)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_3_primary_key_externally_declared - assert (None is not None)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_4_foreign_keys_present - assert (None is not None)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_5_unique_constraints_present - assert (None is not None)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_6_indexes_present - assert (None is not None)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_7_enums_declared - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_8_encrypted_fields_flagged - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_9_global_encrypted_manifest_exists - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_10_constraints_listed_globally - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_11_migration_journal_includes_filenames - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_12_migration_journal_includes_timestamps - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_13_one_response_per_question_per_submission - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_14_duplicate_placeholders_rejected_via_uniqueness - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_15_direct_lookup_structural_visibility - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_16_tls_enforcement_externally_visible - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_17_deterministic_ordering_of_artefacts - assert None is not None
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_1_tables_created_after_runner_start - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61adebfa00>('create_tables')
+ +    where <built-in method count of list object at 0x7f61adebfa00> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_2_constraints_follow_tables - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61adeaed40>('create_constraints')
+ +    where <built-in method count of list object at 0x7f61adeaed40> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_3_encryption_follows_constraints - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61adfb00c0>('apply_encryption')
+ +    where <built-in method count of list object at 0x7f61adfb00c0> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_4_tls_before_db_ops - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61adf1f180>('tls.established')
+ +    where <built-in method count of list object at 0x7f61adf1f180> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_5_row_validation_after_tls - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61adf97480>('validate.row')
+ +    where <built-in method count of list object at 0x7f61adf97480> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_6_direct_lookup_after_validation - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61adfbec00>('lookup.placeholder')
+ +    where <built-in method count of list object at 0x7f61adfbec00> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_7_resolution_after_lookup - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61adf66ec0>('resolve.placeholders')
+ +    where <built-in method count of list object at 0x7f61adf66ec0> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_8_rollback_immediately_after_failure - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61adefe2c0>('rollback')
+ +    where <built-in method count of list object at 0x7f61adefe2c0> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_9_determinism_gate_precedes_next_step - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61ade58f80>('determinism.verify')
+ +    where <built-in method count of list object at 0x7f61ade58f80> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_11_template_registration_without_migrations - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61ade81780>('template.register')
+ +    where <built-in method count of list object at 0x7f61ade81780> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_1_12_policy_registration_without_migrations - AssertionError: assert 0 == 1
+ +  where 0 = <built-in method count of list object at 0x7f61add1e440>('policy.register')
+ +    where <built-in method count of list object at 0x7f61add1e440> = [].count
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_1_erd_spec_file_missing_or_unreadable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_2_erd_spec_contains_invalid_json - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_3_erd_spec_schema_mismatch - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_4_mermaid_erd_missing_unreadable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_5_mermaid_erd_not_utf_8 - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_6_mermaid_erd_invalid_syntax - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_7_relationships_csv_missing_unreadable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_8_relationships_csv_invalid_csv - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_9_relationships_csv_header_mismatch - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_10_init_migration_missing_unreadable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_11_init_migration_invalid_sql - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_12_init_migration_execution_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_13_constraints_migration_missing_unreadable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_14_constraints_migration_invalid_sql - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_15_constraints_migration_execution_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_16_indexes_migration_missing_unreadable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_17_indexes_migration_invalid_sql - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_18_indexes_migration_execution_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_19_rollbacks_migration_missing_unreadable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_20_rollbacks_migration_invalid_sql - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_21_rollbacks_migration_execution_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_22_database_url_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_23_database_url_invalid_dsn - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_24_database_host_unresolved - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_25_tls_required_flag_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_26_tls_required_not_boolean - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_27_tls_materials_unavailable_while_required - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_28_encryption_mode_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_29_encryption_mode_invalid_value - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_30_kms_key_alias_required_for_column_mode - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_31_kms_key_alias_not_found - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_32_kms_get_key_call_failed - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_33_kms_get_key_schema_mismatch - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_34_kms_get_key_not_immutable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_35_secret_manager_call_failed - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_36_secret_schema_mismatch - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_37_secret_was_logged - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_38_ca_bundle_missing_unreadable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_39_ca_bundle_invalid_pem - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_40_ca_certificate_not_valid - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_41_encrypted_fields_policy_missing_unreadable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_42_encrypted_fields_pointers_unresolved - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_43_encrypted_field_not_in_entity - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_44_migration_timeout_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_45_migration_timeout_not_positive_integer - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_46_runtime_migration_execution_failure - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_47_runtime_constraint_creation_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_48_runtime_encryption_apply_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_49_runtime_rollback_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_50_runtime_tls_connection_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_51_runtime_row_insertion_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_52_runtime_join_resolution_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_53_runtime_invalid_encryption_key - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_54_runtime_tls_materials_unavailable - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_55_runtime_unsupported_data_type - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_56_runtime_migration_out_of_order - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_57_runtime_unidentified_error - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_58_outputs_entities_incomplete - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_59_outputs_entities_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_60_outputs_entities_mutable_within_step - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_61_outputs_entity_name_empty - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_62_outputs_entity_name_mismatch_with_erd - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_63_outputs_entity_name_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_64_outputs_fields_set_invalid - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_65_outputs_fields_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_66_outputs_fields_array_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_67_outputs_field_name_mismatch_with_erd - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_68_outputs_field_name_not_unique - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_69_outputs_field_name_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_70_outputs_field_type_mismatch_with_erd - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_71_outputs_field_type_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_72_outputs_encrypted_flag_false_when_required - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_73_outputs_encrypted_flag_true_when_not_required - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_74_outputs_encrypted_flag_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_75_primary_key_columns_empty - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_76_primary_key_columns_unknown - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_77_primary_key_columns_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_78_primary_key_columns_missing_when_pk_defined - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_79_foreign_keys_set_invalid - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_80_foreign_keys_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_81_foreign_key_name_empty - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_82_foreign_key_name_not_unique - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_83_foreign_key_name_missing_when_fks_exist - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_84_foreign_key_columns_unknown - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_85_foreign_key_columns_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_86_foreign_key_columns_missing_when_fks_exist - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_87_foreign_key_references_entity_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_88_foreign_key_references_columns_missing - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_89_foreign_key_references_entity_unknown - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_90_foreign_key_references_columns_unknown - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_91_foreign_key_references_columns_count_mismatch - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_92_unique_constraints_set_invalid - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_93_unique_constraints_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_94_unique_constraint_name_empty - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_95_unique_constraint_name_not_unique - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_96_unique_constraint_name_missing_when_uniques_exist - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_97_unique_constraint_columns_unknown - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_98_unique_constraint_columns_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_99_unique_constraint_columns_missing_when_uniques_exist - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_100_indexes_set_invalid - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_101_indexes_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_102_index_name_empty - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_103_index_name_not_unique - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_104_index_name_missing_when_indexes_exist - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_105_index_columns_unknown - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_106_index_columns_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_107_index_columns_missing_when_indexes_exist - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_108_enums_incomplete - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_109_enums_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_110_enum_name_empty - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_111_enum_name_mismatch_with_erd - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_112_enum_name_missing_when_enums_exist - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_113_enum_values_empty - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_114_enum_values_mismatch_with_erd - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_115_enum_values_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_116_enum_values_missing_when_enums_exist - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_117_encrypted_fields_incomplete - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_118_encrypted_fields_values_not_unique - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_119_encrypted_fields_present_when_erd_none - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_120_constraints_applied_incomplete - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_121_constraints_applied_value_empty - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_122_constraints_applied_values_not_unique - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_123_constraints_applied_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_124_migration_journal_empty - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_125_migration_journal_order_not_deterministic - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_2_126_migration_journal_missing_required_fields - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_1_halt_on_migration_execution_error_e1_e2 - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_2_halt_on_constraint_creation_error_e2_indexes - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_3_halt_on_encryption_application_error_e3_remainder - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_4_halt_on_rollback_failure_e8 - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_5_halt_on_tls_connection_error_e4_e5 - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_6_halt_on_row_insertion_validation_error_e5_e6 - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_7_halt_on_join_resolution_error_e6_e7 - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_8_halt_on_invalid_encryption_key_during_field_access_s3 - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_9_halt_when_tls_materials_unavailable_e4 - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_10_halt_on_unsupported_data_type_at_validation_e5 - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_11_halt_on_out_of_order_migration_execution_e1_e2_e8 - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_12_halt_on_unidentified_runtime_error_catch_all - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_13_database_connectivity_failure_halts_step_3_and_prevents_downstream_operations - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_14_database_permission_failure_halts_step_3_and_prevents_schema_creation - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_15_tls_certificate_handshake_failure_halts_step_3_and_prevents_inserts - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_16_database_storage_exhaustion_halts_step_3_and_prevents_journal_updates - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_17_filesystem_temp_unavailability_prevents_step_3_continuation_degraded_stop - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_18_kms_unavailability_halts_step_3_encryption_operations_and_prevents_access - AssertionError
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_19_time_synchronisation_failure_halts_step_3_where_timestamps_are_required - TypeError: cannot set 'utcnow' attribute of immutable type 'datetime.datetime'
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_behaviour_7_3_2_20_configuration_dependency_unavailability_prevents_step_3_initiation - AssertionError
+============ 174 failed, 27 passed, 1 skipped, 3 warnings in 2.47s =============

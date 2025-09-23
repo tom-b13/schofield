@@ -1,0 +1,1126 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-8.4.1, pluggy-1.6.0
+rootdir: /home/codex/schofield
+plugins: mock-3.14.1, anyio-4.9.0, cov-6.2.1, langsmith-0.4.1
+collected 77 items
+
+tests/architectural/test_epic_a_data_model_architecture.py ............. [ 16%]
+..............                                                           [ 35%]
+tests/functional/test_epic_a_data_model_functional.py FFFFFFFFFFF.FFFF.. [ 58%]
+.F......FFFFFFFFFxFFFFFFFFFFFFFF                                         [100%]
+
+=================================== FAILURES ===================================
+_____________ test_7_2_1_1_entities_persisted_with_canonical_names _____________
+
+    def test_7_2_1_1_entities_persisted_with_canonical_names():
+        """Verifies 7.2.1.1 — Entities are persisted with canonical names."""
+        # Invoke migration then request outputs snapshot (shim returns error envelope)
+        result = run_migrate_cli(["--section", "7.2.1.1"])
+        outputs = result.get("outputs") or {}
+    
+        # Assert: names set equals expected canonical names (set-equality)
+        expected_names = {
+            "Company",
+            "QuestionnaireQuestion",
+            "AnswerOption",
+            "ResponseSet",
+            "Response",
+            "GeneratedDocument",
+            "FieldGroup",
+            "QuestionToFieldGroup",
+            "GroupValue",
+        }
+        actual_names = {e.get("name") for e in (outputs.get("entities") or [])}
+>       assert actual_names == expected_names
+E       AssertionError: assert set() == {'AnswerOptio...ldGroup', ...}
+E         
+E         Extra items in the right set:
+E         'ResponseSet'
+E         'FieldGroup'
+E         'AnswerOption'
+E         'QuestionToFieldGroup'
+E         'Company'
+E         'GroupValue'
+E         'QuestionnaireQuestion'
+E         'GeneratedDocument'
+E         'Response'
+E         
+E         Full diff:
+E         + set()
+E         - {
+E         -     'AnswerOption',
+E         -     'Company',
+E         -     'FieldGroup',
+E         -     'GeneratedDocument',
+E         -     'GroupValue',
+E         -     'QuestionToFieldGroup',
+E         -     'QuestionnaireQuestion',
+E         -     'Response',
+E         -     'ResponseSet',
+E         - }
+
+tests/functional/test_epic_a_data_model_functional.py:315: AssertionError
+____________ test_7_2_1_2_entity_fields_exposed_with_declared_types ____________
+
+    def test_7_2_1_2_entity_fields_exposed_with_declared_types():
+        """Verifies 7.2.1.2 — Entity fields are exposed with declared types for Response."""
+        result = run_migrate_cli(["--section", "7.2.1.2"])
+        outputs = result.get("outputs") or {}
+        entities = outputs.get("entities") or []
+        response = next((e for e in entities if e.get("name") == "Response"), {})
+        fields = {f.get("name"): f.get("type") for f in (response.get("fields") or [])}
+        # Assert: required field types present exactly
+>       assert fields.get("response_id") == "uuid"
+E       AssertionError: assert None == 'uuid'
+E        +  where None = <built-in method get of dict object at 0x7f0c38331800>('response_id')
+E        +    where <built-in method get of dict object at 0x7f0c38331800> = {}.get
+
+tests/functional/test_epic_a_data_model_functional.py:330: AssertionError
+_________________ test_7_2_1_3_primary_key_externally_declared _________________
+
+    def test_7_2_1_3_primary_key_externally_declared():
+        """Verifies 7.2.1.3 — Primary key is externally declared for Response."""
+        result = run_migrate_cli(["--section", "7.2.1.3"])
+        outputs = result.get("outputs") or {}
+        response = next((e for e in (outputs.get("entities") or []) if e.get("name") == "Response"), {})
+        pk_cols = (response.get("primary_key") or {}).get("columns") or []
+        # Assert: exact PK columns
+>       assert pk_cols == ["response_id"]
+E       AssertionError: assert [] == ['response_id']
+E         
+E         Right contains one more item: 'response_id'
+E         
+E         Full diff:
+E         + []
+E         - [
+E         -     'response_id',
+E         - ]
+
+tests/functional/test_epic_a_data_model_functional.py:348: AssertionError
+_________________ test_7_2_1_4_foreign_key_constraints_present _________________
+
+    def test_7_2_1_4_foreign_key_constraints_present():
+        """Verifies 7.2.1.4 — Foreign key constraints are present for Response → ResponseSet."""
+        result = run_migrate_cli(["--section", "7.2.1.4"])
+        outputs = result.get("outputs") or {}
+        response = next((e for e in (outputs.get("entities") or []) if e.get("name") == "Response"), {})
+        fks = response.get("foreign_keys") or []
+        expected = {
+            "name": "fk_response_set",
+            "columns": ["response_set_id"],
+            "references": {"entity": "ResponseSet", "columns": ["response_set_id"]},
+        }
+        # Assert: exact FK entry exists
+>       assert expected in fks
+E       AssertionError: assert {'columns': ['response_set_id'], 'name': 'fk_response_set', 'references': {'columns': ['response_set_id'], 'entity': 'ResponseSet'}} in []
+
+tests/functional/test_epic_a_data_model_functional.py:365: AssertionError
+___________________ test_7_2_1_5_unique_constraints_present ____________________
+
+    def test_7_2_1_5_unique_constraints_present():
+        """Verifies 7.2.1.5 — Unique constraints are present (Response one-per-question-per-submission)."""
+        result = run_migrate_cli(["--section", "7.2.1.5"])
+        outputs = result.get("outputs") or {}
+        response = next((e for e in (outputs.get("entities") or []) if e.get("name") == "Response"), {})
+        uniques = response.get("unique_constraints") or []
+        expected = {"name": "uq_response_set_question", "columns": ["response_set_id", "question_id"]}
+>       assert expected in uniques
+E       AssertionError: assert {'columns': ['response_set_id', 'question_id'], 'name': 'uq_response_set_question'} in []
+
+tests/functional/test_epic_a_data_model_functional.py:378: AssertionError
+_________________________ test_7_2_1_6_indexes_present _________________________
+
+    def test_7_2_1_6_indexes_present():
+        """Verifies 7.2.1.6 — Indexes are present (QuestionnaireQuestion.placeholder_code lookup)."""
+        result = run_migrate_cli(["--section", "7.2.1.6"])
+        outputs = result.get("outputs") or {}
+        qq = next((e for e in (outputs.get("entities") or []) if e.get("name") == "QuestionnaireQuestion"), {})
+        idxs = qq.get("indexes") or []
+        expected = {"name": "uq_question_placeholder_code", "columns": ["placeholder_code"]}
+>       assert expected in idxs
+E       AssertionError: assert {'columns': ['placeholder_code'], 'name': 'uq_question_placeholder_code'} in []
+
+tests/functional/test_epic_a_data_model_functional.py:390: AssertionError
+____________________ test_7_2_1_7_enums_externally_declared ____________________
+
+    def test_7_2_1_7_enums_externally_declared():
+        """Verifies 7.2.1.7 — Enums are externally declared (answer_kind values)."""
+        result = run_migrate_cli(["--section", "7.2.1.7"])
+        outputs = result.get("outputs") or {}
+        enums = outputs.get("enums") or []
+        answer_kind = next((e for e in enums if e.get("name") == "answer_kind"), {})
+        expected_values = ["boolean", "enum_single", "long_text", "number", "short_string"]
+>       assert answer_kind.get("values") == expected_values
+E       AssertionError: assert None == ['boolean', 'enum_single', 'long_text', 'number', 'short_string']
+E        +  where None = <built-in method get of dict object at 0x7f0c385aa040>('values')
+E        +    where <built-in method get of dict object at 0x7f0c385aa040> = {}.get
+
+tests/functional/test_epic_a_data_model_functional.py:403: AssertionError
+____________________ test_7_2_1_8_encrypted_fields_flagged _____________________
+
+    def test_7_2_1_8_encrypted_fields_flagged():
+        """Verifies 7.2.1.8 — Encrypted fields are explicitly flagged."""
+        result = run_migrate_cli(["--section", "7.2.1.8"])
+        outputs = result.get("outputs") or {}
+    
+        def _encrypted(entity: str, field: str) -> Any:
+            ent = next((e for e in (outputs.get("entities") or []) if e.get("name") == entity), {})
+            fld = next((f for f in (ent.get("fields") or []) if f.get("name") == field), {})
+            return fld.get("encrypted", False)
+    
+        # Assert: sensitive fields are flagged true
+>       assert _encrypted("Company", "legal_name") is True
+E       AssertionError: assert False is True
+E        +  where False = <function test_7_2_1_8_encrypted_fields_flagged.<locals>._encrypted at 0x7f0c38552680>('Company', 'legal_name')
+
+tests/functional/test_epic_a_data_model_functional.py:417: AssertionError
+_____________ test_7_2_1_9_global_encrypted_fields_manifest_exists _____________
+
+    def test_7_2_1_9_global_encrypted_fields_manifest_exists():
+        """Verifies 7.2.1.9 — Global encrypted fields manifest exists."""
+        result = run_migrate_cli(["--section", "7.2.1.9"])
+        outputs = result.get("outputs") or {}
+        manifest = outputs.get("encrypted_fields") or []
+        expected = {
+            "Company.legal_name",
+            "Company.registered_office_address",
+            "Response.value_json",
+            "GeneratedDocument.output_uri",
+        }
+>       assert set(manifest) == expected
+E       AssertionError: assert set() == {'Company.leg...e.value_json'}
+E         
+E         Extra items in the right set:
+E         'Response.value_json'
+E         'Company.legal_name'
+E         'GeneratedDocument.output_uri'
+E         'Company.registered_office_address'
+E         
+E         Full diff:
+E         + set()
+E         - {
+E         -     'Company.legal_name',
+E         -     'Company.registered_office_address',
+E         -     'GeneratedDocument.output_uri',
+E         -     'Response.value_json',
+E         - }
+
+tests/functional/test_epic_a_data_model_functional.py:436: AssertionError
+__________________ test_7_2_1_10_constraints_listed_globally ___________________
+
+    def test_7_2_1_10_constraints_listed_globally():
+        """Verifies 7.2.1.10 — Constraints are listed globally in outputs.constraints_applied[]."""
+        result = run_migrate_cli(["--section", "7.2.1.10"])
+        outputs = result.get("outputs") or {}
+        constraints = outputs.get("constraints_applied") or []
+        required = {"pk_response", "fk_response_set", "uq_response_set_question"}
+>       assert required.issubset(set(constraints))
+E       AssertionError: assert False
+E        +  where False = <built-in method issubset of set object at 0x7f0c3876a420>(set())
+E        +    where <built-in method issubset of set object at 0x7f0c3876a420> = {'fk_response_set', 'pk_response', 'uq_response_set_question'}.issubset
+E        +    and   set() = set([])
+
+tests/functional/test_epic_a_data_model_functional.py:447: AssertionError
+______________ test_7_2_1_11_migration_journal_includes_filenames ______________
+
+    def test_7_2_1_11_migration_journal_includes_filenames():
+        """Verifies 7.2.1.11 — Migration journal entries include filenames under migrations/."""
+        result = run_migrate_cli(["--section", "7.2.1.11"])
+        outputs = result.get("outputs") or {}
+        journal = outputs.get("migration_journal") or []
+        filenames = [j.get("filename") for j in journal]
+        # Assert: includes the two expected filenames
+>       assert "migrations/001_init.sql" in filenames
+E       AssertionError: assert 'migrations/001_init.sql' in []
+
+tests/functional/test_epic_a_data_model_functional.py:460: AssertionError
+________ test_7_2_1_13_one_response_per_question_per_submission_visible ________
+
+    def test_7_2_1_13_one_response_per_question_per_submission_visible():
+        """Verifies 7.2.1.13 — Uniqueness rule externally visible in outputs for Response."""
+        result = run_migrate_cli(["--section", "7.2.1.13"])
+        outputs = result.get("outputs") or {}
+        response = next((e for e in (outputs.get("entities") or []) if e.get("name") == "Response"), {})
+        uniques = response.get("unique_constraints") or []
+>       assert {"name": "uq_response_set_question", "columns": ["response_set_id", "question_id"]} in uniques
+E       AssertionError: assert {'columns': ['response_set_id', 'question_id'], 'name': 'uq_response_set_question'} in []
+
+tests/functional/test_epic_a_data_model_functional.py:483: AssertionError
+_________ test_7_2_1_14_duplicate_placeholders_rejected_via_uniqueness _________
+
+    def test_7_2_1_14_duplicate_placeholders_rejected_via_uniqueness():
+        """Verifies 7.2.1.14 — Duplicate placeholders are rejected via uniqueness on placeholder_code."""
+        result = run_migrate_cli(["--section", "7.2.1.14"])
+        outputs = result.get("outputs") or {}
+        qq = next((e for e in (outputs.get("entities") or []) if e.get("name") == "QuestionnaireQuestion"), {})
+        # Assert: unique/index exists with exact name and columns
+>       assert {"name": "uq_question_placeholder_code", "columns": ["placeholder_code"]} in (qq.get("unique_constraints") or []) or (
+            {"name": "uq_question_placeholder_code", "columns": ["placeholder_code"]} in (qq.get("indexes") or [])
+        )
+E       AssertionError: assert ({'columns': ['placeholder_code'], 'name': 'uq_question_placeholder_code'} in ((None or [])) or {'columns': ['placeholder_code'], 'name': 'uq_question_placeholder_code'} in ((None or [])))
+E        +  where None = <built-in method get of dict object at 0x7f0c3832b880>('unique_constraints')
+E        +    where <built-in method get of dict object at 0x7f0c3832b880> = {}.get
+E        +  and   None = <built-in method get of dict object at 0x7f0c3832b880>('indexes')
+E        +    where <built-in method get of dict object at 0x7f0c3832b880> = {}.get
+
+tests/functional/test_epic_a_data_model_functional.py:492: AssertionError
+________ test_7_2_1_15_direct_lookup_resolves_placeholders_structurally ________
+
+    def test_7_2_1_15_direct_lookup_resolves_placeholders_structurally():
+        """Verifies 7.2.1.15 — Direct lookup artefacts present; no template mapping entities exist."""
+        result = run_migrate_cli(["--section", "7.2.1.15"])
+        outputs = result.get("outputs") or {}
+        entities = [e.get("name") for e in (outputs.get("entities") or [])]
+        # Assert: QuestionnaireQuestion has placeholder_code field
+        qq = next((e for e in (outputs.get("entities") or []) if e.get("name") == "QuestionnaireQuestion"), {})
+>       assert any(f.get("name") == "placeholder_code" for f in (qq.get("fields") or []))
+E       assert False
+E        +  where False = any(<generator object test_7_2_1_15_direct_lookup_resolves_placeholders_structurally.<locals>.<genexpr> at 0x7f0c3857aff0>)
+
+tests/functional/test_epic_a_data_model_functional.py:504: AssertionError
+_______________ test_7_2_1_16_tls_enforcement_externally_visible _______________
+
+    def test_7_2_1_16_tls_enforcement_externally_visible():
+        """Verifies 7.2.1.16 — TLS enforcement is externally visible if outputs surface configuration."""
+        result = run_migrate_cli(["--section", "7.2.1.16"])
+        outputs = result.get("outputs") or {}
+        config = outputs.get("config") or {}
+        # Assert: if TLS projection exists, it reflects true
+        tls_required = (config.get("database") or {}).get("ssl", {}).get("required")
+>       assert tls_required is True
+E       assert None is True
+
+tests/functional/test_epic_a_data_model_functional.py:517: AssertionError
+____________________ test_7_2_2_3_erd_spec_schema_mismatch _____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c384f9180>
+
+    def test_7_2_2_3_erd_spec_schema_mismatch(mocker):
+        """Verifies 7.2.2.3 — ERD spec schema mismatch."""
+        # Mock: valid JSON wrong shape, then pretend validator flags missing properties.
+        payload = json.dumps({"entities": [{"table_name": "Response"}]})
+    
+        class _FH:
+            def read(self):
+                return payload
+    
+            def __enter__(self):
+                return self
+    
+            def __exit__(self, *args: Any) -> None:  # pragma: no cover
+                return None
+    
+        mocker.patch("builtins.open", return_value=_FH())
+        # Mock: schema validator boundary exists (not invoked by shim yet)
+        mocker.stub(name="SchemaValidator.validate")
+        # No validator in shim; test remains failing as intended with precise expectations
+        result = run_migrate_cli(["--section", "3"])  # default branch returns decoded JSON
+    
+        # Assert: exit code present for failure path
+>       assert result.get("exit_code") == 1
+E       AssertionError: assert None == 1
+E        +  where None = <built-in method get of dict object at 0x7f0c3834f400>('exit_code')
+E        +    where <built-in method get of dict object at 0x7f0c3834f400> = {'context': {}, 'error': {'code': 'EXPECTED_ERROR_CODE_FROM_SPEC'}, 'events': [], 'exit_code': None, ...}.get
+
+tests/functional/test_epic_a_data_model_functional.py:629: AssertionError
+_______________ test_7_3_1_1_table_creation_after_runner_starts ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c385a6a40>
+
+    def test_7_3_1_1_table_creation_after_runner_starts(mocker):
+        """Verifies 7.3.1.1 — Table creation occurs after MigrationRunner.start."""
+        order: List[str] = []
+        # Patch boundary: MigrationRunner.start appends to order when called
+>       start = mocker.patch(
+            "app.db.migrations_runner.MigrationRunner.start",
+            create=True,
+            side_effect=lambda *a, **k: order.append("runner.start"),
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:874: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app.db.migrations_runner' from '/home/codex/schofield/app/db/migrations_runner.py'>
+comp = 'MigrationRunner'
+import_path = 'app.db.migrations_runner.MigrationRunner'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.db.migrations_runner.MigrationRunner'; 'app.db.migrations_runner' is not a package
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+________________ test_7_3_1_2_constraints_follow_table_creation ________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c38762c80>
+
+    def test_7_3_1_2_constraints_follow_table_creation(mocker):
+        """Verifies 7.3.1.2 — Constraint creation follows table creation."""
+        order: List[str] = []
+        # Patch boundary: create_tables then create_constraints must be called in order
+>       create_tables = mocker.patch(
+            "app.db.migrations_runner.MigrationRunner.create_tables",
+            create=True,
+            side_effect=lambda *a, **k: order.append("create_tables"),
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:897: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app.db.migrations_runner' from '/home/codex/schofield/app/db/migrations_runner.py'>
+comp = 'MigrationRunner'
+import_path = 'app.db.migrations_runner.MigrationRunner'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.db.migrations_runner.MigrationRunner'; 'app.db.migrations_runner' is not a package
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+__________________ test_7_3_1_3_encryption_after_constraints ___________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c38137fa0>
+
+    def test_7_3_1_3_encryption_after_constraints(mocker):
+        """Verifies 7.3.1.3 — Encryption application follows constraint creation."""
+        order: List[str] = []
+        # Patch boundary: create_constraints then apply_column_encryption
+>       create_constraints = mocker.patch(
+            "app.db.migrations_runner.MigrationRunner.create_constraints",
+            create=True,
+            side_effect=lambda *a, **k: order.append("create_constraints"),
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:918: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app.db.migrations_runner' from '/home/codex/schofield/app/db/migrations_runner.py'>
+comp = 'MigrationRunner'
+import_path = 'app.db.migrations_runner.MigrationRunner'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.db.migrations_runner.MigrationRunner'; 'app.db.migrations_runner' is not a package
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+____________________ test_7_3_1_4_tls_before_db_operations _____________________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c38763910>
+
+    def test_7_3_1_4_tls_before_db_operations(mocker):
+        """Verifies 7.3.1.4 — TLS session established before any DB operation."""
+        order: List[str] = []
+        # Patch boundary: DB.connect_tls must occur before any DB operation
+>       connect_tls = mocker.patch(
+            "app.db.base.DB.connect_tls",
+            create=True,
+            side_effect=lambda *a, **k: order.append("connect_tls"),
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:939: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app.db.base' from '/home/codex/schofield/app/db/base.py'>
+comp = 'DB', import_path = 'app.db.base.DB'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.db.base.DB'; 'app.db.base' is not a package
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+_____________ test_7_3_1_5_row_validation_after_secure_connection ______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c384b71f0>
+
+    def test_7_3_1_5_row_validation_after_secure_connection(mocker):
+        """Verifies 7.3.1.5 — Row validation is performed after secure connection."""
+        order: List[str] = []
+        # Patch boundary: TLS connect then DBSession.validate_row
+>       connect_tls = mocker.patch(
+            "app.db.base.DB.connect_tls",
+            create=True,
+            side_effect=lambda *a, **k: order.append("connect_tls"),
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:960: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app.db.base' from '/home/codex/schofield/app/db/base.py'>
+comp = 'DB', import_path = 'app.db.base.DB'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.db.base.DB'; 'app.db.base' is not a package
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+______________ test_7_3_1_6_direct_lookup_follows_row_validation _______________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c384ac3d0>
+
+    def test_7_3_1_6_direct_lookup_follows_row_validation(mocker):
+        """Verifies 7.3.1.6 — Direct lookup follows row validation."""
+        order: List[str] = []
+        # Patch boundary: validate_row then PlaceholderResolver.lookup_by_code
+>       validate_row = mocker.patch(
+            "app.db.base.DBSession.validate_row",
+            create=True,
+            side_effect=lambda *a, **k: order.append("validate_row"),
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:981: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app.db.base' from '/home/codex/schofield/app/db/base.py'>
+comp = 'DBSession', import_path = 'app.db.base.DBSession'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.db.base.DBSession'; 'app.db.base' is not a package
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+__________ test_7_3_1_7_placeholder_resolution_follows_direct_lookup ___________
+
+thing = <module 'app' from '/home/codex/schofield/app/__init__.py'>
+comp = 'resolution', import_path = 'app.resolution'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+>           return getattr(thing, comp)
+E           AttributeError: module 'app' has no attribute 'resolution'
+
+/usr/lib/python3.10/unittest/mock.py:1248: AttributeError
+
+During handling of the above exception, another exception occurred:
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c38703190>
+
+    def test_7_3_1_7_placeholder_resolution_follows_direct_lookup(mocker):
+        """Verifies 7.3.1.7 — Placeholder resolution follows direct lookup."""
+        order: List[str] = []
+        # Patch boundary: PlaceholderResolver.lookup_by_code then Resolver.resolve_placeholders
+>       lookup = mocker.patch(
+            "app.resolution.placeholder.PlaceholderResolver.lookup_by_code",
+            create=True,
+            side_effect=lambda *a, **k: order.append("lookup_by_code"),
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:1002: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app' from '/home/codex/schofield/app/__init__.py'>
+comp = 'resolution', import_path = 'app.resolution'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.resolution'
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+__________ test_7_3_1_8_rollback_immediately_after_migration_failure ___________
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c38584730>
+
+    def test_7_3_1_8_rollback_immediately_after_migration_failure(mocker):
+        """Verifies 7.3.1.8 — Rollback is initiated immediately after a migration failure."""
+        order: List[str] = []
+        # Patch boundary: create_tables raises, rollback is invoked immediately after
+        def _raise_failure(*_a, **_k):
+            order.append("create_tables")
+            raise RuntimeError("controlled migration failure")
+    
+>       create_tables = mocker.patch(
+            "app.db.migrations_runner.MigrationRunner.create_tables",
+            create=True,
+            side_effect=_raise_failure,
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:1027: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app.db.migrations_runner' from '/home/codex/schofield/app/db/migrations_runner.py'>
+comp = 'MigrationRunner'
+import_path = 'app.db.migrations_runner.MigrationRunner'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.db.migrations_runner.MigrationRunner'; 'app.db.migrations_runner' is not a package
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+______________ test_7_3_1_9_determinism_check_precedes_next_step _______________
+
+thing = <module 'app' from '/home/codex/schofield/app/__init__.py'>
+comp = 'determinism', import_path = 'app.determinism'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+>           return getattr(thing, comp)
+E           AttributeError: module 'app' has no attribute 'determinism'
+
+/usr/lib/python3.10/unittest/mock.py:1248: AttributeError
+
+During handling of the above exception, another exception occurred:
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c387023b0>
+
+    def test_7_3_1_9_determinism_check_precedes_next_step(mocker):
+        """Verifies 7.3.1.9 — Determinism check precedes transition to the next step."""
+        order: List[str] = []
+        # Patch boundary: DeterminismChecker.verify precedes NextStep.start
+>       determinism_check = mocker.patch(
+            "app.determinism.checker.DeterminismChecker.verify",
+            create=True,
+            side_effect=lambda *a, **k: order.append("determinism_check"),
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:1048: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app' from '/home/codex/schofield/app/__init__.py'>
+comp = 'determinism', import_path = 'app.determinism'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.determinism'
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+______________ test_7_3_1_11_template_registration_reuses_schema _______________
+
+thing = <module 'app' from '/home/codex/schofield/app/__init__.py'>
+comp = 'registry', import_path = 'app.registry'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+>           return getattr(thing, comp)
+E           AttributeError: module 'app' has no attribute 'registry'
+
+/usr/lib/python3.10/unittest/mock.py:1248: AttributeError
+
+During handling of the above exception, another exception occurred:
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c3858d390>
+
+    def test_7_3_1_11_template_registration_reuses_schema(mocker):
+        """Verifies 7.3.1.11 — Template registration proceeds without schema migrations."""
+        # Patch boundary: TemplateRegistry.register should be invoked once
+>       register = mocker.patch(
+            "app.registry.templates.TemplateRegistry.register",
+            create=True,
+            return_value=None,
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:1073: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app' from '/home/codex/schofield/app/__init__.py'>
+comp = 'registry', import_path = 'app.registry'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.registry'
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+_______________ test_7_3_1_12_policy_registration_reuses_schema ________________
+
+thing = <module 'app' from '/home/codex/schofield/app/__init__.py'>
+comp = 'registry', import_path = 'app.registry'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+>           return getattr(thing, comp)
+E           AttributeError: module 'app' has no attribute 'registry'
+
+/usr/lib/python3.10/unittest/mock.py:1248: AttributeError
+
+During handling of the above exception, another exception occurred:
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x7f0c38762500>
+
+    def test_7_3_1_12_policy_registration_reuses_schema(mocker):
+        """Verifies 7.3.1.12 — Policy registration proceeds without schema migrations."""
+        # Patch boundary: PolicyRegistry.register should be invoked once
+>       policy_register = mocker.patch(
+            "app.registry.policies.PolicyRegistry.register",
+            create=True,
+            return_value=None,
+        )
+
+tests/functional/test_epic_a_data_model_functional.py:1094: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:439: in __call__
+    return self._start_patch(
+../.local/lib/python3.10/site-packages/pytest_mock/plugin.py:257: in _start_patch
+    mocked: MockType = p.start()
+/usr/lib/python3.10/unittest/mock.py:1595: in start
+    result = self.__enter__()
+/usr/lib/python3.10/unittest/mock.py:1431: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.10/unittest/mock.py:1618: in <lambda>
+    getter = lambda: _importer(target)
+/usr/lib/python3.10/unittest/mock.py:1261: in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+thing = <module 'app' from '/home/codex/schofield/app/__init__.py'>
+comp = 'registry', import_path = 'app.registry'
+
+    def _dot_lookup(thing, comp, import_path):
+        try:
+            return getattr(thing, comp)
+        except AttributeError:
+>           __import__(import_path)
+E           ModuleNotFoundError: No module named 'app.registry'
+
+/usr/lib/python3.10/unittest/mock.py:1250: ModuleNotFoundError
+________________ test_7_3_2_1_halt_on_migration_execution_error ________________
+
+    def test_7_3_2_1_halt_on_migration_execution_error():
+        """Verifies 7.3.2.1 — Halt on migration execution error (E1 → E2)."""
+        result = run_migrate_cli(["--section", "7.3.2.1"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_MIGRATION_EXECUTION_ERROR"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_MIGRATIO...ECUTION_ERROR'
+E         
+E         - RUN_MIGRATION_EXECUTION_ERROR
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1120: AssertionError
+________________ test_7_3_2_2_halt_on_constraint_creation_error ________________
+
+    def test_7_3_2_2_halt_on_constraint_creation_error():
+        """Verifies 7.3.2.2 — Halt on constraint creation error (E2 → indexes)."""
+        result = run_migrate_cli(["--section", "7.3.2.2"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_CONSTRAINT_CREATION_ERROR"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_CONSTRAI...REATION_ERROR'
+E         
+E         - RUN_CONSTRAINT_CREATION_ERROR
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1128: AssertionError
+_________________ test_7_3_2_3_halt_on_encryption_apply_error __________________
+
+    def test_7_3_2_3_halt_on_encryption_apply_error():
+        """Verifies 7.3.2.3 — Halt on encryption application error (E3 → remainder)."""
+        result = run_migrate_cli(["--section", "7.3.2.3"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_ENCRYPTION_APPLY_ERROR"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_ENCRYPTION_APPLY_ERROR'
+E         
+E         - RUN_ENCRYPTION_APPLY_ERROR
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1136: AssertionError
+____________________ test_7_3_2_4_halt_on_rollback_failure _____________________
+
+    def test_7_3_2_4_halt_on_rollback_failure():
+        """Verifies 7.3.2.4 — Halt on rollback failure (E8)."""
+        result = run_migrate_cli(["--section", "7.3.2.4"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_MIGRATION_ROLLBACK_ERROR"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_MIGRATION_ROLLBACK_ERROR'
+E         
+E         - RUN_MIGRATION_ROLLBACK_ERROR
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1144: AssertionError
+__________________ test_7_3_2_5_halt_on_tls_connection_error ___________________
+
+    def test_7_3_2_5_halt_on_tls_connection_error():
+        """Verifies 7.3.2.5 — Halt on TLS connection error (E4 → E5)."""
+        result = run_migrate_cli(["--section", "7.3.2.5"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_TLS_CONNECTION_ERROR"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_TLS_CONNECTION_ERROR'
+E         
+E         - RUN_TLS_CONNECTION_ERROR
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1152: AssertionError
+_____________ test_7_3_2_6_halt_on_row_insertion_validation_error ______________
+
+    def test_7_3_2_6_halt_on_row_insertion_validation_error():
+        """Verifies 7.3.2.6 — Halt on row insertion validation error (E5 → E6)."""
+        result = run_migrate_cli(["--section", "7.3.2.6"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_ROW_INSERTION_ERROR"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_ROW_INSERTION_ERROR'
+E         
+E         - RUN_ROW_INSERTION_ERROR
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1160: AssertionError
+__________________ test_7_3_2_7_halt_on_join_resolution_error __________________
+
+    def test_7_3_2_7_halt_on_join_resolution_error():
+        """Verifies 7.3.2.7 — Halt on join resolution error (E6 → E7)."""
+        result = run_migrate_cli(["--section", "7.3.2.7"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_JOIN_RESOLUTION_ERROR"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_JOIN_RESOLUTION_ERROR'
+E         
+E         - RUN_JOIN_RESOLUTION_ERROR
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1168: AssertionError
+_________________ test_7_3_2_8_halt_on_invalid_encryption_key __________________
+
+    def test_7_3_2_8_halt_on_invalid_encryption_key():
+        """Verifies 7.3.2.8 — Halt on invalid encryption key during field access (S3)."""
+        result = run_migrate_cli(["--section", "7.3.2.8"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_INVALID_ENCRYPTION_KEY"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_INVALID_ENCRYPTION_KEY'
+E         
+E         - RUN_INVALID_ENCRYPTION_KEY
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1176: AssertionError
+_______________ test_7_3_2_9_halt_when_tls_materials_unavailable _______________
+
+    def test_7_3_2_9_halt_when_tls_materials_unavailable():
+        """Verifies 7.3.2.9 — Halt when TLS materials unavailable (E4)."""
+        result = run_migrate_cli(["--section", "7.3.2.9"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_TLS_MATERIALS_UNAVAILABLE"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_TLS_MATE...S_UNAVAILABLE'
+E         
+E         - RUN_TLS_MATERIALS_UNAVAILABLE
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1184: AssertionError
+_________________ test_7_3_2_10_halt_on_unsupported_data_type __________________
+
+    def test_7_3_2_10_halt_on_unsupported_data_type():
+        """Verifies 7.3.2.10 — Halt on unsupported data type at validation (E5)."""
+        result = run_migrate_cli(["--section", "7.3.2.10"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_UNSUPPORTED_DATA_TYPE"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_UNSUPPORTED_DATA_TYPE'
+E         
+E         - RUN_UNSUPPORTED_DATA_TYPE
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1192: AssertionError
+_________________ test_7_3_2_11_halt_on_out_of_order_migration _________________
+
+    def test_7_3_2_11_halt_on_out_of_order_migration():
+        """Verifies 7.3.2.11 — Halt on out-of-order migration execution (E1/E2/E8)."""
+        result = run_migrate_cli(["--section", "7.3.2.11"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_MIGRATION_OUT_OF_ORDER"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_MIGRATION_OUT_OF_ORDER'
+E         
+E         - RUN_MIGRATION_OUT_OF_ORDER
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1200: AssertionError
+_______________ test_7_3_2_12_halt_on_unidentified_runtime_error _______________
+
+    def test_7_3_2_12_halt_on_unidentified_runtime_error():
+        """Verifies 7.3.2.12 — Halt on unidentified runtime error (catch-all)."""
+        result = run_migrate_cli(["--section", "7.3.2.12"])  # placeholder
+        assert result.get("status") == "error"
+>       assert (result.get("error", {}) or {}).get("code") == "RUN_UNIDENTIFIED_ERROR"
+E       AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_UNIDENTIFIED_ERROR'
+E         
+E         - RUN_UNIDENTIFIED_ERROR
+E         + EXPECTED_ERROR_CODE_FROM_SPEC
+
+tests/functional/test_epic_a_data_model_functional.py:1208: AssertionError
+=========================== short test summary info ============================
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_1_entities_persisted_with_canonical_names - AssertionError: assert set() == {'AnswerOptio...ldGroup', ...}
+  
+  Extra items in the right set:
+  'ResponseSet'
+  'FieldGroup'
+  'AnswerOption'
+  'QuestionToFieldGroup'
+  'Company'
+  'GroupValue'
+  'QuestionnaireQuestion'
+  'GeneratedDocument'
+  'Response'
+  
+  Full diff:
+  + set()
+  - {
+  -     'AnswerOption',
+  -     'Company',
+  -     'FieldGroup',
+  -     'GeneratedDocument',
+  -     'GroupValue',
+  -     'QuestionToFieldGroup',
+  -     'QuestionnaireQuestion',
+  -     'Response',
+  -     'ResponseSet',
+  - }
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_2_entity_fields_exposed_with_declared_types - AssertionError: assert None == 'uuid'
+ +  where None = <built-in method get of dict object at 0x7f0c38331800>('response_id')
+ +    where <built-in method get of dict object at 0x7f0c38331800> = {}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_3_primary_key_externally_declared - AssertionError: assert [] == ['response_id']
+  
+  Right contains one more item: 'response_id'
+  
+  Full diff:
+  + []
+  - [
+  -     'response_id',
+  - ]
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_4_foreign_key_constraints_present - AssertionError: assert {'columns': ['response_set_id'], 'name': 'fk_response_set', 'references': {'columns': ['response_set_id'], 'entity': 'ResponseSet'}} in []
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_5_unique_constraints_present - AssertionError: assert {'columns': ['response_set_id', 'question_id'], 'name': 'uq_response_set_question'} in []
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_6_indexes_present - AssertionError: assert {'columns': ['placeholder_code'], 'name': 'uq_question_placeholder_code'} in []
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_7_enums_externally_declared - AssertionError: assert None == ['boolean', 'enum_single', 'long_text', 'number', 'short_string']
+ +  where None = <built-in method get of dict object at 0x7f0c385aa040>('values')
+ +    where <built-in method get of dict object at 0x7f0c385aa040> = {}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_8_encrypted_fields_flagged - AssertionError: assert False is True
+ +  where False = <function test_7_2_1_8_encrypted_fields_flagged.<locals>._encrypted at 0x7f0c38552680>('Company', 'legal_name')
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_9_global_encrypted_fields_manifest_exists - AssertionError: assert set() == {'Company.leg...e.value_json'}
+  
+  Extra items in the right set:
+  'Response.value_json'
+  'Company.legal_name'
+  'GeneratedDocument.output_uri'
+  'Company.registered_office_address'
+  
+  Full diff:
+  + set()
+  - {
+  -     'Company.legal_name',
+  -     'Company.registered_office_address',
+  -     'GeneratedDocument.output_uri',
+  -     'Response.value_json',
+  - }
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_10_constraints_listed_globally - AssertionError: assert False
+ +  where False = <built-in method issubset of set object at 0x7f0c3876a420>(set())
+ +    where <built-in method issubset of set object at 0x7f0c3876a420> = {'fk_response_set', 'pk_response', 'uq_response_set_question'}.issubset
+ +    and   set() = set([])
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_11_migration_journal_includes_filenames - AssertionError: assert 'migrations/001_init.sql' in []
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_13_one_response_per_question_per_submission_visible - AssertionError: assert {'columns': ['response_set_id', 'question_id'], 'name': 'uq_response_set_question'} in []
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_14_duplicate_placeholders_rejected_via_uniqueness - AssertionError: assert ({'columns': ['placeholder_code'], 'name': 'uq_question_placeholder_code'} in ((None or [])) or {'columns': ['placeholder_code'], 'name': 'uq_question_placeholder_code'} in ((None or [])))
+ +  where None = <built-in method get of dict object at 0x7f0c3832b880>('unique_constraints')
+ +    where <built-in method get of dict object at 0x7f0c3832b880> = {}.get
+ +  and   None = <built-in method get of dict object at 0x7f0c3832b880>('indexes')
+ +    where <built-in method get of dict object at 0x7f0c3832b880> = {}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_15_direct_lookup_resolves_placeholders_structurally - assert False
+ +  where False = any(<generator object test_7_2_1_15_direct_lookup_resolves_placeholders_structurally.<locals>.<genexpr> at 0x7f0c3857aff0>)
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_1_16_tls_enforcement_externally_visible - assert None is True
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_3_erd_spec_schema_mismatch - AssertionError: assert None == 1
+ +  where None = <built-in method get of dict object at 0x7f0c3834f400>('exit_code')
+ +    where <built-in method get of dict object at 0x7f0c3834f400> = {'context': {}, 'error': {'code': 'EXPECTED_ERROR_CODE_FROM_SPEC'}, 'events': [], 'exit_code': None, ...}.get
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_1_table_creation_after_runner_starts - ModuleNotFoundError: No module named 'app.db.migrations_runner.MigrationRunner'; 'app.db.migrations_runner' is not a package
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_2_constraints_follow_table_creation - ModuleNotFoundError: No module named 'app.db.migrations_runner.MigrationRunner'; 'app.db.migrations_runner' is not a package
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_3_encryption_after_constraints - ModuleNotFoundError: No module named 'app.db.migrations_runner.MigrationRunner'; 'app.db.migrations_runner' is not a package
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_4_tls_before_db_operations - ModuleNotFoundError: No module named 'app.db.base.DB'; 'app.db.base' is not a package
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_5_row_validation_after_secure_connection - ModuleNotFoundError: No module named 'app.db.base.DB'; 'app.db.base' is not a package
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_6_direct_lookup_follows_row_validation - ModuleNotFoundError: No module named 'app.db.base.DBSession'; 'app.db.base' is not a package
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_7_placeholder_resolution_follows_direct_lookup - ModuleNotFoundError: No module named 'app.resolution'
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_8_rollback_immediately_after_migration_failure - ModuleNotFoundError: No module named 'app.db.migrations_runner.MigrationRunner'; 'app.db.migrations_runner' is not a package
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_9_determinism_check_precedes_next_step - ModuleNotFoundError: No module named 'app.determinism'
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_11_template_registration_reuses_schema - ModuleNotFoundError: No module named 'app.registry'
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_1_12_policy_registration_reuses_schema - ModuleNotFoundError: No module named 'app.registry'
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_1_halt_on_migration_execution_error - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_MIGRATIO...ECUTION_ERROR'
+  
+  - RUN_MIGRATION_EXECUTION_ERROR
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_2_halt_on_constraint_creation_error - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_CONSTRAI...REATION_ERROR'
+  
+  - RUN_CONSTRAINT_CREATION_ERROR
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_3_halt_on_encryption_apply_error - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_ENCRYPTION_APPLY_ERROR'
+  
+  - RUN_ENCRYPTION_APPLY_ERROR
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_4_halt_on_rollback_failure - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_MIGRATION_ROLLBACK_ERROR'
+  
+  - RUN_MIGRATION_ROLLBACK_ERROR
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_5_halt_on_tls_connection_error - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_TLS_CONNECTION_ERROR'
+  
+  - RUN_TLS_CONNECTION_ERROR
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_6_halt_on_row_insertion_validation_error - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_ROW_INSERTION_ERROR'
+  
+  - RUN_ROW_INSERTION_ERROR
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_7_halt_on_join_resolution_error - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_JOIN_RESOLUTION_ERROR'
+  
+  - RUN_JOIN_RESOLUTION_ERROR
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_8_halt_on_invalid_encryption_key - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_INVALID_ENCRYPTION_KEY'
+  
+  - RUN_INVALID_ENCRYPTION_KEY
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_9_halt_when_tls_materials_unavailable - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_TLS_MATE...S_UNAVAILABLE'
+  
+  - RUN_TLS_MATERIALS_UNAVAILABLE
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_10_halt_on_unsupported_data_type - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_UNSUPPORTED_DATA_TYPE'
+  
+  - RUN_UNSUPPORTED_DATA_TYPE
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_11_halt_on_out_of_order_migration - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_MIGRATION_OUT_OF_ORDER'
+  
+  - RUN_MIGRATION_OUT_OF_ORDER
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+FAILED tests/functional/test_epic_a_data_model_functional.py::test_7_3_2_12_halt_on_unidentified_runtime_error - AssertionError: assert 'EXPECTED_ERR...ODE_FROM_SPEC' == 'RUN_UNIDENTIFIED_ERROR'
+  
+  - RUN_UNIDENTIFIED_ERROR
+  + EXPECTED_ERROR_CODE_FROM_SPEC
+=================== 39 failed, 37 passed, 1 xfailed in 4.22s ===================

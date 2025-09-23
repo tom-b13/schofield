@@ -1,0 +1,1289 @@
+{
+  "clarke_review": {
+    "acceptable_as_is": [
+      "7.2.1.1",
+      "7.2.1.2",
+      "7.2.1.3",
+      "7.2.1.4",
+      "7.2.1.5",
+      "7.2.1.6",
+      "7.2.1.7",
+      "7.2.1.8",
+      "7.2.1.9",
+      "7.2.1.10",
+      "7.2.1.11",
+      "7.2.1.12",
+      "7.2.1.13",
+      "7.2.1.14",
+      "7.2.1.15",
+      "7.2.1.16",
+      "7.2.1.17",
+      "7.2.2.10",
+      "7.2.2.11",
+      "7.2.2.12",
+      "7.2.2.13",
+      "7.2.2.14",
+      "7.2.2.15",
+      "7.2.2.16",
+      "7.2.2.17",
+      "7.2.2.18",
+      "7.2.2.19",
+      "7.2.2.20",
+      "7.2.2.21",
+      "7.3.1.1",
+      "7.3.1.2",
+      "7.3.1.3",
+      "7.3.1.4",
+      "7.3.1.5",
+      "7.3.1.6",
+      "7.3.1.7",
+      "7.3.1.8",
+      "7.3.1.9",
+      "7.3.1.10",
+      "7.3.1.11",
+      "7.3.1.12",
+      "7.3.2.1",
+      "7.3.2.2",
+      "7.3.2.3",
+      "7.3.2.4",
+      "7.3.2.5",
+      "7.3.2.6",
+      "7.3.2.7",
+      "7.3.2.8",
+      "7.3.2.9",
+      "7.3.2.10",
+      "7.3.2.11",
+      "7.3.2.12"
+    ],
+    "needs_improvement": [
+      "7.2.2.1",
+      "7.2.2.2",
+      "7.2.2.3",
+      "7.2.2.4",
+      "7.2.2.5",
+      "7.2.2.6",
+      "7.2.2.7",
+      "7.2.2.8",
+      "7.2.2.9",
+      "7.2.2.22",
+      "7.2.2.23",
+      "7.2.2.24",
+      "7.2.2.25",
+      "7.2.2.26",
+      "7.2.2.27",
+      "7.2.2.28",
+      "7.2.2.29",
+      "7.2.2.30",
+      "7.2.2.31",
+      "7.2.2.32",
+      "7.2.2.33",
+      "7.2.2.34",
+      "7.2.2.35",
+      "7.2.2.36",
+      "7.2.2.37",
+      "7.2.2.38",
+      "7.2.2.39",
+      "7.2.2.40",
+      "7.2.2.41",
+      "7.2.2.42",
+      "7.2.2.43",
+      "7.2.2.44",
+      "7.2.2.45",
+      "7.2.2.46",
+      "7.2.2.47",
+      "7.2.2.48",
+      "7.2.2.49",
+      "7.2.2.50",
+      "7.2.2.51",
+      "7.2.2.52",
+      "7.2.2.53",
+      "7.2.2.54",
+      "7.2.2.55",
+      "7.2.2.56",
+      "7.2.2.57",
+      "7.2.2.58",
+      "7.2.2.60",
+      "7.2.2.62",
+      "7.2.2.64",
+      "7.2.2.67",
+      "7.2.2.70",
+      "7.2.2.72",
+      "7.2.2.108",
+      "7.2.2.111",
+      "7.2.2.114",
+      "7.2.2.117",
+      "7.2.2.120",
+      "7.2.2.124",
+      "7.3.2.13",
+      "7.3.2.14",
+      "7.3.2.15",
+      "7.3.2.16",
+      "7.3.2.17",
+      "7.3.2.18",
+      "7.3.2.19",
+      "7.3.2.20"
+    ],
+    "required_missing_tests": [],
+    "suspicious_passing_tests": [
+      "7.2.2.59",
+      "7.2.2.61",
+      "7.2.2.63",
+      "7.2.2.65",
+      "7.2.2.66",
+      "7.2.2.68",
+      "7.2.2.69",
+      "7.2.2.71",
+      "7.2.2.73",
+      "7.2.2.74",
+      "7.2.2.75",
+      "7.2.2.76",
+      "7.2.2.77",
+      "7.2.2.78",
+      "7.2.2.79",
+      "7.2.2.80",
+      "7.2.2.81",
+      "7.2.2.82",
+      "7.2.2.83",
+      "7.2.2.84",
+      "7.2.2.85",
+      "7.2.2.86",
+      "7.2.2.87",
+      "7.2.2.88",
+      "7.2.2.89",
+      "7.2.2.90",
+      "7.2.2.91",
+      "7.2.2.92",
+      "7.2.2.93",
+      "7.2.2.94",
+      "7.2.2.95",
+      "7.2.2.96",
+      "7.2.2.97",
+      "7.2.2.98",
+      "7.2.2.99",
+      "7.2.2.100",
+      "7.2.2.101",
+      "7.2.2.102",
+      "7.2.2.103",
+      "7.2.2.104",
+      "7.2.2.105",
+      "7.2.2.106",
+      "7.2.2.107",
+      "7.2.2.109",
+      "7.2.2.110",
+      "7.2.2.112",
+      "7.2.2.113",
+      "7.2.2.115",
+      "7.2.2.116",
+      "7.2.2.118",
+      "7.2.2.119",
+      "7.2.2.121",
+      "7.2.2.122",
+      "7.2.2.123",
+      "7.2.2.125",
+      "7.2.2.126"
+    ],
+    "explicit_actions_for_ada": [
+      {
+        "test_id": "7.2.2.1",
+        "category": "needs_improvement",
+        "instruction": "Remove the dynamically generated duplicate test_7_2_2_01_error_mode_matches_spec and keep the explicit test_7_2_2_1_erd_spec_file_missing_or_unreadable; ensure it asserts open('docs/erd_spec.json','r',encoding='utf-8') was called once and that no outputs key exists.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Duplicate generator: globals()[f\"test_7_2_2_{int(_sid):02d}_error_mode_matches_spec\"] at ~line 880; explicit function at line 545."
+      },
+      {
+        "test_id": "7.2.2.2",
+        "category": "needs_improvement",
+        "instruction": "Delete the duplicate dynamic test_7_2_2_02_error_mode_matches_spec; retain test_7_2_2_2_erd_spec_contains_invalid_json and keep the JSON parse position assertion and single open() call with utf-8.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dynamic assignment around line 880; explicit function at line 574."
+      },
+      {
+        "test_id": "7.2.2.3",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic test_7_2_2_03_error_mode_matches_spec; keep test_7_2_2_3_erd_spec_schema_mismatch which asserts SchemaValidator.validate was called once and message lists 'name' and 'fields'.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit function strengthened at lines 610–640; duplicate generator at ~880."
+      },
+      {
+        "test_id": "7.2.2.4",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic test_7_2_2_04_error_mode_matches_spec; keep test_7_2_2_4_mermaid_erd_missing_or_unreadable and its path/message and open() call assertions.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 645; duplicate generator at ~880."
+      },
+      {
+        "test_id": "7.2.2.5",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic test_7_2_2_05_error_mode_matches_spec; retain test_7_2_2_5_mermaid_erd_not_utf8 with UnicodeDecodeError mock and path in message and read_text call-count check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 661; duplicate generator at ~880."
+      },
+      {
+        "test_id": "7.2.2.6",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic test_7_2_2_06_error_mode_matches_spec; keep test_7_2_2_6_mermaid_erd_invalid_syntax ensuring 'mermaid' context and parser.parse called once.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 680; duplicate generator at ~880."
+      },
+      {
+        "test_id": "7.2.2.7",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic test_7_2_2_07_error_mode_matches_spec; keep test_7_2_2_7_relationships_csv_missing_or_unreadable with path mention and single open() call assertion.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 700; duplicate generator at ~880."
+      },
+      {
+        "test_id": "7.2.2.8",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic test_7_2_2_08_error_mode_matches_spec; keep test_7_2_2_8_relationships_csv_invalid_csv asserting DictReader raised and was called once.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 716; duplicate generator at ~880."
+      },
+      {
+        "test_id": "7.2.2.9",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic test_7_2_2_09_error_mode_matches_spec; keep test_7_2_2_9_relationships_csv_header_mismatch and file read call-count assertion.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 730; duplicate generator at ~880."
+      },
+      {
+        "test_id": "7.2.2.22",
+        "category": "needs_improvement",
+        "instruction": "Delete duplicate test_7_2_2_22_error_mode_matches_spec and keep test_7_2_2_22_enhanced_error_semantics (mapping _SAD_722_NEEDS_MOCKS) with DB.connect not-called and message fragment checks.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Generators at ~880 and ~1500 both produce 7.2.2.22 tests."
+      },
+      {
+        "test_id": "7.2.2.23",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.23; keep enhanced_error_semantics asserting DSN detail and DB.connect not called.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dual generators around lines ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.24",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.24; keep enhanced_error_semantics asserting host unresolved message and single resolver call.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dual generators present (~880, ~1500)."
+      },
+      {
+        "test_id": "7.2.2.25",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.25; keep enhanced_error_semantics asserting 'config.database.ssl.required' in message and 0 DB ops.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dual generators present (~880, ~1500)."
+      },
+      {
+        "test_id": "7.2.2.26",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.26; keep enhanced_error_semantics asserting boolean/type mismatch and 0 DB.connect calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dual generators present (~880, ~1500)."
+      },
+      {
+        "test_id": "7.2.2.27",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.27; keep enhanced_error_semantics asserting TLS materials required and DB.connect_tls not called.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dual generators present (~880, ~1500)."
+      },
+      {
+        "test_id": "7.2.2.28",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.28; keep enhanced_error_semantics asserting missing encryption.mode and 0 apply_column_encryption calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 28; error_mode loop also defines 28."
+      },
+      {
+        "test_id": "7.2.2.29",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.29; keep enhanced_error_semantics asserting invalid mode and 0 KMS get_key calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 29; error_mode loop also defines 29."
+      },
+      {
+        "test_id": "7.2.2.30",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.30; keep enhanced_error_semantics asserting kms.key_alias requirement and 0 KMS calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 30; error_mode loop also defines 30."
+      },
+      {
+        "test_id": "7.2.2.31",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.31; keep enhanced_error_semantics asserting alias-not-found detail and single KMS attempt.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 31; error_mode loop also defines 31."
+      },
+      {
+        "test_id": "7.2.2.32",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.32; keep enhanced_error_semantics asserting provider failure and call_count == 1.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 32; error_mode loop also defines 32."
+      },
+      {
+        "test_id": "7.2.2.33",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.33; keep enhanced_error_semantics asserting schema mismatch details and 0 decrypt calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 33; error_mode loop also defines 33."
+      },
+      {
+        "test_id": "7.2.2.34",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.34; keep enhanced_error_semantics asserting NOT_IMMUTABLE message and no cache/store calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 34; error_mode loop also defines 34."
+      },
+      {
+        "test_id": "7.2.2.35",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.35; keep enhanced_error_semantics asserting secrets CALL_FAILED and verifying logs redact secrets; assert call_count conditions.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 35; error_mode loop also defines 35."
+      },
+      {
+        "test_id": "7.2.2.36",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.36; keep enhanced_error_semantics asserting secret schema mismatch and no DB.connect attempts.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 36; error_mode loop also defines 36."
+      },
+      {
+        "test_id": "7.2.2.37",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.37; keep enhanced_error_semantics asserting PRE_secrets_db_password_LOGGED and verifying log content triggers error mode.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 37; error_mode loop also defines 37."
+      },
+      {
+        "test_id": "7.2.2.38",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.38; keep enhanced_error_semantics asserting CA bundle path in message and DB.connect_tls not called.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 38; error_mode loop also defines 38."
+      },
+      {
+        "test_id": "7.2.2.39",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.39; keep enhanced_error_semantics asserting invalid PEM detail and no TLS session attempts.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 39; error_mode loop also defines 39."
+      },
+      {
+        "test_id": "7.2.2.40",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.40; keep enhanced_error_semantics asserting certificate not valid message and 0 DB ops.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 40; error_mode loop also defines 40."
+      },
+      {
+        "test_id": "7.2.2.41",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.41; keep enhanced_error_semantics asserting encrypted fields policy missing and 0 apply_column_encryption calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 41; error_mode loop also defines 41."
+      },
+      {
+        "test_id": "7.2.2.42",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.42; keep enhanced_error_semantics asserting pointers unresolved and 0 encryption calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 42; error_mode loop also defines 42."
+      },
+      {
+        "test_id": "7.2.2.43",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.43; keep enhanced_error_semantics asserting field not in entity and 0 encryption calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 43; error_mode loop also defines 43."
+      },
+      {
+        "test_id": "7.2.2.44",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.44; keep enhanced_error_semantics asserting migration.timeout missing and MigrationRunner.start not called.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 44; error_mode loop also defines 44."
+      },
+      {
+        "test_id": "7.2.2.45",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.45; keep enhanced_error_semantics asserting positive integer requirement and MigrationRunner.start not called.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 45; error_mode loop also defines 45."
+      },
+      {
+        "test_id": "7.2.2.46",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.46; keep enhanced_error_semantics asserting execution failure message and 0 downstream calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "_SAD_722_NEEDS_MOCKS includes 46; error_mode loop also defines 46."
+      },
+      {
+        "test_id": "7.2.2.47",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.47; keep enhanced_error_semantics asserting constraint error message and 0 index creation calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.48",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.48; keep enhanced_error_semantics asserting encryption apply error and 0 row validations/joins.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.49",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.49; keep enhanced_error_semantics asserting rollback error and single rollback attempt only.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.50",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.50; keep enhanced_error_semantics asserting TLS connection error and no validation occurs.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.51",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.51; keep enhanced_error_semantics asserting row insertion error and no placeholder lookup occurs.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.52",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.52; keep enhanced_error_semantics asserting join error and no resolution attempted.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.53",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.53; keep enhanced_error_semantics asserting invalid encryption key and 0 encrypted field accesses.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.54",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.54; keep enhanced_error_semantics asserting TLS materials unavailable and single TLS materials load attempt.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.55",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.55; keep enhanced_error_semantics asserting unsupported data type and no insert occurs.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.56",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.56; keep enhanced_error_semantics asserting out-of-order migration and no next step started.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.57",
+        "category": "needs_improvement",
+        "instruction": "Remove duplicate error_mode_matches_spec for 7.2.2.57; keep enhanced_error_semantics asserting unidentified error telemetry emission and halt.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Two generators around ~880 and ~1500."
+      },
+      {
+        "test_id": "7.2.2.58",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic test_7_2_2_58_error_mode_matches_spec and keep test_7_2_2_58_outputs_entities_incomplete; it asserts entities presence and exact set equality.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit function at line 1525; generator loop at ~880 creates an additional test for 58."
+      },
+      {
+        "test_id": "7.2.2.60",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.60 and keep test_7_2_2_60_outputs_entities_mutable_within_step; no change to assertions needed.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 1541; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.62",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.62 and keep test_7_2_2_62_outputs_entity_name_mismatch_with_erd with exact set check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 1556; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.64",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.64 and keep test_7_2_2_64_outputs_fields_set_invalid with exact mapping assertion for Response fields.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 1570; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.67",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.67 and keep test_7_2_2_67_outputs_field_name_mismatch_with_erd asserting exact field name set.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 1593; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.70",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.70 and keep test_7_2_2_70_outputs_field_type_mismatch_with_erd asserting field type mapping.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 1617; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.72",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.72 and keep test_7_2_2_72_outputs_encrypted_flag_false_when_required asserting value_json encrypted is True.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 1633; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.108",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.108 and keep test_7_2_2_108_enums_incomplete asserting 'answer_kind' values exactly match expected list.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 1949; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.111",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.111 and keep test_7_2_2_111_enum_name_mismatch_with_erd asserting required enums subset exists.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 1972; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.114",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.114 and keep test_7_2_2_114_enum_values_mismatch_with_erd asserting set equality for 'answer_kind' values.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 1995; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.117",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.117 and keep test_7_2_2_117_encrypted_fields_incomplete asserting exact manifest set.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 2017; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.120",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.120 and keep test_7_2_2_120_constraints_applied_incomplete asserting required subset in constraints_applied.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 2039; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.2.2.124",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic duplicate for 7.2.2.124 and keep test_7_2_2_124_migration_journal_empty asserting non-empty migration_journal.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Explicit at line 2068; generator loop at ~880 duplicates."
+      },
+      {
+        "test_id": "7.3.2.13",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamically generated test_7_3_2_13_env_error_mode_matches_spec and keep explicit test_7_3_2_13_db_connectivity_failure_halting_step with DB.connect call_count=1 and no downstream ops.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dynamic generator for 7.3.2.* at ~2105; explicit function at line 1330."
+      },
+      {
+        "test_id": "7.3.2.14",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic env_error_mode test for 7.3.2.14; keep explicit test_7_3_2_14_db_permission_failure_prevents_schema_creation asserting execute_ddl raises and create_tables not called.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dynamic generator at ~2105; explicit at line 1342."
+      },
+      {
+        "test_id": "7.3.2.15",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic env_error_mode test for 7.3.2.15; keep explicit test_7_3_2_15_tls_handshake_failure_prevents_inserts with connect_tls call_count=1 and 0 inserts.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dynamic generator at ~2105; explicit at line 1354."
+      },
+      {
+        "test_id": "7.3.2.16",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic env_error_mode test for 7.3.2.16; keep explicit test_7_3_2_16_db_storage_exhaustion_prevents_journal_updates with journal not updated.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dynamic generator at ~2105; explicit at line 1366."
+      },
+      {
+        "test_id": "7.3.2.17",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic env_error_mode test for 7.3.2.17; keep explicit test_7_3_2_17_temp_fs_unavailable_prevents_step_continuation with 0 DDL calls.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dynamic generator at ~2105; explicit at line 1378."
+      },
+      {
+        "test_id": "7.3.2.18",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic env_error_mode test for 7.3.2.18; keep explicit test_7_3_2_18_kms_unavailability_halts_encryption asserting get_key called once and encryption not applied.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dynamic generator at ~2105; explicit at line 1390."
+      },
+      {
+        "test_id": "7.3.2.19",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic env_error_mode test for 7.3.2.19; keep explicit test_7_3_2_19_time_sync_failure_halts_step asserting ensure_synchronised called once and next step not started.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dynamic generator at ~2105; explicit at line 1402."
+      },
+      {
+        "test_id": "7.3.2.20",
+        "category": "needs_improvement",
+        "instruction": "Remove dynamic env_error_mode test for 7.3.2.20; keep explicit test_7_3_2_20_config_dependency_unavailable_prevents_start asserting config load raised and DB.connect not called.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Dynamic generator at ~2105; explicit at line 1414."
+      },
+      {
+        "test_id": "7.2.2.59",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_59_outputs_entities_order_not_deterministic, add a presence guard: assert isinstance(outputs.get('entities'), list) and outputs['entities'] before asserting sorted order.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Current test builds names_order from (outputs.get('entities') or []); with empty outputs this trivially passes (line ~1534)."
+      },
+      {
+        "test_id": "7.2.2.61",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_61_outputs_entity_name_empty, assert outputs['entities'] is a non-empty list before looping and asserting name values.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop over (outputs.get('entities') or []); empty outputs lead to no assertions (line ~1549)."
+      },
+      {
+        "test_id": "7.2.2.63",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_63_outputs_entity_name_missing, add assert outputs['entities'] and at least one dict before checking 'name' in ent.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions can vacuously pass when entities == [] (line ~1563)."
+      },
+      {
+        "test_id": "7.2.2.65",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_65_outputs_fields_order_not_deterministic, assert Response entity exists and has fields before asserting sorted(field names).",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "names = [.. for f in (resp.get('fields') or [])]; empty list makes equality true (line ~1578)."
+      },
+      {
+        "test_id": "7.2.2.66",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_66_outputs_fields_array_missing, assert outputs['entities'] non-empty before looping to assert fields arrays exist.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop over entities can be skipped on empty outputs (line ~1586)."
+      },
+      {
+        "test_id": "7.2.2.68",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_68_outputs_field_name_not_unique, add guard that at least one entity with fields exists before checking uniqueness.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "names list over [] trivially satisfies len(names)==len(set(names)) (line ~1601)."
+      },
+      {
+        "test_id": "7.2.2.69",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_69_outputs_field_name_missing, assert entities and fields presence first to avoid vacuous success on empty outputs.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Nested loops may not execute if outputs empty (line ~1609)."
+      },
+      {
+        "test_id": "7.2.2.71",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_71_outputs_field_type_missing, assert at least one entity with fields exists before asserting type presence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop over entities/fields may not run on empty outputs (line ~1625)."
+      },
+      {
+        "test_id": "7.2.2.73",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_73_outputs_encrypted_flag_true_when_not_required, assert Response entity and 'response_id' field exist before checking encrypted flag in (False, None).",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Without presence guard, fld.get('encrypted') is None passes erroneously (line ~1641)."
+      },
+      {
+        "test_id": "7.2.2.74",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_74_outputs_encrypted_flag_missing, assert non-empty entities and fields first so the loop executes.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop skipped when outputs empty (line ~1649)."
+      },
+      {
+        "test_id": "7.2.2.75",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_75_primary_key_columns_empty, assert at least one entity has a primary_key before checking columns non-empty.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Conditional in loop may never run on empty outputs (line ~1657)."
+      },
+      {
+        "test_id": "7.2.2.76",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_76_primary_key_columns_unknown, assert entities and fields present before subset checks.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions vacuously pass on empty outputs (line ~1666)."
+      },
+      {
+        "test_id": "7.2.2.77",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_77_primary_key_columns_order_not_deterministic, assert primary_key columns exist before comparing list order.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop may not execute on empty outputs (line ~1675)."
+      },
+      {
+        "test_id": "7.2.2.78",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_78_primary_key_columns_missing_when_pk_defined, assert at least one entity has primary_key before asserting 'columns' key presence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "If no entities, no asserts run (line ~1683)."
+      },
+      {
+        "test_id": "7.2.2.79",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_79_foreign_keys_set_invalid, assert entities and foreign_keys exist before validating inner structure.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop over empty collections yields no assertions (line ~1692)."
+      },
+      {
+        "test_id": "7.2.2.80",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_80_foreign_keys_order_not_deterministic, assert foreign_keys exist before checking sorted order and uniqueness.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "names == sorted(names) holds for empty list (line ~1704)."
+      },
+      {
+        "test_id": "7.2.2.81",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_81_foreign_key_name_empty, assert at least one fk exists before name checks.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1713)."
+      },
+      {
+        "test_id": "7.2.2.82",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_82_foreign_key_name_not_unique, assert fks exist before uniqueness check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "len(names)==len(set(names)) true for empty (line ~1721)."
+      },
+      {
+        "test_id": "7.2.2.83",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_83_foreign_key_name_missing_when_fks_exist, assert entities non-empty and fks list non-empty to ensure loop executes.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "'if fks:' block may not run at all (line ~1729)."
+      },
+      {
+        "test_id": "7.2.2.84",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_84_foreign_key_columns_unknown, assert entities and fields present before subset checks on fk columns.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop may be skipped entirely (line ~1739)."
+      },
+      {
+        "test_id": "7.2.2.85",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_85_foreign_key_columns_order_not_deterministic, assert fk columns exist before comparing list ordering.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Order check on empty columns list trivially passes (line ~1748)."
+      },
+      {
+        "test_id": "7.2.2.86",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_86_foreign_key_columns_missing_when_fks_exist, assert fks exist before asserting columns presence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop may not execute (line ~1757)."
+      },
+      {
+        "test_id": "7.2.2.87",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_87_foreign_key_references_entity_missing, assert entities and fks exist before checking reference entity membership.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop may not execute (line ~1765)."
+      },
+      {
+        "test_id": "7.2.2.88",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_88_foreign_key_references_columns_missing, assert 'references' exists and list non-empty before asserting.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop may not execute (line ~1774)."
+      },
+      {
+        "test_id": "7.2.2.89",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_89_foreign_key_references_entity_unknown, assert entities and fks exist before membership check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop may not execute (line ~1783)."
+      },
+      {
+        "test_id": "7.2.2.90",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_90_foreign_key_references_columns_unknown, assert referenced columns are present before checking (avoid bare truthiness on empty).",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "(fk.get('references') or {}).get('columns') truthiness check should be preceded by presence assertion (line ~1792)."
+      },
+      {
+        "test_id": "7.2.2.91",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_91_foreign_key_references_columns_count_mismatch, assert both fk columns and ref columns exist before comparing lengths.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop may not execute (line ~1801)."
+      },
+      {
+        "test_id": "7.2.2.92",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_92_unique_constraints_set_invalid, assert unique_constraints exist before validating inner structure.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1811)."
+      },
+      {
+        "test_id": "7.2.2.93",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_93_unique_constraints_order_not_deterministic, assert unique_constraints exist before sorted order check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "names == sorted(names) passes for empty list (line ~1820)."
+      },
+      {
+        "test_id": "7.2.2.94",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_94_unique_constraint_name_empty, assert uqs exist before name value checks.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1828)."
+      },
+      {
+        "test_id": "7.2.2.95",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_95_unique_constraint_name_not_unique, assert uqs exist before uniqueness check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "len(names)==len(set(names)) true for empty list (line ~1836)."
+      },
+      {
+        "test_id": "7.2.2.96",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_96_unique_constraint_name_missing_when_uniques_exist, assert uqs exist to ensure inner loop runs.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "'if uqs:' block may not run (line ~1844)."
+      },
+      {
+        "test_id": "7.2.2.97",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_97_unique_constraint_columns_unknown, assert fields and uqs exist before subset checks.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1854)."
+      },
+      {
+        "test_id": "7.2.2.98",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_98_unique_constraint_columns_order_not_deterministic, assert columns exist before list ordering assertions.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "cols == list(cols) passes for empty list (line ~1863)."
+      },
+      {
+        "test_id": "7.2.2.99",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_99_unique_constraint_columns_missing_when_uniques_exist, assert uqs exist before asserting columns presence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1872)."
+      },
+      {
+        "test_id": "7.2.2.100",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_100_indexes_set_invalid, assert indexes exist before inner name/columns checks.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1880)."
+      },
+      {
+        "test_id": "7.2.2.101",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_101_indexes_order_not_deterministic, assert indexes exist before sorted order check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "names == sorted(names) passes on empty (line ~1889)."
+      },
+      {
+        "test_id": "7.2.2.102",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_102_index_name_empty, assert indexes exist before name checks.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1897)."
+      },
+      {
+        "test_id": "7.2.2.103",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_103_index_name_not_unique, assert indexes exist before uniqueness check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "len(names)==len(set(names)) true for empty (line ~1905)."
+      },
+      {
+        "test_id": "7.2.2.104",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_104_index_name_missing_when_indexes_exist, assert indexes exist to ensure inner loop runs.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "'if idxs:' may short-circuit (line ~1913)."
+      },
+      {
+        "test_id": "7.2.2.105",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_105_index_columns_unknown, assert indexes exist before subset checks of index columns within fields.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1923)."
+      },
+      {
+        "test_id": "7.2.2.106",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_106_index_columns_order_not_deterministic, assert index columns exist before list ordering assertions.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "cols == list(cols) passes for empty list (line ~1932)."
+      },
+      {
+        "test_id": "7.2.2.107",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_107_index_columns_missing_when_indexes_exist, assert indexes exist before asserting columns presence.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1941)."
+      },
+      {
+        "test_id": "7.2.2.109",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_109_enums_order_not_deterministic, assert enums list is non-empty before sorted order check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "vals == sorted(vals) passes for empty (line ~1957)."
+      },
+      {
+        "test_id": "7.2.2.110",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_110_enum_name_empty, assert enums list non-empty before name checks.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1965)."
+      },
+      {
+        "test_id": "7.2.2.112",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_112_enum_name_missing_when_enums_exist, assert enums non-empty to ensure inner assertions run.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "'if enums:' may short-circuit to pass (line ~1979)."
+      },
+      {
+        "test_id": "7.2.2.113",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_113_enum_values_empty, assert enums non-empty before asserting values list non-empty.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~1988)."
+      },
+      {
+        "test_id": "7.2.2.115",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_115_enum_values_order_not_deterministic, assert values list non-empty before sorted order check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "vals == sorted(vals) passes for empty (line ~2002)."
+      },
+      {
+        "test_id": "7.2.2.116",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_116_enum_values_missing_when_enums_exist, assert enums non-empty to ensure assertions execute.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~2010)."
+      },
+      {
+        "test_id": "7.2.2.118",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_118_encrypted_fields_values_not_unique, assert outputs['encrypted_fields'] non-empty before comparing lengths to avoid 0==0 passing.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "len(manifest)==len(set(manifest)) is true for [] (line ~2025)."
+      },
+      {
+        "test_id": "7.2.2.119",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_119_encrypted_fields_present_when_erd_none, first assert that ERD defines some encrypted fields context or explicitly assert an expected empty manifest based on test setup to avoid vacuous pass.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Asserting value in ([], None) passes with default shim outputs None (line ~2032)."
+      },
+      {
+        "test_id": "7.2.2.121",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_121_constraints_applied_value_empty, assert constraints_applied non-empty before per-item non-empty string checks.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~2047)."
+      },
+      {
+        "test_id": "7.2.2.122",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_122_constraints_applied_values_not_unique, assert constraints_applied non-empty before uniqueness check to avoid 0==0 passing.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "len(cons)==len(set(cons)) passes on empty (line ~2054)."
+      },
+      {
+        "test_id": "7.2.2.123",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_123_constraints_applied_order_not_deterministic, assert constraints_applied non-empty before sorted order check.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "cons == sorted(cons) passes on empty list (line ~2061)."
+      },
+      {
+        "test_id": "7.2.2.125",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_125_migration_journal_order_not_deterministic, assert migration_journal non-empty before comparing timestamps ordering.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "times == sorted(times) passes on empty (line ~2074)."
+      },
+      {
+        "test_id": "7.2.2.126",
+        "category": "suspicious_passing_tests",
+        "instruction": "In test_7_2_2_126_migration_journal_missing_required_fields, assert migration_journal non-empty before per-entry field checks.",
+        "files": [
+          "tests/functional/test_epic_a_data_model_functional.py"
+        ],
+        "evidence": "Loop-only assertions (line ~2081)."
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

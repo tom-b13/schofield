@@ -1,0 +1,152 @@
+{
+  "clarke_review": {
+    "tests": [
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_1_entities_have_canonical_names",
+        "predicate": "assert outputs is not None and \"entities\" in outputs  # structural presence",
+        "evidence": {
+          "input": "get_outputs_snapshot() returns {'status':'not_implemented', 'outputs': None, 'events': [], ...}",
+          "expected": "outputs is a dict containing key 'entities' with canonical names",
+          "actual": "outputs is None -> assertion fails (None is not dict)",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Wire the tests to real application outputs. In tests/functional/test_epic_a_data_model_functional.py, replace the placeholder get_outputs_snapshot() to call an implemented application helper (e.g., app.helpers.introspection.build_outputs_snapshot()) that returns {'entities': [...], 'enums': [...], 'encrypted_fields': [...], 'constraints_applied': [...], 'migration_journal': [...], 'config': {...}}. Ensure 'entities' contains exactly the 9 canonical names and attach fields/PKs/FKs/uniques/indexes per docs/erd_spec.json. Until that helper exists, import from your concrete module (e.g., from app.db.migrations_runner import apply_migrations and from docs/erd_spec.json) and build the outputs dict.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_2_entity_fields_exposed_with_declared_types",
+        "predicate": "assert outputs is not None and \"entities\" in outputs",
+        "evidence": {
+          "input": "get_outputs_snapshot() returns outputs=None",
+          "expected": "outputs['entities'] present; each entity exposes exact fields/types from ERD; fields sorted",
+          "actual": "outputs is None so structural assertions fail immediately",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "After rewiring get_outputs_snapshot(), ensure the returned outputs.entities[*].fields is a list of {'name': str, 'type': str, 'encrypted': bool|None} covering fields + PK columns from ERD. Types must be base tokens (e.g., 'uuid', 'text', 'int', not 'enum:...'). Fields must be sorted by name and exactly match ERD (no extras).",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_3_primary_key_externally_declared",
+        "predicate": "assert outputs is not None and \"entities\" in outputs",
+        "evidence": {
+          "input": "get_outputs_snapshot() returns outputs=None",
+          "expected": "For each entity, outputs.entities[i].primary_key.columns equals ERD PK (ordered) or omitted when none",
+          "actual": "outputs is None; cannot access entities/primary_key",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Populate outputs.entities[*].primary_key={'columns': [...]} exactly as in ERD (ordered) for entities with PKs; if no PK in ERD, omit or set to a falsy/empty structure so the test treats it as absent.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_4_foreign_keys_present",
+        "predicate": "assert outputs is not None and \"entities\" in outputs",
+        "evidence": {
+          "input": "get_outputs_snapshot() returns outputs=None",
+          "expected": "outputs.entities[*].foreign_keys list present with unique, non-empty names and exact columns/references per ERD",
+          "actual": "outputs is None; FK presence checks fail",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Ensure outputs.entities[*].foreign_keys is a list like {'name': str, 'columns': [..], 'references': {'entity': str, 'columns': [..]}}. Names must be unique and non-empty when FKs exist. Include all FKs implied by ERD field tokens containing '->'.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_5_unique_constraints_present",
+        "predicate": "assert outputs is not None and \"entities\" in outputs",
+        "evidence": {
+          "input": "get_outputs_snapshot() returns outputs=None",
+          "expected": "Required unique constraints exist: Response(response_set_id, question_id), GroupValue(response_set_id, field_group_id), QuestionToFieldGroup(question_id, field_group_id), AnswerOption(question_id, value)",
+          "actual": "outputs is None; cannot verify unique constraints",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Expose outputs.entities[*].unique_constraints as [{'name': str, 'columns': [..]}]. Include at least: uq_response_set_question on Response([response_set_id, question_id]); uq_group_value_per_set on GroupValue([response_set_id, field_group_id]); uq_q2fg_question_group on QuestionToFieldGroup([question_id, field_group_id]); uq_answer_option_question_value on AnswerOption([question_id, value]).",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_6_indexes_present",
+        "predicate": "assert outputs is not None and \"entities\" in outputs",
+        "evidence": {
+          "input": "get_outputs_snapshot() returns outputs=None",
+          "expected": "QuestionnaireQuestion exposes a partial-unique artefact on [placeholder_code] with NOT NULL predicate (via unique constraint or index). Index names unique.",
+          "actual": "outputs is None; artefact search fails",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Within outputs.entities for 'QuestionnaireQuestion', include either a matching unique constraint or an index object under 'indexes' like {'name': str, 'columns': ['placeholder_code'], 'predicate'|'where': '... NOT NULL ...'}. Ensure any 'indexes' list has unique names.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_7_enums_declared",
+        "predicate": "assert outputs is not None",
+        "evidence": {
+          "input": "get_outputs_snapshot() returns outputs=None",
+          "expected": "outputs.enums includes {'name':'answer_kind','values':['boolean','enum_single','long_text','number','short_string']}",
+          "actual": "outputs is None, so enums check fails",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Ensure get_outputs_snapshot() returns outputs with enums=[{'name':'answer_kind','values':[...]}] in ascending order exactly as expected. Source from ERD/spec to avoid drift.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_8_encrypted_fields_flagged",
+        "predicate": "assert outputs is not None",
+        "evidence": {
+          "input": "get_outputs_snapshot() returns outputs=None",
+          "expected": "All entity fields carry 'encrypted' flags matching sensitive set: Company.legal_name, Company.registered_office_address, Response.value_json, GeneratedDocument.output_uri",
+          "actual": "outputs is None; cannot verify flags",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Populate outputs.entities[*].fields[*].encrypted for the sensitive set above and False/None otherwise. Also prepare outputs.encrypted_fields as a de-duplicated list of those fully-qualified names.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_9_global_encrypted_manifest_exists",
+        "predicate": "assert outputs is not None",
+        "evidence": {
+          "input": "get_outputs_snapshot() returns outputs=None",
+          "expected": "outputs.encrypted_fields contains the full sensitive set and no duplicates",
+          "actual": "outputs is None; manifest missing",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Return outputs.encrypted_fields as a sorted, unique list including exactly: Company.legal_name, Company.registered_office_address, Response.value_json, GeneratedDocument.output_uri.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_contract_7_2_1_10_constraints_listed_globally",
+        "predicate": "assert outputs is not None",
+        "evidence": {
+          "input": "get_outputs_snapshot() returns outputs=None",
+          "expected": "outputs.constraints_applied includes identifiers like 'pk_response', 'fk_response_set', 'uq_response_set_question' with no duplicates",
+          "actual": "outputs is None; cannot verify constraints list",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Expose outputs.constraints_applied as a deterministically ordered, duplicate-free list including at least: pk_response, fk_response_set, uq_response_set_question. Derive from ERD/migrations to ensure parity.",
+        "request_for_clarification": ""
+      },
+      {
+        "test_id": "meta::iteration_blocker",
+        "predicate": "Only first 10 failures listed; remaining unit tests also fail due to placeholder stubs (outputs=None, events=[]). Additionally, a non-allowed file was modified previously (tests/architectural/test_epic_a_data_model_architecture.py).",
+        "evidence": {
+          "input": "Raw output shows >100 FAILED lines; behavioural tests assert counts on events but run_step3_sequence() returns [], and many 7.2.2.* dynamic tests expect boundary/mocks to be invoked.",
+          "expected": "Tests should exercise real application behaviour (non-empty outputs/events) and only allowed files should be changed unless test logic is flawed.",
+          "actual": "Stubs in tests return inert structures; app code cannot influence them. Prior change modified a tests/ file outside the allowed app/docs set.",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "In tests/functional/test_epic_a_data_model_functional.py, also replace run_step3_sequence() to invoke your real migration orchestration (e.g., call app.db.migrations_runner.apply_migrations() with a no-op executor) and build a deterministic events list covering the asserted sequence: ['runner.start','create_tables','create_constraints','validate.row','lookup.placeholder','resolve.placeholders','determinism.verify','step.next'] and, for failure scenarios, include 'failure.migration' then 'rollback' immediately after. Similarly, update run_migrate_cli() to import and call your actual entrypoint, propagating error messages that include the required path/tokens so the dynamic 7.2.2.* assertions and mock .assert_called_once() checks can succeed. Finally, avoid further edits to tests outside this file unless a test is demonstrably flawed; keep future changes within application code and docs when possible.",
+        "request_for_clarification": ""
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

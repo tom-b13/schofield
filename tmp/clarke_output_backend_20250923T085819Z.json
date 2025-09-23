@@ -1,0 +1,22 @@
+{
+  "clarke_review": {
+    "tests": [
+      {
+        "test_id": "meta::iteration_blocker",
+        "predicate": "Test collection fails due to import-time evaluation of inner f-string placeholder inside the outer f-string template, causing NameError at line 2549.",
+        "evidence": {
+          "input": "tests/functional/test_epic_a_data_model_functional.py (dynamic 7.2.2 generator src template at lines 2530–2552)",
+          "expected": "Module imports cleanly; dynamic tests are generated; collection proceeds.",
+          "actual": "NameError: name 'result' is not defined at tests/functional/test_epic_a_data_model_functional.py:2549 while building the outer f-string for src. Offending fragment: f\"expected {\"{code}\"} got {result.get('error', {}).get('code')} for 7.2.2.{sec_id}\"",
+          "passable_by_app_code": false
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "In tests/functional/test_epic_a_data_model_functional.py within the 7.2.2 dynamic test generator, escape the inner f-string placeholder so it is not evaluated by the outer f-string at import time. Specifically, on the assert message line currently at 2549:\n\n    assert result.get(\"error\", dict()).get(\"code\") == \"{code}\", f\"expected {\"{code}\"} got {result.get('error', {}).get('code')} for 7.2.2.{sec_id}\"\n\nchange only the inner placeholder around result to use double braces so it survives into the generated function’s f-string:\n\n    assert result.get(\"error\", dict()).get(\"code\") == \"{code}\", f\"expected {\"{code}\"} got {{result.get('error', {}).get('code')}} for 7.2.2.{sec_id}\"\n\nScan for any other inner f-string expressions within the src template and apply the same double-brace escaping. Do not alter application code.",
+        "request_for_clarification": ""
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

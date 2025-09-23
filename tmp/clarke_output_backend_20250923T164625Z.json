@@ -1,0 +1,22 @@
+{
+  "clarke_review": {
+    "tests": [
+      {
+        "test_id": "tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_119_encrypted_fields_present_when_erd_none",
+        "predicate": "assert actual == spec_manifest",
+        "evidence": {
+          "input": "_get_outputs_for_contract() with spec from docs/erd_spec.json",
+          "expected": "actual list exactly equals spec_manifest (order-sensitive)",
+          "actual": "actual=['Company.legal_name','Company.registered_office_address','GeneratedDocument.output_uri','Response.value_json'] vs spec_manifest=['Company.legal_name','Company.registered_office_address','Response.value_json','GeneratedDocument.output_uri']",
+          "passable_by_app_code": true
+        },
+        "next_step": "update test code",
+        "instructions_to_ada": "Revise tests/functional/test_epic_a_data_model_functional.py::test_7_2_2_119_encrypted_fields_present_when_erd_none to compare encrypted_fields order-insensitively against the ERD manifest. Keep the ERD-driven source of truth, but avoid order dependence.\n\nChange:\n- Replace: assert actual == spec_manifest\n- With: assert set(actual) == set(spec_manifest)\n\nOptionally improve diagnostics:\n- Add: assert not (set(actual) - set(spec_manifest)), \"unexpected fields present\"\n- Add: assert not (set(spec_manifest) - set(actual)), \"expected fields missing\"\n\nDocstring: Clarify that parity is order-agnostic. This revises earlier guidance that used strict list equality; rationale: the ERD defines membership, not ordering, for encrypted_fields.",
+        "request_for_clarification": ""
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

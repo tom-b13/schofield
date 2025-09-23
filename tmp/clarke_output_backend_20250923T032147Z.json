@@ -1,0 +1,27 @@
+{
+  "clarke_review": {
+    "acceptable_as_is": [
+      "feature::Epic A Behaviour::scenario::Migration Initiates Schema Creation"
+    ],
+    "needs_improvement": [
+      "feature::Epic A Behaviour::scenario::Direct Lookup Follows Row Validation"
+    ],
+    "required_missing_tests": [],
+    "suspicious_passing_tests": [],
+    "explicit_actions_for_ada": [
+      {
+        "test_id": "feature::Epic A Behaviour::scenario::Direct Lookup Follows Row Validation",
+        "category": "needs_improvement",
+        "instruction": "Enforce uniqueness properly: remove the 'or True' so the assertion hard-fails when 'placeholder_code' is not listed in 'uniques'; also assert ERD conventions.placeholder_format == 'UPPERCASE_UNDERSCORE'. Keep existing ERD schema validation and event ordering.",
+        "files": [
+          "tests/integration/features/steps/epic_a_behaviour_steps.py",
+          "tests/integration/data/epic_a/placeholder_sample.json"
+        ],
+        "evidence": "Spec §2.2.2 E6 requires direct lookup by QuestionnaireQuestion.placeholder_code (unique when present). Feature line 11 states '(unique when present)'. Step uses a no-op assertion at tests/integration/features/steps/epic_a_behaviour_steps.py:287–289: `assert (\"placeholder_code\" in uniques) or True`, which defeats the uniqueness check."
+      }
+    ]
+  },
+  "final_decision": {
+    "continue": false
+  }
+}

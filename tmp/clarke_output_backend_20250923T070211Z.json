@@ -1,0 +1,175 @@
+{
+  "tests": [
+    {
+      "test_id": "tests/architectural/test_epic_a_data_model_architecture.py::test_unique_constraints_declared_and_present_in_ddl",
+      "predicate": "assert any(cols == u for u in uniques_in_sql), (f\"Unique {uq['name']} with columns {cols} missing in 002_constraints.sql\")",
+      "evidence": {
+        "matches": [
+          {
+            "structure": "assertion",
+            "name": "uniques_in_sql_columns_check",
+            "lines": "314–327",
+            "excerpt": "uniques_in_sql = [u.replace(\" \", \"\").lower() for u in _find_unique_defs(sql)]\n...\ncols = \",\".join(uq[\"columns\"]).replace(\" \", \"\").lower()\nassert any(cols == u for u in uniques_in_sql), (\n    f\"Unique {uq['name']} with columns {cols} missing in 002_constraints.sql\"\n)"
+          },
+          {
+            "structure": "helper",
+            "name": "_find_unique_defs",
+            "lines": "97–101",
+            "excerpt": "def _find_unique_defs(sql: str) -> List[str]:\n    return re.findall(r\"\\bUNIQUE\\b\\s*\\(([^)]*)\\)\", sql, re.IGNORECASE)"
+          },
+          {
+            "structure": "helper",
+            "name": "_find_unique_index_defs",
+            "lines": "103–107",
+            "excerpt": "def _find_unique_index_defs(sql: str) -> List[str]:\n    return re.findall(r\"CREATE\\s+UNIQUE\\s+INDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(\\w+)\\s+ON\\s+(\\w+)\\s*\\(([^)]*)\\)(?:\\s+WHERE\\s+(.+?))?;\",\n                      sql, re.IGNORECASE | re.DOTALL)"
+          },
+          {
+            "structure": "SQL DDL",
+            "name": "migrations/002_constraints.sql (partial unique index present)",
+            "lines": "38–44",
+            "excerpt": "CREATE UNIQUE INDEX IF NOT EXISTS uq_question_placeholder_code\n    ON questionnaire_question(placeholder_code)\n    WHERE placeholder_code IS NOT NULL;"
+          }
+        ],
+        "passable_by_app_code": false
+      },
+      "next_step": "update test code",
+      "instructions_to_ada": "In test_unique_constraints_declared_and_present_in_ddl, include CREATE UNIQUE INDEX definitions when validating uniques. Build the column set from both UNIQUE(...) and unique index defs. Example:\n\n- After computing uniques_in_sql from _find_unique_defs(sql), also extend with `[cols.replace(\" \", \"\").lower() for _, _, cols, _ in _find_unique_index_defs(sql)]`.\n- Keep existing behavior; do not remove UNIQUE(...) support.",
+      "request_for_clarification": ""
+    },
+    {
+      "test_id": "tests/architectural/test_epic_a_data_model_architecture.py::test_indexes_declared_and_created_by_migrations",
+      "predicate": "assert any(cols == c and table == t for _, t, c in create_index_cols), (f\"Index {ix['name']} missing in 003_indexes.sql\")",
+      "evidence": {
+        "matches": [
+          {
+            "structure": "assertion",
+            "name": "index_presence_check",
+            "lines": "334–348",
+            "excerpt": "cols = \",\".join(ix[\"columns\"]).replace(\" \", \"\").lower()\n# Use snake_case table name derived from CamelCase entity name\ntable = re.sub(r\"(?<!^)(?=[A-Z])\", \"_\", ent[\"name\"]).lower()\nassert any(cols == c and table == t for _, t, c in create_index_cols), (\n    f\"Index {ix['name']} missing in 003_indexes.sql\"\n)"
+          },
+          {
+            "structure": "ERD",
+            "name": "QuestionToFieldGroup.indexes",
+            "lines": "70–84 (approx)",
+            "excerpt": "\"indexes\": [\n  {\"name\": \"ix_q2fg_field_group\", \"columns\": [\"field_group_id\"]},\n  {\"name\": \"ix_q2fg_question\", \"columns\": [\"question_id\"]}\n]"
+          },
+          {
+            "structure": "SQL DDL",
+            "name": "migrations/003_indexes.sql (no q2fg indexes)",
+            "lines": "1–40",
+            "excerpt": "-- QuestionnaireQuestion\nCREATE INDEX IF NOT EXISTS ix_question_answer_type ON questionnaire_question(answer_type);\n\n-- AnswerOption\nCREATE INDEX IF NOT EXISTS ix_answer_option_question ON answer_option(question_id);\n\n-- Response\nCREATE INDEX IF NOT EXISTS ix_response_set ON response(response_set_id);\nCREATE INDEX IF NOT EXISTS ix_response_question ON response(question_id);\nCREATE INDEX IF NOT EXISTS ix_response_option ON response(option_id);\n\n-- GroupValue\nCREATE INDEX IF NOT EXISTS ix_group_value_set ON group_value(response_set_id);\nCREATE INDEX IF NOT EXISTS ix_group_value_group ON group_value(field_group_id);\nCREATE INDEX IF NOT EXISTS ix_group_value_source_q ON group_value(source_question_id);\n\n-- GeneratedDocument\nCREATE INDEX IF NOT EXISTS ix_generated_document_set ON generated_document(response_set_id);\nCREATE INDEX IF NOT EXISTS ix_generated_document_created ON generated_document(created_at);"
+          }
+        ],
+        "passable_by_app_code": true
+      },
+      "next_step": "update application code",
+      "instructions_to_ada": "Add missing QuestionToFieldGroup indexes to migrations/003_indexes.sql and drops to migrations/004_rollbacks.sql in strict reverse order:\n\n- Append at the end of 003_indexes.sql (after GeneratedDocument section):\n  CREATE INDEX IF NOT EXISTS ix_q2fg_question ON question_to_field_group(question_id);\n  CREATE INDEX IF NOT EXISTS ix_q2fg_field_group ON question_to_field_group(field_group_id);\n\n- Because these are appended last in 003, insert their DROP statements at the very top of 004_rollbacks.sql, before other DROP INDEX lines:\n  DROP INDEX IF EXISTS ix_q2fg_field_group;\n  DROP INDEX IF EXISTS ix_q2fg_question;",
+      "request_for_clarification": ""
+    },
+    {
+      "test_id": "tests/architectural/test_epic_a_data_model_architecture.py::test_collections_are_in_deterministic_sorted_order",
+      "predicate": "assert edge_pairs_in_order == sorted(edge_pairs_in_order), \"Mermaid edges must be sorted by (source,target)\"",
+      "evidence": {
+        "matches": [
+          {
+            "structure": "assertion",
+            "name": "mermaid_edges_sorted_check",
+            "lines": "459–476",
+            "excerpt": "for line in mermaid.splitlines():\n    m = re.search(r\"(\\w+)\\s*[-.]{2,}>\\s*(\\w+)\", line)\n    if m:\n        edge_pairs_in_order.append((m.group(1), m.group(2)))\nif edge_pairs_in_order:\n    assert edge_pairs_in_order == sorted(edge_pairs_in_order), \"Mermaid edges must be sorted by (source,target)\""
+          },
+          {
+            "structure": "Mermaid",
+            "name": "docs/erd_mermaid.md (comment matches edge regex)",
+            "lines": "12–18",
+            "excerpt": "% Edges (source --> target), sorted pairs\nAnswerOption --> QuestionnaireQuestion\nGroupValue --> AnswerOption\n..."
+          }
+        ],
+        "passable_by_app_code": true
+      },
+      "next_step": "update application code",
+      "instructions_to_ada": "In docs/erd_mermaid.md, change the comment to avoid matching the edge regex. Replace the arrow token in the comment so it doesn’t match `(\\w+)\\s*[-.]{2,}>\\s*(\\w+)`, e.g.:\n- Replace \"% Edges (source --> target), sorted pairs\" with \"% Edges (source→target), sorted pairs\".\nEnsure the actual edge lines remain lexicographically sorted by (source,target).",
+      "request_for_clarification": ""
+    },
+    {
+      "test_id": "tests/architectural/test_epic_a_data_model_architecture.py::test_rollback_scripts_present_and_reverse_prior_migrations",
+      "predicate": "assert m is not None, f\"Rollback must drop {kind} named {name}\"",
+      "evidence": {
+        "matches": [
+          {
+            "structure": "SQL DDL",
+            "name": "migrations/002_constraints.sql (FK created)",
+            "lines": "24–33",
+            "excerpt": "-- GeneratedDocument → ResponseSet\nALTER TABLE generated_document\n    ADD CONSTRAINT fk_generated_document_set\n        FOREIGN KEY (response_set_id) REFERENCES response_set(response_set_id) ON DELETE CASCADE;"
+          },
+          {
+            "structure": "SQL DDL",
+            "name": "migrations/004_rollbacks.sql (FK drop missing)",
+            "lines": "1–48",
+            "excerpt": "DROP INDEX IF EXISTS ix_generated_document_created;\nDROP INDEX IF EXISTS ix_generated_document_set;\n...\nALTER TABLE response_set\n    DROP CONSTRAINT IF EXISTS fk_response_set_company;\n...\n-- No DROP CONSTRAINT for fk_generated_document_set present"
+          }
+        ],
+        "passable_by_app_code": true
+      },
+      "next_step": "update application code",
+      "instructions_to_ada": "In migrations/004_rollbacks.sql, add the missing drop for the GeneratedDocument→ResponseSet FK in correct reverse position. Insert after dropping Response constraints and before dropping fk_response_set_company:\n\nALTER TABLE generated_document\n    DROP CONSTRAINT IF EXISTS fk_generated_document_set;",
+      "request_for_clarification": ""
+    },
+    {
+      "test_id": "tests/architectural/test_epic_a_data_model_architecture.py::test_constraints_and_indexes_live_in_migrations_not_code",
+      "predicate": "assert not offenders, f\"DDL tokens must not appear outside migrations: {offenders}\"",
+      "evidence": {
+        "matches": [
+          {
+            "structure": "failure_output",
+            "name": "offenders_list",
+            "lines": "2049",
+            "excerpt": "DDL tokens must not appear outside migrations: [(PosixPath('tests/architectural/test_epic_a_data_model_architecture.py'), '\\\\bCREATE\\\\s+TABLE\\\\b'), (PosixPath('tests/integration/features/steps/epic_a_behaviour_steps.py'), '\\\\bCONSTRAINT\\\\b'), (PosixPath('tests/functional/test_epic_a_data_model_functional.py'), '\\\\bCONSTRAINT\\\\b')]"
+          },
+          {
+            "structure": "helper",
+            "name": "_ddl_tokens_present_outside_migrations (tests exclusion too narrow)",
+            "lines": "150–168",
+            "excerpt": "for path in Path(\".\").rglob(\"*.py\"):\n    if str(path).startswith(\"./migrations/\"):\n        continue\n    # Exclude tests from scan; only application code should be checked\n    if str(path).startswith(\"./tests/\"):\n        continue\n    ...\n    if re.search(t, text, re.IGNORECASE):\n        offenders.append((path, t))"
+          }
+        ],
+        "passable_by_app_code": false
+      },
+      "next_step": "update test code",
+      "instructions_to_ada": "Broaden the tests directory exclusion in _ddl_tokens_present_outside_migrations to match actual paths. Replace the prefix check with a robust path-based filter, e.g.:\n\n- Compute `p = path.as_posix()` and skip when `p.startswith('tests/')` or any('tests' == part for part in path.parts).\n- Keep the migrations exclusion intact.\n\nExample:\nif any(part == 'tests' for part in path.parts):\n    continue",
+      "request_for_clarification": ""
+    },
+    {
+      "test_id": "tests/architectural/test_epic_a_data_model_architecture.py::test_erd_parity_exports_correspond_to_erd_spec",
+      "predicate": "assert erd_relationships.issubset(csv_relationships), \"All ERD FKs must appear as CSV rows\"",
+      "evidence": {
+        "matches": [
+          {
+            "structure": "ERD",
+            "name": "GeneratedDocument foreign key",
+            "lines": "56–69 (approx)",
+            "excerpt": "\"name\": \"GeneratedDocument\",\n...\n\"foreign_keys\": [\n  {\"name\": \"fk_generated_document_set\", \"columns\": [\"response_set_id\"], \"references\": {\"entity\": \"ResponseSet\", \"columns\": [\"response_set_id\"]}}\n]"
+          },
+          {
+            "structure": "CSV",
+            "name": "docs/erd_relationships.csv (wrong direction)",
+            "lines": "1–12",
+            "excerpt": "source,target\n...\nResponseSet,GeneratedDocument"
+          },
+          {
+            "structure": "Mermaid",
+            "name": "docs/erd_mermaid.md (wrong direction)",
+            "lines": "12–18",
+            "excerpt": "...\nResponseSet --> GeneratedDocument"
+          }
+        ],
+        "passable_by_app_code": true
+      },
+      "next_step": "update application code",
+      "instructions_to_ada": "Correct relationship direction to reflect ERD FKs (child → parent):\n\n- In docs/erd_relationships.csv, replace the row `ResponseSet,GeneratedDocument` with `GeneratedDocument,ResponseSet` and keep rows sorted.\n- In docs/erd_mermaid.md, change the edge to `GeneratedDocument --> ResponseSet` and keep edges sorted.\n- Re-verify that all ERD foreign_keys project to matching CSV rows and Mermaid edges.",
+      "request_for_clarification": ""
+    }
+  ],
+  "iteration_checkpoint": {
+    "continue": false
+  }
+}

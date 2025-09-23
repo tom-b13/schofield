@@ -19,3 +19,7 @@ CREATE INDEX IF NOT EXISTS ix_group_value_source_q ON group_value(source_questio
 -- GeneratedDocument
 CREATE INDEX IF NOT EXISTS ix_generated_document_set ON generated_document(response_set_id);
 CREATE INDEX IF NOT EXISTS ix_generated_document_created ON generated_document(created_at);
+
+-- QuestionToFieldGroup
+CREATE INDEX IF NOT EXISTS ix_q2fg_question ON question_to_field_group(question_id);
+CREATE INDEX IF NOT EXISTS ix_q2fg_field_group ON question_to_field_group(field_group_id);
