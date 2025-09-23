@@ -38,7 +38,7 @@
         "answer_type": "enum:answer_kind:not_null",
         "placeholder_code": "text",
         "mandatory": "boolean:not_null",
-        "parent_question_id": "uuid",
+        "parent_question_id": "uuid -> QuestionnaireQuestion.question_id",
         "visible_if_value": "text"
       },
       "uniques": [
