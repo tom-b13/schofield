@@ -2,258 +2,433 @@ openapi: 3.1.0
 info:
   title: Questionnaire Service API (Epic B, without conditionals)
   version: 1.0.0
-  description: >
-    Backend API for questionnaires, screens, per-answer autosave, CSV import/export, and generation gating.
-    Conditional-question logic is out of scope for this epic.
+  description: 'Backend API for questionnaires, screens, per-answer autosave, CSV
+    import/export, and generation gating. Conditional-question logic is out of scope
+    for this epic.
+
+    '
 servers:
-  - url: /api/v1
+- url: /api/v1
 paths:
   /questionnaires/{id}:
     get:
       summary: Get questionnaire metadata and screens index (no questions)
       operationId: getQuestionnaire
-      security: [{ bearerAuth: [] }]
+      security:
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: Questionnaire metadata and screens
           content:
             application/json:
               schema:
                 type: object
-                required: [questionnaire_id, name, screens]
+                required:
+                - questionnaire_id
+                - name
+                - screens
                 properties:
-                  questionnaire_id: { type: string, format: uuid }
-                  name: { type: string }
-                  description: { type: string }
+                  questionnaire_id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  description:
+                    type: string
                   screens:
                     type: array
-                    items: { $ref: "#/components/schemas/ScreenIndexItem" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
+                    items:
+                      $ref: '#/components/schemas/ScreenIndexItem'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /response-sets/{response_set_id}/screens/{screen_id}:
     get:
       summary: Get a screen with its questions and any existing answers
       operationId: getScreenWithAnswers
-      security: [{ bearerAuth: [] }]
+      security:
+      - bearerAuth: []
       parameters:
-        - { name: response_set_id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: screen_id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: response_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: screen_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: Screen view (no conditional filtering)
           headers:
             ETag:
               description: Strong validator for optimistic concurrency on autosave
-              schema: { type: string }
+              schema:
+                type: string
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ScreenView" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
+              schema:
+                $ref: '#/components/schemas/ScreenView'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /response-sets/{response_set_id}/answers/{question_id}:
     patch:
       summary: Autosave a single answer for a question
       operationId: autosaveAnswer
-      security: [{ bearerAuth: [] }]
+      security:
+      - bearerAuth: []
       parameters:
-        - { name: response_set_id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: question_id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 1 } }
-        - { name: If-Match, in: header, required: false, schema: { type: string } }
+      - name: response_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: question_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          type: string
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/AnswerUpsert" }
+            schema:
+              $ref: '#/components/schemas/AnswerUpsert'
       responses:
-        "200":
+        '200':
           description: Saved successfully
           headers:
             ETag:
               description: New strong validator for subsequent writes
-              schema: { type: string }
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 type: object
-                required: [saved]
-                properties: { saved: { type: boolean } }
-        "409": { $ref: "#/components/responses/Conflict" }
-        "422": { $ref: "#/components/responses/ValidationError" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
+                required:
+                - saved
+                properties:
+                  saved:
+                    type: boolean
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /response-sets/{id}/answers:
     post:
       summary: Batch upsert answers (optional; used by importer/integrations)
       operationId: batchUpsertAnswers
-      security: [{ bearerAuth: [] }]
+      security:
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/AnswerDeltaBatch" }
+            schema:
+              $ref: '#/components/schemas/AnswerDeltaBatch'
       responses:
-        "202":
+        '202':
           description: Accepted; results per delta
           content:
             application/json:
               schema:
                 type: object
-                required: [results]
+                required:
+                - results
                 properties:
                   results:
                     type: array
                     items:
                       type: object
-                      required: [question_id, saved]
+                      required:
+                      - question_id
+                      - saved
                       properties:
-                        question_id: { type: string, format: uuid }
-                        saved: { type: boolean }
-                        error: { $ref: "#/components/schemas/ValidationItem" }
-        "422": { $ref: "#/components/responses/ValidationError" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
+                        question_id:
+                          type: string
+                          format: uuid
+                        saved:
+                          type: boolean
+                        error:
+                          $ref: '#/components/schemas/ValidationItem'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /response-sets/{id}/regenerate-check:
     post:
       summary: Check whether generation may proceed (gating)
       operationId: regenerateCheck
-      security: [{ bearerAuth: [] }]
+      security:
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: Gating status
           content:
             application/json:
               schema:
                 type: object
-                required: [ok, mandatory_total, mandatory_answered]
+                required:
+                - ok
+                - mandatory_total
+                - mandatory_answered
                 properties:
-                  ok: { type: boolean }
-                  mandatory_total: { type: integer, minimum: 0 }
-                  mandatory_answered: { type: integer, minimum: 0 }
-                  optional_answered: { type: integer, minimum: 0 }
-                  total_questions: { type: integer, minimum: 0 }
+                  ok:
+                    type: boolean
+                  mandatory_total:
+                    type: integer
+                    minimum: 0
+                  mandatory_answered:
+                    type: integer
+                    minimum: 0
+                  optional_answered:
+                    type: integer
+                    minimum: 0
+                  total_questions:
+                    type: integer
+                    minimum: 0
                   blocking_outstanding:
                     type: array
-                    items: { type: string, format: uuid }
-        "404": { $ref: "#/components/responses/NotFound" }
-
+                    items:
+                      type: string
+                      format: uuid
+        '404':
+          $ref: '#/components/responses/NotFound'
   /questionnaires/import:
     post:
       summary: Import questionnaire CSV (v1.0)
       operationId: importQuestionnaireCsv
-      security: [{ bearerAuth: [] }]
+      security:
+      - bearerAuth: []
       requestBody:
         required: true
         content:
           text/csv:
-            schema: { type: string, format: binary }
+            schema:
+              type: string
+              format: binary
       responses:
-        "200":
+        '200':
           description: Import result
           content:
             application/json:
               schema:
                 type: object
-                required: [created, updated, deleted, errors]
+                required:
+                - created
+                - updated
+                - deleted
+                - errors
                 properties:
-                  created: { type: integer, minimum: 0 }
-                  updated: { type: integer, minimum: 0 }
-                  deleted: { type: integer, minimum: 0 }
+                  created:
+                    type: integer
+                    minimum: 0
+                  updated:
+                    type: integer
+                    minimum: 0
+                  deleted:
+                    type: integer
+                    minimum: 0
                   errors:
                     type: array
                     items:
                       type: object
-                      required: [line, message]
+                      required:
+                      - line
+                      - message
                       properties:
-                        line: { type: integer, minimum: 1 }
-                        message: { type: string }
-
+                        line:
+                          type: integer
+                          minimum: 1
+                        message:
+                          type: string
   /questionnaires/{id}/export:
     get:
       summary: Export questionnaire CSV (v1.0)
       operationId: exportQuestionnaireCsv
-      security: [{ bearerAuth: [] }]
+      security:
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: CSV snapshot
           headers:
             ETag:
               description: Strong validator for snapshot
-              schema: { type: string }
+              schema:
+                type: string
           content:
             text/csv:
-              schema: { type: string, format: binary }
-        "404": { $ref: "#/components/responses/NotFound" }
-
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
-    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   responses:
     NotFound:
       description: Not Found
-      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     Conflict:
       description: Conflict (e.g., If-Match precondition failed)
-      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     ValidationError:
       description: One or more validation errors occurred
-      content: { application/problem+json: { schema: { $ref: "#/components/schemas/ValidationProblem" } } }
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblem'
   schemas:
     ScreenIndexItem:
       type: object
-      required: [screen_id, screen_key, title, question_count]
+      required:
+      - screen_id
+      - screen_key
+      - title
+      - question_count
       properties:
-        screen_id: { type: string, format: uuid }
-        screen_key: { type: string }
-        title: { type: string }
-        question_count: { type: integer, minimum: 0 }
+        screen_id:
+          type: string
+          format: uuid
+        screen_key:
+          type: string
+        title:
+          type: string
+        question_count:
+          type: integer
+          minimum: 0
     QuestionWithAnswer:
       type: object
-      required: [question_id, question_text, answer_type, mandatory]
+      required:
+      - question_id
+      - question_text
+      - answer_kind
+      - mandatory
       properties:
-        question_id: { type: string, format: uuid }
-        external_qid: { type: string }
-        question_text: { type: string }
-        answer_type:
+        question_id:
           type: string
-          enum: [short_string, long_text, boolean, number, enum_single, date]
-        mandatory: { type: boolean }
-        placeholder_code: { type: string, nullable: true }
+          format: uuid
+        external_qid:
+          type: string
+        question_text:
+          type: string
+        mandatory:
+          type: boolean
+        placeholder_code:
+          type: string
+          nullable: true
         options:
           description: Present only for enum_single
           type: array
           items:
             type: object
-            required: [option_id, value]
+            required:
+            - option_id
+            - value
             properties:
-              option_id: { type: string, format: uuid }
-              value: { type: string }
-              label: { type: string }
+              option_id:
+                type: string
+                format: uuid
+              value:
+                type: string
+              label:
+                type: string
         answer:
           description: Existing answer if present
           type: object
           properties:
             value: {}
-            option_id: { type: string, format: uuid }
-            answered_at: { type: string, format: date-time }
+            option_id:
+              type: string
+              format: uuid
+            answered_at:
+              type: string
+              format: date-time
+        answer_kind:
+          type: string
+          enum:
+          - short_string
+          - long_text
+          - boolean
+          - number
+          - enum_single
+          - date
     ScreenView:
       type: object
-      required: [screen_id, screen_key, title, questions]
+      required:
+      - screen_id
+      - screen_key
+      - title
+      - questions
       properties:
-        screen_id: { type: string, format: uuid }
-        screen_key: { type: string }
-        title: { type: string }
+        screen_id:
+          type: string
+          format: uuid
+        screen_key:
+          type: string
+        title:
+          type: string
         questions:
           type: array
-          items: { $ref: "#/components/schemas/QuestionWithAnswer" }
+          items:
+            $ref: '#/components/schemas/QuestionWithAnswer'
     AnswerUpsert:
       type: object
       additionalProperties: false
@@ -261,58 +436,83 @@ components:
         value:
           description: Type-appropriate answer value
           oneOf:
-            - { type: string }
-            - { type: number }
-            - { type: boolean }
+          - type: string
+          - type: number
+          - type: boolean
         option_id:
-          description: Required when answer_type is enum_single
+          description: Required when answer_kind is enum_single
           type: string
           format: uuid
       anyOf:
-        - { required: [value] }
-        - { required: [option_id] }
+      - required:
+        - value
+      - required:
+        - option_id
     AnswerDelta:
       type: object
-      required: [question_id]
+      required:
+      - question_id
       additionalProperties: false
       properties:
-        question_id: { type: string, format: uuid }
+        question_id:
+          type: string
+          format: uuid
         value:
           oneOf:
-            - { type: string }
-            - { type: number }
-            - { type: boolean }
-        option_id: { type: string, format: uuid }
+          - type: string
+          - type: number
+          - type: boolean
+        option_id:
+          type: string
+          format: uuid
     AnswerDeltaBatch:
       type: object
-      required: [items]
+      required:
+      - items
       properties:
         items:
           type: array
           minItems: 1
-          items: { $ref: "#/components/schemas/AnswerDelta" }
+          items:
+            $ref: '#/components/schemas/AnswerDelta'
     Problem:
       type: object
-      required: [type, title, status]
+      required:
+      - type
+      - title
+      - status
       properties:
-        type: { type: string, format: uri }
-        title: { type: string }
-        status: { type: integer }
-        detail: { type: string }
-        instance: { type: string }
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
     ValidationItem:
       type: object
-      required: [path, message]
+      required:
+      - path
+      - message
       properties:
-        path: { type: string }
-        message: { type: string }
-        code: { type: string }
+        path:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
     ValidationProblem:
       allOf:
-        - $ref: "#/components/schemas/Problem"
-        - type: object
-          required: [errors]
-          properties:
-            errors:
-              type: array
-              items: { $ref: "#/components/schemas/ValidationItem" }
+      - $ref: '#/components/schemas/Problem'
+      - type: object
+        required:
+        - errors
+        properties:
+          errors:
+            type: array
+            items:
+              $ref: '#/components/schemas/ValidationItem'
