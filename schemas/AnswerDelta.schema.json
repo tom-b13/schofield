@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/AnswerUpsert.schema.json",
-  "title": "AnswerUpsert",
+  "$id": "https://example.com/schemas/AnswerDelta.schema.json",
+  "title": "AnswerDelta",
   "type": "object",
   "properties": {
     "question_id": {

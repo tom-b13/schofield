@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/CSVImportFile.schema.json",
+  "title": "CSVImportFile",
+  "type": "string",
+  "contentMediaType": "text/csv",
+  "description": "UTF-8, RFC4180 CSV file containing questionnaire definitions for import."
+}

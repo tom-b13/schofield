@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/QuestionnaireId.schema.json",
+  "title": "QuestionnaireId",
+  "type": "string",
+  "format": "uuid",
+  "description": "Unique identifier for questionnaire objects."
+}

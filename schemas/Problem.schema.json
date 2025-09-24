@@ -1,12 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/Problem.schema.json",
   "title": "Problem",
   "type": "object",
-  "required": [
-    "type",
-    "title",
-    "status"
-  ],
   "properties": {
     "type": {
       "type": "string",
@@ -22,7 +18,14 @@
       "type": "string"
     },
     "instance": {
-      "type": "string"
+      "type": "string",
+      "format": "uri-reference"
     }
-  }
+  },
+  "required": [
+    "title",
+    "status"
+  ],
+  "additionalProperties": true,
+  "description": "application/problem+json per RFC7807."
 }

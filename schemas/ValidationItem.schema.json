@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/ValidationItem.schema.json",
+  "title": "ValidationItem",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "path",
+    "message",
+    "code"
+  ],
+  "additionalProperties": false
+}

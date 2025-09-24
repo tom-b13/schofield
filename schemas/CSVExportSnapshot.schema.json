@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/CSVExportSnapshot.schema.json",
+  "title": "CSVExportSnapshot",
+  "type": "string",
+  "contentMediaType": "text/csv",
+  "description": "Snapshot CSV produced by export for authoring and review."
+}

@@ -1,38 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/ValidationProblem.schema.json",
   "title": "ValidationProblem",
   "allOf": [
     {
-      "$ref": "Problem.schema.json"
-    },
-    {
-      "type": "object",
-      "required": [
-        "errors"
-      ],
-      "properties": {
-        "errors": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": [
-              "path",
-              "message"
-            ],
-            "properties": {
-              "path": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
-              },
-              "code": {
-                "type": "string"
-              }
-            }
-          }
-        }
+      "$ref": "https://example.com/schemas/Problem.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "https://example.com/schemas/ValidationItem.schema.json"
       }
     }
-  ]
+  },
+  "required": [
+    "title",
+    "status",
+    "errors"
+  ],
+  "additionalProperties": true
 }
