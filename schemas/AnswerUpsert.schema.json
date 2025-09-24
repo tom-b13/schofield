@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AnswerUpsert",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "value": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "option_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "value"
+      ]
+    },
+    {
+      "required": [
+        "option_id"
+      ]
+    }
+  ]
+}
