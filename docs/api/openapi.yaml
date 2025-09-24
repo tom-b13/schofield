@@ -48,6 +48,10 @@ paths:
                       $ref: '#/components/schemas/ScreenIndexItem'
         '404':
           $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /response-sets/{response_set_id}/screens/{screen_id}:
     get:
       summary: Get a screen with its questions and any existing answers
@@ -81,6 +85,10 @@ paths:
                 $ref: '#/components/schemas/ScreenView'
         '404':
           $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /response-sets/{response_set_id}/answers/{question_id}:
     patch:
       summary: Autosave a single answer for a question
@@ -111,6 +119,8 @@ paths:
         required: false
         schema:
           type: string
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
@@ -136,10 +146,22 @@ paths:
                     type: boolean
         '409':
           $ref: '#/components/responses/Conflict'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '422':
           $ref: '#/components/responses/ValidationError'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblem'
         '404':
           $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /response-sets/{id}/answers:
     post:
       summary: Batch upsert answers (optional; used by importer/integrations)
@@ -186,8 +208,16 @@ paths:
                           $ref: '#/components/schemas/ValidationItem'
         '422':
           $ref: '#/components/responses/ValidationError'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblem'
         '404':
           $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /response-sets/{id}/regenerate-check:
     post:
       summary: Check whether generation may proceed (gating)
@@ -234,6 +264,10 @@ paths:
                       format: uuid
         '404':
           $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /questionnaires/import:
     post:
       summary: Import questionnaire CSV (v1.0)
@@ -245,8 +279,7 @@ paths:
         content:
           text/csv:
             schema:
-              type: string
-              format: binary
+              $ref: '#/components/schemas/CSVImportFile'
       responses:
         '200':
           description: Import result
@@ -306,10 +339,13 @@ paths:
           content:
             text/csv:
               schema:
-                type: string
-                format: binary
+                $ref: '#/components/schemas/CSVExportSnapshot'
         '404':
           $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 components:
   securitySchemes:
     bearerAuth:
@@ -448,6 +484,7 @@ components:
         - value
       - required:
         - option_id
+      required: []
     AnswerDelta:
       type: object
       required:
@@ -516,3 +553,53 @@ components:
             type: array
             items:
               $ref: '#/components/schemas/ValidationItem'
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationItem'
+    QuestionnaireId:
+      title: QuestionnaireId
+      type: string
+      format: uuid
+      description: Unique identifier for questionnaire objects.
+    ResponseSetId:
+      title: ResponseSetId
+      type: string
+      format: uuid
+      description: Unique identifier for responseset objects.
+    ScreenId:
+      title: ScreenId
+      type: string
+      format: uuid
+      description: Unique identifier for screen objects.
+    QuestionId:
+      title: QuestionId
+      type: string
+      format: uuid
+      description: Unique identifier for question objects.
+    CSVImportFile:
+      title: CSVImportFile
+      type: string
+      contentMediaType: text/csv
+      description: UTF-8, RFC4180 CSV file for questionnaire import.
+    CSVExportSnapshot:
+      title: CSVExportSnapshot
+      type: string
+      contentMediaType: text/csv
+      description: CSV snapshot produced by export.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Unique key for idempotent requests.
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+      description: ETag precondition for optimistic concurrency.
