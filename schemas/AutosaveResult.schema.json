@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/AutosaveResult.schema.json",
+  "title": "AutosaveResult",
+  "type": "object",
+  "properties": {
+    "saved": {
+      "type": "boolean",
+      "description": "Result flag for per-answer autosave"
+    },
+    "etag": {
+      "type": "string",
+      "description": "ETag token for optimistic concurrency"
+    }
+  },
+  "required": [
+    "saved",
+    "etag"
+  ],
+  "additionalProperties": false
+}

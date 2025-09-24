@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/ImportResult.schema.json",
+  "title": "ImportResult",
+  "type": "object",
+  "properties": {
+    "created": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of questions created"
+    },
+    "updated": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of questions updated"
+    },
+    "errors": {
+      "type": "array",
+      "description": "Row-level errors from CSV import",
+      "items": {
+        "type": "object",
+        "properties": {
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "line",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "created",
+    "updated",
+    "errors"
+  ],
+  "additionalProperties": false
+}
