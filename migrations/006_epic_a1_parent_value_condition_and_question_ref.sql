@@ -10,6 +10,15 @@ ALTER TABLE questionnaire_question
 CREATE INDEX IF NOT EXISTS ix_question_parent_question_id ON questionnaire_question(parent_question_id);
 
 -- Foreign key: parent_question_id → questionnaire_question(question_id)
-ALTER TABLE questionnaire_question
-    ADD CONSTRAINT IF NOT EXISTS fk_question_parent_question
-        FOREIGN KEY (parent_question_id) REFERENCES questionnaire_question(question_id) ON DELETE RESTRICT;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_question_parent_question'
+  ) THEN
+    ALTER TABLE questionnaire_question
+      ADD CONSTRAINT fk_question_parent_question
+      FOREIGN KEY (parent_question_id)
+      REFERENCES questionnaire_question(question_id)
+      ON DELETE RESTRICT;
+  END IF;
+END $$;
