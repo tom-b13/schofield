@@ -452,6 +452,14 @@
         {
           "name": "screen_key",
           "type": "text"
+        },
+        {
+          "name": "parent_question_id",
+          "type": "uuid"
+        },
+        {
+          "name": "visible_if_value",
+          "type": "jsonb"
         }
       ],
       "primary_key": {
@@ -481,6 +489,26 @@
           "columns": [
             "answer_type"
           ]
+        },
+        {
+          "name": "ix_question_parent",
+          "columns": [
+            "parent_question_id"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_question_parent",
+          "columns": [
+            "parent_question_id"
+          ],
+          "references": {
+            "entity": "QuestionnaireQuestion",
+            "columns": [
+              "question_id"
+            ]
+          }
         }
       ]
     },
@@ -671,11 +699,13 @@
     "uq_q2fg_question_group",
     "uq_question_external_qid",
     "uq_question_placeholder_code",
-    "uq_response_set_question"
+    "uq_response_set_question",
+    "fk_question_parent"
   ],
   "notes": [
     "Single handbook template parsed at merge; no template/mapping tables are persisted.",
     "Mapping is on QuestionnaireQuestion.placeholder_code with partial unique index.",
-    "answer_kind includes enum_single for single-choice questions."
+    "answer_kind includes enum_single for single-choice questions.",
+    "QuestionnaireQuestion now includes optional parent_question_id (self-referential) and visible_if_value (jsonb) to support server-side conditional visibility."
   ]
 }
