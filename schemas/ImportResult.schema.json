@@ -26,6 +26,10 @@
           },
           "message": {
             "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Optional machine-readable error code"
           }
         },
         "required": [

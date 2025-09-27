@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/AnswerUpsert.schema.json",
+  "title": "AnswerUpsert",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "answer_kind": {
+      "type": "string",
+      "enum": ["short_string", "long_text", "boolean", "number", "enum_single"]
+    },
+    "value": {
+      "description": "Type-appropriate answer value.",
+      "oneOf": [
+        {"type": "string"},
+        {"type": "number"},
+        {"type": "boolean"}
+      ]
+    },
+    "option_id": {
+      "description": "Required when answer_kind is enum_single.",
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "anyOf": [
+    {"required": ["value"]},
+    {"required": ["option_id"]}
+  ]
+}
+

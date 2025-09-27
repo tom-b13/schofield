@@ -434,6 +434,10 @@
           "type": "boolean"
         },
         {
+          "name": "parent_question_id",
+          "type": "uuid"
+        },
+        {
           "name": "placeholder_code",
           "type": "text"
         },
@@ -460,6 +464,20 @@
           "question_id"
         ]
       },
+      "foreign_keys": [
+        {
+          "name": "fk_question_parent_question",
+          "columns": [
+            "parent_question_id"
+          ],
+          "references": {
+            "entity": "QuestionnaireQuestion",
+            "columns": [
+              "question_id"
+            ]
+          }
+        }
+      ],
       "unique": [
         {
           "name": "uq_question_external_qid",
@@ -645,6 +663,7 @@
     "GeneratedDocument.output_uri"
   ],
   "constraints_applied": [
+    "fk_question_parent_question",
     "fk_generated_document_set",
     "fk_answer_option_question",
     "fk_group_value_group",

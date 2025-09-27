@@ -18,6 +18,7 @@ GroupValue --> QuestionnaireQuestion
 GroupValue --> ResponseSet
 QuestionToFieldGroup --> FieldGroup
 QuestionToFieldGroup --> QuestionnaireQuestion
+QuestionnaireQuestion --> QuestionnaireQuestion
 Response --> AnswerOption
 Response --> QuestionnaireQuestion
 Response --> ResponseSet

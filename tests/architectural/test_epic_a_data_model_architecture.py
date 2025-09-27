@@ -159,6 +159,13 @@ def _ddl_tokens_present_outside_migrations() -> List[Tuple[Path, str]]:
         # Exclude tests from scan; only application code should be checked
         if rel.startswith("tests/"):
             continue
+        # Exclude common hidden/virtualenv dirs to avoid false positives
+        if rel.startswith((".venv/", ".git/", ".pytest_cache/")):
+            continue
+        # Robustly exclude any paths that include virtualenv or site-packages directories
+        parts = set(path.parts)
+        if any(p in {"venv", ".venv", "site-packages", "dist-packages"} for p in parts):
+            continue
         try:
             text = _read_text(path)
         except AssertionError:

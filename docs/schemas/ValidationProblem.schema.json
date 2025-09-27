@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/ValidationProblem.schema.json",
+  "title": "ValidationProblem",
+  "allOf": [
+    {"$ref": "./Problem.schema.json"}
+  ],
+  "type": "object",
+  "properties": {
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {"type": "string"},
+          "path": {"type": "string"},
+          "message": {"type": "string"}
+        },
+        "required": ["code", "path"]
+      }
+    }
+  },
+  "required": ["errors"]
+}
+

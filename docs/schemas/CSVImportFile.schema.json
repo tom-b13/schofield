@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/CSVImportFile.schema.json",
+  "title": "CSVImportFile",
+  "type": "object",
+  "description": "Schema describing columns for questionnaire CSV import.",
+  "properties": {
+    "external_qid": {"type": "string"},
+    "screen_key": {"type": "string"},
+    "question_order": {"type": "integer", "minimum": 0},
+    "question_text": {"type": "string"},
+    "answer_kind": {"type": "string"},
+    "mandatory": {"type": "boolean"},
+    "placeholder_code": {"type": "string"},
+    "options": {
+      "type": "string",
+      "description": "Pipe-separated option tokens with optional labels: value[:label]|value2[:label2]|..."
+    }
+  },
+  "required": [
+    "external_qid",
+    "screen_key",
+    "question_order",
+    "question_text",
+    "answer_kind",
+    "mandatory",
+    "placeholder_code",
+    "options"
+  ]
+}
+

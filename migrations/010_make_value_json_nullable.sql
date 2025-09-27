@@ -1,0 +1,1 @@
+ALTER TABLE response ALTER COLUMN value_json DROP NOT NULL;

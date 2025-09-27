@@ -7,19 +7,19 @@ Assumptions: a real database is available and migrated; HTTP server is running; 
 Background:
 Given a clean database
 And the following questionnaire exists in the database:
-\| questionnaire\_id                      | key         | title                 |
-\| 11111111-1111-1111-1111-111111111111  | ONB-2025    | Onboarding 2025       |
+| questionnaire\_id                      | key         | title                 |
+| 11111111-1111-1111-1111-111111111111  | ONB-2025    | Onboarding 2025       |
 And the following screens exist for questionnaire "11111111-1111-1111-1111-111111111111":
-\| screen\_id                              | screen\_key   | title          | order |
-\| 22222222-2222-2222-2222-222222222222   | company      | Company Info   | 1     |
+| screen\_id                              | screen\_key   | title          | order |
+| 22222222-2222-2222-2222-222222222222   | company      | Company Info   | 1     |
 And the following questions exist and are bound to screen "22222222-2222-2222-2222-222222222222":
-\| question\_id                            | external\_qid | question\_text                | answer\_kind  | mandatory | question\_order |
-\| 33333333-3333-3333-3333-333333333331   | Q\_CO\_NAME    | What is the company name?    | short\_string | true      | 1              |
-\| 33333333-3333-3333-3333-333333333332   | Q\_CO\_SIZE    | How many employees?          | number       | true      | 2              |
-\| 33333333-3333-3333-3333-333333333333   | Q\_NEWSLETTER | Subscribe to newsletter?     | boolean      | false     | 3              |
+| question\_id                            | external\_qid | question\_text                | answer\_kind  | mandatory | question\_order |
+| 33333333-3333-3333-3333-333333333331   | Q\_CO\_NAME    | What is the company name?    | short\_string | true      | 1              |
+| 33333333-3333-3333-3333-333333333332   | Q\_CO\_SIZE    | How many employees?          | number       | true      | 2              |
+| 33333333-3333-3333-3333-333333333333   | Q\_NEWSLETTER | Subscribe to newsletter?     | boolean      | false     | 3              |
 And an empty response set exists:
-\| response\_set\_id                         | company\_id                         |
-\| 44444444-4444-4444-4444-444444444444    | 55555555-5555-5555-5555-555555555555 |
+| response\_set\_id                         | company\_id                         |
+| 44444444-4444-4444-4444-444444444444    | 55555555-5555-5555-5555-555555555555 |
 And no answers exist yet for response set "44444444-4444-4444-4444-444444444444"
 
 @integration @happy\_path
@@ -36,8 +36,8 @@ And the database table "answer" should have 0 rows for response\_set\_id "444444
 Scenario: Autosave a single answer with idempotency and ETag
 Given I GET "/response-sets/44444444-4444-4444-4444-444444444444/screens/22222222-2222-2222-2222-222222222222" and capture header "ETag" as "etag\_v1"
 When I PATCH "/response-sets/44444444-4444-4444-4444-444444444444/answers/33333333-3333-3333-3333-333333333331" with headers:
-\| Idempotency-Key | idem-001 |
-\| If-Match        | {etag\_v1} |
+| Idempotency-Key | idem-001 |
+| If-Match        | {etag\_v1} |
 And body:
 """
 { "question\_id": "33333333-3333-3333-3333-333333333331", "value": "Acme Ltd" }
@@ -47,8 +47,8 @@ And the response JSON at "\$.saved" equals true
 And the response header "ETag" should be a non-empty string and capture as "etag\_v2"
 And the database should contain exactly 1 row in "answer" for (response\_set\_id="44444444-4444-4444-4444-444444444444", question\_id="33333333-3333-3333-3333-333333333331") with value "Acme Ltd"
 When I PATCH "/response-sets/44444444-4444-4444-4444-444444444444/answers/33333333-3333-3333-3333-333333333331" with headers:
-\| Idempotency-Key | idem-001 |
-\| If-Match        | {etag\_v2} |
+| Idempotency-Key | idem-001 |
+| If-Match        | {etag\_v2} |
 And body:
 """
 { "question\_id": "33333333-3333-3333-3333-333333333331", "value": "Acme Ltd" }
@@ -60,8 +60,8 @@ And the database should still contain exactly 1 row in "answer" for (response\_s
 @integration @happy\_path
 Scenario: Complete mandatory answers and pass regenerate-check gating
 Given I PATCH "/response-sets/44444444-4444-4444-4444-444444444444/answers/33333333-3333-3333-3333-333333333332" with headers:
-\| Idempotency-Key | idem-002 |
-\| If-Match        | "\*" |
+| Idempotency-Key | idem-002 |
+| If-Match        | "\*" |
 And body:
 """
 { "question\_id": "33333333-3333-3333-3333-333333333332", "value": 42 }
@@ -99,16 +99,16 @@ And the response header "ETag" should be a non-empty string
 Scenario: Autosave fails with 409 Conflict on stale ETag
 Given I GET "/response-sets/44444444-4444-4444-4444-444444444444/screens/22222222-2222-2222-2222-222222222222" and capture header "ETag" as "old\_etag"
 And I PATCH "/response-sets/44444444-4444-4444-4444-444444444444/answers/33333333-3333-3333-3333-333333333331" with headers:
-\| Idempotency-Key | idem-003 |
-\| If-Match        | {old\_etag} |
+| Idempotency-Key | idem-003 |
+| If-Match        | {old\_etag} |
 And body:
 """
 { "question\_id": "33333333-3333-3333-3333-333333333331", "value": "TempCo" }
 """
 And I GET "/response-sets/44444444-4444-4444-4444-444444444444/screens/22222222-2222-2222-2222-222222222222" and capture header "ETag" as "fresh\_etag"
 When I PATCH "/response-sets/44444444-4444-4444-4444-444444444444/answers/33333333-3333-3333-3333-333333333331" with headers:
-\| Idempotency-Key | idem-004 |
-\| If-Match        | {old\_etag} |
+| Idempotency-Key | idem-004 |
+| If-Match        | {old\_etag} |
 And body:
 """
 { "question\_id": "33333333-3333-3333-3333-333333333331", "value": "NewerCo" }
@@ -120,8 +120,8 @@ And the database value in "answer" for (response\_set\_id="44444444-4444-4444-44
 @integration @sad\_path
 Scenario: Autosave fails with 422 Unprocessable Entity for type mismatch
 When I PATCH "/response-sets/44444444-4444-4444-4444-444444444444/answers/33333333-3333-3333-3333-333333333332" with headers:
-\| Idempotency-Key | idem-005 |
-\| If-Match        | "\*" |
+| Idempotency-Key | idem-005 |
+| If-Match        | "\*" |
 And body:
 """
 { "question\_id": "33333333-3333-3333-3333-333333333332", "value": "forty-two" }
@@ -165,8 +165,8 @@ Then the response code should be 200
 And the response JSON at "\$.ok" equals false
 And the response JSON at "\$.blocking\_items.length()" is greater than 0
 When I PATCH "/response-sets/44444444-4444-4444-4444-444444444444/answers/33333333-3333-3333-3333-333333333332" with headers:
-\| Idempotency-Key | idem-006 |
-\| If-Match        | "\*" |
+| Idempotency-Key | idem-006 |
+| If-Match        | "\*" |
 And body:
 """
 { "question\_id": "33333333-3333-3333-3333-333333333332", "value": 7 }
@@ -175,3 +175,4 @@ And I POST "/response-sets/44444444-4444-4444-4444-444444444444/regenerate-check
 Then the response code should be 200
 And the response JSON at "\$.ok" equals true
 And the response JSON at "\$.blocking\_items" equals \[]
+

@@ -14,6 +14,7 @@ paths:
     get:
       summary: Get questionnaire metadata and screens index (no questions)
       operationId: getQuestionnaire
+      tags: [Questionnaires]
       security:
       - bearerAuth: []
       parameters:
@@ -55,7 +56,9 @@ paths:
   /response-sets/{response_set_id}/screens/{screen_id}:
     get:
       summary: Get a screen with its questions and any existing answers
+      description: Pre-population may be applied to answers prior to serialization.
       operationId: getScreenWithAnswers
+      tags: [ScreenView]
       security:
       - bearerAuth: []
       parameters:
@@ -76,9 +79,7 @@ paths:
           description: Screen view (no conditional filtering)
           headers:
             ETag:
-              description: Strong validator for optimistic concurrency on autosave
-              schema:
-                type: string
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -93,6 +94,7 @@ paths:
     patch:
       summary: Autosave a single answer for a question
       operationId: autosaveAnswer
+      tags: [Autosave]
       security:
       - bearerAuth: []
       parameters:
@@ -108,17 +110,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          type: string
       - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -132,9 +123,7 @@ paths:
           description: Saved successfully
           headers:
             ETag:
-              description: New strong validator for subsequent writes
-              schema:
-                type: string
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -166,6 +155,7 @@ paths:
     post:
       summary: Batch upsert answers (optional; used by importer/integrations)
       operationId: batchUpsertAnswers
+      tags: [Ingestion]
       security:
       - bearerAuth: []
       parameters:
@@ -222,6 +212,7 @@ paths:
     post:
       summary: Check whether generation may proceed (gating)
       operationId: regenerateCheck
+      tags: [Gating]
       security:
       - bearerAuth: []
       parameters:
@@ -272,12 +263,13 @@ paths:
     post:
       summary: Import questionnaire CSV (v1.0)
       operationId: importQuestionnaireCsv
+      tags: [Import]
       security:
       - bearerAuth: []
       requestBody:
         required: true
         content:
-          text/csv:
+          text/csv; charset=utf-8:
             schema:
               $ref: '#/components/schemas/CSVImportFile'
       responses:
@@ -286,39 +278,15 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required:
-                - created
-                - updated
-                - deleted
-                - errors
-                properties:
-                  created:
-                    type: integer
-                    minimum: 0
-                  updated:
-                    type: integer
-                    minimum: 0
-                  deleted:
-                    type: integer
-                    minimum: 0
-                  errors:
-                    type: array
-                    items:
-                      type: object
-                      required:
-                      - line
-                      - message
-                      properties:
-                        line:
-                          type: integer
-                          minimum: 1
-                        message:
-                          type: string
+                $ref: '#/components/schemas/ImportResult'
   /questionnaires/{id}/export:
     get:
       summary: Export questionnaire CSV (v1.0)
+      description: |
+        Stream the CSV export using a read-only, repeatable-read (or equivalent snapshot) to ensure deterministic results. The endpoint will stream data to the client.
+        Order by screen_key NULLS LAST, question_order NULLS LAST, then question_id for stable output.
       operationId: exportQuestionnaireCsv
+      tags: [Export]
       security:
       - bearerAuth: []
       parameters:
@@ -330,14 +298,13 @@ paths:
           format: uuid
       responses:
         '200':
-          description: CSV snapshot
+          description: CSV snapshot streamed; read-only, repeatable-read transaction (or equivalent snapshot). Order by screen_key NULLS LAST, question_order NULLS LAST, then question_id.
           headers:
             ETag:
-              description: Strong validator for snapshot
-              schema:
-                type: string
+              $ref: '#/components/headers/ETag'
+              description: Strong validator computed from payload (e.g., SHA-256 over rowset).
           content:
-            text/csv:
+            text/csv; charset=utf-8:
               schema:
                 $ref: '#/components/schemas/CSVExportSnapshot'
         '404':
@@ -352,6 +319,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  headers:
+    ETag:
+      description: Strong validator computed from payload (e.g., SHA-256 over rowset).
+      schema:
+        type: string
   responses:
     NotFound:
       description: Not Found
@@ -372,6 +344,30 @@ components:
           schema:
             $ref: '#/components/schemas/ValidationProblem'
   schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+      required: [title, status]
+    ValidationProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              path: { type: string }
+              message: { type: string }
+            required: [code, path]
+      required: [errors]
     ScreenIndexItem:
       type: object
       required:
@@ -450,11 +446,15 @@ components:
       type: object
       required:
       - screen_id
+      - response_set_id
       - screen_key
       - title
       - questions
       properties:
         screen_id:
+          type: string
+          format: uuid
+        response_set_id:
           type: string
           format: uuid
         screen_key:
@@ -583,11 +583,89 @@ components:
       type: string
       contentMediaType: text/csv
       description: UTF-8, RFC4180 CSV file for questionnaire import.
+    ImportResult:
+      title: ImportResult
+      type: object
+      required:
+      - created
+      - updated
+      - deleted
+      - errors
+      properties:
+        created:
+          type: integer
+        updated:
+          type: integer
+        deleted:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+            required:
+            - line
+            - message
+            properties:
+              line:
+                type: integer
+              message:
+                type: string
     CSVExportSnapshot:
       title: CSVExportSnapshot
       type: string
       contentMediaType: text/csv
       description: CSV snapshot produced by export.
+    Questionnaire:
+      type: object
+      properties:
+        questionnaire_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+    Screen:
+      type: object
+      properties:
+        screen_id:
+          type: string
+          format: uuid
+        questionnaire_id:
+          type: string
+          format: uuid
+        screen_key:
+          type: string
+        title:
+          type: string
+    Question:
+      type: object
+      properties:
+        question_id:
+          type: string
+          format: uuid
+        screen_id:
+          type: string
+          format: uuid
+        question_text:
+          type: string
+        answer_kind:
+          type: string
+        mandatory:
+          type: boolean
+    Answer:
+      type: object
+      properties:
+        response_set_id:
+          type: string
+          format: uuid
+        question_id:
+          type: string
+          format: uuid
+        value: {}
+        option_id:
+          type: string
+          format: uuid
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
@@ -603,3 +681,9 @@ components:
       schema:
         type: string
       description: ETag precondition for optimistic concurrency.
+    
+    
+    
+    
+    
+    
