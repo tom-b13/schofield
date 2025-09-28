@@ -1,4 +1,4 @@
-# Epic I — Conditional Visibility (placeholder)
+# Epic I — Conditional Visibility
 
 ## Purpose
 
