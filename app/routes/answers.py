@@ -28,6 +28,10 @@ from app.logic.repository_answers import (
     upsert_answer,
 )
 from app.logic.repository_screens import count_responses_for_screen
+from app.logic.repository_screens import get_visibility_rules_for_screen
+from app.logic.answer_canonical import canonicalize_answer_value
+from app.logic.visibility_rules import compute_visible_set
+from app.logic.visibility_delta import compute_visibility_delta
 import uuid
 
 
@@ -85,7 +89,12 @@ def autosave_answer(
     # Resolve screen_key and current ETag for optimistic concurrency and If-Match precheck
     screen_key = _screen_key_for_question(question_id)
     if not screen_key:
-        raise HTTPException(status_code=404, detail="Unknown question")
+        problem = {
+            "title": "Not Found",
+            "status": 404,
+            "detail": f"question_id '{question_id}' not found",
+        }
+        return JSONResponse(problem, status_code=404, media_type="application/problem+json")
     current_etag = compute_screen_etag(response_set_id, screen_key)
     # Capture raw and normalized If-Match for traceability
     raw_if_match = (if_match or "").strip()
@@ -123,7 +132,28 @@ def autosave_answer(
         existing_count,
     )
 
+    # Pre-compute visibility for this screen before any write
+    rules = get_visibility_rules_for_screen(screen_key)
+
+    # Cache of parent question canonical values
+    parents: set[str] = {p for (p, _) in rules.values() if p is not None}
+    parent_value_pre: dict[str, str | None] = {}
+    try:
+        for pid in parents:
+            row = get_existing_answer(response_set_id, pid)
+            if row is None:
+                parent_value_pre[pid] = None
+            else:
+                opt_id, vtext, vnum, vbool = row
+                parent_value_pre[pid] = canonicalize_answer_value(vtext, vnum, vbool)
+    except SQLAlchemyError:
+        logger.error("visibility_precompute_failed rs_id=%s screen_key=%s", response_set_id, screen_key, exc_info=True)
+        parent_value_pre = {pid: None for pid in parents}
+
+    visible_pre = compute_visible_set(rules, parent_value_pre)
+
     # Strong idempotency: deterministic response_id replay check (after If-Match enforcement)
+    idempotent_short_circuit = False
     if idempotency_key:
         try:
             deterministic_rid = str(
@@ -134,7 +164,7 @@ def autosave_answer(
             )
             # Probe for existing response id
             if response_id_exists(deterministic_rid):
-                response.headers["ETag"] = current_etag
+                idempotent_short_circuit = True
                 logger.info(
                     "autosave_idempotent_replay rs_id=%s q_id=%s reason=response_id_match etag=%s idempotency_key=%s",
                     response_set_id,
@@ -142,7 +172,6 @@ def autosave_answer(
                     current_etag,
                     idempotency_key,
                 )
-                return {"saved": True, "etag": current_etag}
         except SQLAlchemyError:
             # Fail open to existing behavior if short-circuit probe fails
             logger.error(
@@ -189,7 +218,7 @@ def autosave_answer(
                 match,
             )
             if match:
-                response.headers["ETag"] = current_etag
+                idempotent_short_circuit = True
                 logger.info(
                     "autosave_idempotent_replay rs_id=%s q_id=%s reason=value_match etag=%s idempotency_key=%s",
                     response_set_id,
@@ -197,7 +226,6 @@ def autosave_answer(
                     current_etag,
                     idempotency_key,
                 )
-                return {"saved": True, "etag": current_etag}
     except SQLAlchemyError:
         # Fail open to existing behavior if short-circuit probe fails
         logger.error(
@@ -208,7 +236,7 @@ def autosave_answer(
         )
 
     # If-Match check; allow wildcard. Enforce only if NOT an idempotent replay
-    if if_match is not None:
+    if if_match is not None and not idempotent_short_circuit:
         incoming = _normalize_etag((if_match or "").strip())
         current = _normalize_etag((current_etag or "").strip())
         logger.info(
@@ -247,48 +275,125 @@ def autosave_answer(
             resp.headers["ETag"] = current_etag
             return resp
 
-    # Validate payload according to shared rules; kind-specific rules are out of scope here
-    validate_answer_upsert(payload.model_dump())
+    # If idempotent replay detected, skip validation and write; otherwise proceed with normal flow
+    write_performed = False
+    new_etag = current_etag
+    if not idempotent_short_circuit:
+        # Validate payload according to shared rules; kind-specific rules are out of scope here
+        validate_answer_upsert(payload.model_dump())
 
-    # Type-aware value validation for number/boolean kinds
-    kind = _answer_kind_for_question(question_id) or ""
-    value: Any = payload.value
+        # Type-aware value validation for number/boolean kinds
+        kind = _answer_kind_for_question(question_id) or ""
+        value: Any = payload.value
+        try:
+            validate_kind_value(kind, value)
+        except HamiltonValidationError:
+            # Return ValidationProblem-compliant payload for 422
+            # Map kind to field name as per contract
+            field_map = {
+                "boolean": "value_bool",
+                "number": "value_number",
+                "text": "value_text",
+                "short_string": "value_text",
+            }
+            field_name = field_map.get((kind or "").lower())
+            # Build human-readable message mentioning expected type when known
+            expected = None
+            if field_name == "value_bool":
+                expected = "boolean"
+            elif field_name == "value_number":
+                expected = "number"
+            elif field_name == "value_text":
+                expected = "text"
+
+            error_obj: dict[str, Any] = {
+                "path": "$.value",
+                "code": "type_mismatch",
+            }
+            if field_name:
+                error_obj["field"] = field_name
+            if expected:
+                error_obj["message"] = f"Expected {expected} value (type mismatch)"
+
+            problem = {
+                "title": "Unprocessable Entity",
+                "status": 422,
+                "errors": [error_obj],
+            }
+            return JSONResponse(problem, status_code=422, media_type="application/problem+json")
+
+        # Upsert response row
+        logger.info(
+            "autosave_write_begin rs_id=%s q_id=%s value=%s option_id=%s",
+            response_set_id,
+            question_id,
+            value,
+            payload.option_id,
+        )
+        upsert_answer(
+            response_set_id=response_set_id,
+            question_id=question_id,
+            option_id=payload.option_id,
+            value=value,
+            idempotency_key=idempotency_key,
+        )
+        write_performed = True
+
+        # Compute and expose fresh ETag for the screen
+        new_etag = compute_screen_etag(response_set_id, screen_key)
+
+    # Compute visibility after write (or same as before for idempotent replay)
+    parent_value_post = dict(parent_value_pre)
+    # If the changed question is a parent, update the canonical value from payload
+    if question_id in parents:
+        pv: str | None
+        if payload.value is None:
+            pv = None
+        elif isinstance(payload.value, bool):
+            pv = "true" if payload.value else "false"
+        else:
+            pv = str(payload.value)
+        parent_value_post[question_id] = pv
+
+    visible_post = compute_visible_set(rules, parent_value_post)
+
+    def _has_answer(qid: str) -> bool:
+        row = get_existing_answer(response_set_id, qid)
+        return row is not None
+
     try:
-        validate_kind_value(kind, value)
-    except HamiltonValidationError:
-        problem = {
-            "title": "Validation failed",
-            "status": 422,
-            "errors": [
-                {"path": "$.value", "code": "type_mismatch", "message": f"Expected {kind} for question kind '{kind}'"}
-            ],
-        }
-        return JSONResponse(problem, status_code=422, media_type="application/problem+json")
+        now_visible, now_hidden, suppressed_answers = compute_visibility_delta(
+            visible_pre, visible_post, _has_answer
+        )
+    except SQLAlchemyError:
+        logger.error(
+            "suppressed_answers_probe_failed rs_id=%s screen_key=%s",
+            response_set_id,
+            screen_key,
+            exc_info=True,
+        )
+        now_visible = sorted(list(set(visible_post) - set(visible_pre)))
+        now_hidden = sorted(list(set(visible_pre) - set(visible_post)))
+        suppressed_answers = []
 
-    # Upsert response row
-    logger.info(
-        "autosave_write_begin rs_id=%s q_id=%s value=%s option_id=%s",
-        response_set_id,
-        question_id,
-        value,
-        payload.option_id,
-    )
-    upsert_answer(
-        response_set_id=response_set_id,
-        question_id=question_id,
-        option_id=payload.option_id,
-        value=value,
-        idempotency_key=idempotency_key,
-    )
-
-    # Compute and expose fresh ETag for the screen
-    new_etag = compute_screen_etag(response_set_id, screen_key)
+    # Finalize response
     response.headers["ETag"] = new_etag
     logger.info(
-        "autosave_ok rs_id=%s q_id=%s screen_key=%s new_etag=%s write_performed=true",
+        "autosave_ok rs_id=%s q_id=%s screen_key=%s new_etag=%s write_performed=%s now_visible=%s now_hidden=%s",
         response_set_id,
         question_id,
         screen_key,
         new_etag,
+        write_performed,
+        now_visible,
+        now_hidden,
     )
-    return {"saved": True, "etag": new_etag}
+    return {
+        "saved": True,
+        "etag": new_etag,
+        "visibility_delta": {
+            "now_visible": now_visible,
+            "now_hidden": now_hidden,
+        },
+        "suppressed_answers": suppressed_answers,
+    }

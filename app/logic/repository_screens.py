@@ -66,6 +66,56 @@ def list_questions_for_screen(screen_key: str) -> list[dict]:
     return out
 
 
+def get_visibility_rules_for_screen(screen_key: str) -> dict[str, tuple[str | None, list | None]]:
+    """Return visibility metadata for all questions on a screen.
+
+    For each question_id on the given screen_key, return a tuple of
+    (parent_question_id, visible_if_value_list_or_none).
+
+    - Base questions (no parent) map to (None, None)
+    - Child questions include their parent's UUID and a list of string values
+      that should make the child visible when equal to the parent's canonical
+      answer value.
+    """
+    eng = get_engine()
+    with eng.connect() as conn:
+        rows = conn.execute(
+            sql_text(
+                """
+                SELECT question_id, parent_question_id, visible_if_value
+                FROM questionnaire_question
+                WHERE screen_key = :skey
+                """
+            ),
+            {"skey": screen_key},
+        ).fetchall()
+
+    def _to_list(val: Any) -> list | None:
+        if val is None:
+            return None
+        s = str(val).strip()
+        if not s:
+            return None
+        # Accept JSON array in text if present, else a single value
+        try:
+            import json
+
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed]
+        except Exception:
+            pass
+        return [s]
+
+    out: dict[str, tuple[str | None, list | None]] = {}
+    for row in rows:
+        qid = str(row[0])
+        parent_qid = str(row[1]) if row[1] is not None else None
+        vis_list = _to_list(row[2])
+        out[qid] = (parent_qid, vis_list)
+    return out
+
+
 def count_responses_for_screen(response_set_id: str, screen_key: str) -> int:
     """Return the number of responses within a screen for a response set."""
     eng = get_engine()

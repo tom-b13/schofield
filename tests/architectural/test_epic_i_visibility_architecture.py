@@ -1,265 +1,507 @@
-"""Architectural tests for EPIC I — Conditional Visibility (Section 7.1).
+"""Architectural tests for EPIC I — Conditional Visibility
 
-These tests are intentionally written first (TDD) and are expected to fail
-until the corresponding application code and contracts are implemented.
+These tests enforce the architectural contract defined in
+docs/Epic I - Conditional Visibility.md, specifically section 7.1.
 
-Rules enforced by this module:
-- One test instance per 7.1.x subsection, discovered dynamically from the spec
-  document (docs/api/Epic I - Conditional Visibility.md).
-- Within each test instance, all "assert:" statements listed under that
-  subsection are surfaced and must be enforced against the codebase via
-  structural checks (AST / filesystem). For now, they fail explicitly to
-  signal missing implementation.
-
-Runner stability:
-- No application modules are imported; only filesystem and AST inspection is
-  used. Any parsing errors surface as assertion failures rather than crashing
-  the test run.
+Each test corresponds to a single section (7.1.x) and asserts the
+requirements stated under that section. Tests use static inspection of
+OpenAPI and JSON Schema files to avoid runtime side effects.
 """
 
 from __future__ import annotations
 
-import ast
-import io
+import json
 import os
-import re
-from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, Iterable, List, Tuple
 
 import pytest
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SPEC_PATH = REPO_ROOT / "docs" / "api" / "Epic I - Conditional Visibility.md"
+SPEC_PATH = os.path.join("docs", "Epic I - Conditional Visibility.md")
+OPENAPI_PATH = os.path.join("docs", "api", "openapi.yaml")
+SCHEMAS_DIR = os.path.join("docs", "schemas")
 
 
-def _read_text(path: Path) -> Tuple[str | None, str | None]:
-    """Read file text; never raise at import/collection time.
+def _require_yaml_loader():
+    """Return a safe YAML loader or fail with a clear assertion.
 
-    Returns (text, error_message). Exactly one of the tuple items is non-None.
+    Runner stability: if PyYAML is not available, fail the test with
+    an actionable message rather than throwing ImportError.
     """
     try:
-        return path.read_text(encoding="utf-8"), None
-    except FileNotFoundError as e:
-        return None, (
-            f"Specification not found: {path}. This test suite requires the EPIC I spec "
-            f"to exist with Section 7.1 defined. Error: {e}"
-        )
-    except OSError as e:
-        return None, f"Failed to read specification at {path}: {e}"
-
-
-SECTION_RE = re.compile(r"^\s*7\.1\.(\d+)\s*[\u2014\-\—\–]\s*(.+)$")
-ASSERT_RE = re.compile(r"^\s*(?:[-*]\s*)?assert\s*:\s*(.+)$", re.IGNORECASE)
-
-
-def _extract_7_1_sections(markdown: str) -> List[Dict[str, object]]:
-    """Parse the EPIC I spec and return a list of subsections under 7.1.
-
-    Each item has keys: id (e.g. "7.1.1"), title (str), asserts (List[str]).
-    The parser is tolerant to list markers like '-' or '*', and various dash
-    characters used as separators in headings.
-    """
-    lines = markdown.splitlines()
-    sections: List[Dict[str, object]] = []
-    current: Dict[str, object] | None = None
-
-    # Track whether we are inside the broader 7.1 block (if explicitly titled)
-    # but operate primarily by matching 7.1.x headings.
-    for raw in lines:
-        line = raw.rstrip()
-
-        # Start of a 7.1.x subsection
-        m = SECTION_RE.match(line)
-        if m:
-            # Close previous section bucket
-            if current is not None:
-                sections.append(current)
-
-            index, title = m.group(1), m.group(2).strip()
-            current = {
-                "id": f"7.1.{index}",
-                "title": title,
-                "asserts": [],
-            }
-            continue
-
-        # Collect "assert:" lines under the current subsection
-        if current is not None:
-            am = ASSERT_RE.match(line)
-            if am:
-                current["asserts"].append(am.group(1).strip())
-
-    if current is not None:
-        sections.append(current)
-
-    return sections
-
-
-def _repo_python_files() -> List[Path]:
-    """Enumerate Python source files in the repository for AST analysis.
-
-    This intentionally targets known project directories to avoid scanning
-    virtualenvs or binary artefacts. Adjust the roots here if the project
-    topology changes.
-    """
-    roots = [
-        REPO_ROOT / "app",
-        REPO_ROOT / "schemas",
-        REPO_ROOT / "tests",
-        REPO_ROOT / "migrations",
-        REPO_ROOT / "policy",
-    ]
-    files: List[Path] = []
-    for r in roots:
-        if r.exists():
-            for p in r.rglob("*.py"):
-                # Skip this test file itself for most structural checks
-                if p.resolve() == Path(__file__).resolve():
-                    continue
-                files.append(p)
-    return files
-
-
-def _safe_parse_ast(path: Path) -> ast.AST | None:
-    """Parse a Python file to AST, converting any exception into a test failure.
-
-    Returns None if file cannot be parsed due to syntax error; the caller can
-    decide how to treat such cases per assertion.
-    """
-    try:
-        text = path.read_text(encoding="utf-8")
-    except Exception as e:  # pragma: no cover — failures asserted by caller
-        pytest.fail(f"Failed to read {path}: {e}")
-        return None
-
-    try:
-        return ast.parse(text, filename=str(path))
-    except SyntaxError:
-        # Report syntax errors as assertion-friendly signals rather than hard crash
-        return None
-
-
-def _collect_project_asts() -> List[Tuple[Path, ast.AST | None]]:
-    return [(p, _safe_parse_ast(p)) for p in _repo_python_files()]
-
-
-def _load_spec_sections() -> Tuple[List[Dict[str, object]] | None, str | None]:
-    text, err = _read_text(SPEC_PATH)
-    if err is not None:
-        return None, err
-    sections = _extract_7_1_sections(text or "")
-    if not sections:
-        return None, (
-            "EPIC I Section 7.1 subsections not found in spec. Ensure headings like "
-            "'7.1.1 — <title>' exist and include assert: lines."
-        )
-    return sections, None
-
-
-def _ids_for_param(section: Dict[str, object]) -> str:
-    return f"{section.get('id', '7.1.?')} — {section.get('title', '').strip()}"
-
-
-def pytest_generate_tests(metafunc):
-    """Dynamically parameterize one test per 7.1.x section without crashing collection.
-
-    If the spec is missing or malformed, generate a single failing case that
-    reports the problem via the test body, preserving runner stability.
-    """
-    if "section" in metafunc.fixturenames:
-        sections, err = _load_spec_sections()
-        if err is not None:
-            metafunc.parametrize(
-                "section",
-                [
-                    {
-                        "id": "7.1.error",
-                        "title": "Spec missing or malformed",
-                        "asserts": [],
-                        "error": err,
-                    }
-                ],
-                ids=["7.1.error"],
-            )
-        else:
-            metafunc.parametrize(
-                "section",
-                sections or [],
-                ids=_ids_for_param,
-            )
-
-
-@pytest.mark.parametrize("section", SECTIONS_7_1, ids=_ids_for_param)
-def test_epic_i_conditional_visibility_section_contracts(section: Dict[str, object]):
-    """Verifies EPIC I — Section 7.1.x contracts.
-
-    This single parametrized test yields one test instance per 7.1.x section.
-    For each section, it enumerates all "assert:" requirements defined in the
-    spec and ensures there is an enforcement placeholder that fails until the
-    real structural checks are implemented.
-
-    Section validated: section["id"] (e.g., '7.1.1').
-    """
-    # Comment: Which 7.1.x section this test verifies
-    section_id = section.get("id", "7.1.?")
-    section_title = section.get("title", "").strip()
-    asserts: List[str] = list(section.get("asserts", []))
-
-    # If parameterization captured an upstream spec error, surface it cleanly here.
-    if section.get("error"):
-        pytest.fail(str(section["error"]))
-
-    # Ensure each section actually specifies at least one assert: rule
-    assert asserts, (
-        f"Spec section {section_id} — '{section_title}' defines no 'assert:' lines. "
-        f"Add explicit 'assert:' statements to the spec to drive enforcement."
-    )
-
-    # Prepare ASTs to support structural validations once implemented
-    asts = _collect_project_asts()
-
-    # For now, each assertion fails explicitly as these are TDD placeholders.
-    # Replace each failure with a concrete structural check (AST/FS) that enforces
-    # the assertion on the codebase once implementation work begins.
-    failures: List[str] = []
-    for idx, rule in enumerate(asserts, start=1):
-        # Comment: What is being asserted from the spec
-        # f"assert: {rule}"
-        failures.append(
-            f"[{section_id}] Missing enforcement for assertion #{idx}: {rule}"
-        )
-
-    if failures:
+        import yaml  # type: ignore
+    except Exception as exc:  # pragma: no cover - environment dependent
         pytest.fail(
-            "\n".join(
-                [
-                    f"EPIC I — Conditional Visibility — Section {section_id}: {section_title}",
-                    "Unimplemented architectural enforcement rules:",
-                    *failures,
-                ]
-            )
+            f"PyYAML is required for architectural checks but could not be imported: {exc}"
         )
+    return yaml
 
 
-def test_epic_i_spec_file_exists_and_is_parseable():
-    """Sanity check: the EPIC I spec file exists and contains Section 7.1.
+def load_openapi() -> Dict[str, Any]:
+    """Load the OpenAPI YAML file, failing clearly on error."""
+    assert os.path.exists(
+        OPENAPI_PATH
+    ), f"OpenAPI file missing: {OPENAPI_PATH}. The API contract must exist."
+    yaml = _require_yaml_loader()
+    try:
+        with open(OPENAPI_PATH, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except Exception as exc:
+        pytest.fail(f"Failed to parse OpenAPI YAML at {OPENAPI_PATH}: {exc}")
 
-    This guards against accidental deletion or misnaming of the authoritative
-    spec document that drives these architectural tests.
+
+def json_exists_and_load(path: str) -> Dict[str, Any]:
+    """Load JSON from path, asserting file exists and parses as JSON.
+
+    Runner stability: if the file is missing or invalid, fail with a clear
+    assertion instead of raising.
     """
-    assert SPEC_PATH.exists(), (
-        f"Missing specification file: {SPEC_PATH}. Expected EPIC I spec to be present."
+    assert os.path.exists(path), f"Required JSON schema file missing: {path}"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:
+        pytest.fail(f"Invalid JSON in schema file {path}: {exc}")
+
+
+def _prop(schema: Dict[str, Any], name: str) -> Dict[str, Any]:
+    props = schema.get("properties", {}) or {}
+    assert isinstance(props, dict), "Schema 'properties' must be an object."
+    return props.get(name) or {}
+
+
+def _collect_allowed_types(s: Dict[str, Any]) -> List[str]:
+    """Return the set of allowed JSON Schema types for a property.
+
+    Supports 'type' as string or list, and compositions via oneOf/anyOf/allOf.
+    """
+    types: List[str] = []
+    t = s.get("type")
+    if isinstance(t, str):
+        types.append(t)
+    elif isinstance(t, list):
+        types.extend([x for x in t if isinstance(x, str)])
+
+    for key in ("oneOf", "anyOf", "allOf"):
+        variants = s.get(key) or []
+        if isinstance(variants, list):
+            for v in variants:
+                if isinstance(v, dict):
+                    vt = v.get("type")
+                    if isinstance(vt, str):
+                        types.append(vt)
+                    elif isinstance(vt, list):
+                        types.extend([x for x in vt if isinstance(x, str)])
+    # De-duplicate while preserving order
+    seen = set()
+    deduped: List[str] = []
+    for x in types:
+        if x not in seen:
+            seen.add(x)
+            deduped.append(x)
+    return deduped
+
+
+def _allows_null(s: Dict[str, Any]) -> bool:
+    types = set(_collect_allowed_types(s))
+    return s.get("nullable") is True or ("null" in types)
+
+
+def _is_uuid_string_schema(s: Dict[str, Any]) -> bool:
+    types = set(_collect_allowed_types(s))
+    fmt = s.get("format")
+    return ("string" in types) and (fmt == "uuid")
+
+
+def iter_operations(spec: Dict[str, Any]) -> Iterable[Tuple[str, str, Dict[str, Any]]]:
+    """Yield (path, method, operation) for each operation in the OpenAPI spec."""
+    paths = spec.get("paths", {}) or {}
+    for path, methods in paths.items():
+        if not isinstance(methods, dict):
+            continue
+        for method, op in methods.items():
+            if method.lower() in {"get", "post", "put", "patch", "delete", "options", "head"}:
+                if isinstance(op, dict):
+                    yield (path, method.lower(), op)
+
+
+def get_operation(spec: Dict[str, Any], path: str, method: str) -> Dict[str, Any] | None:
+    return (spec.get("paths", {}) or {}).get(path, {}).get(method.lower())
+
+
+# 7.1.1 — QuestionnaireQuestion visibility fields exist
+def test_epic_i_7_1_1_questionnairequestion_visibility_fields_exist():
+    """7.1.1: QuestionnaireQuestion exposes parent_question_id and visible_if_value with required typing."""
+    # Verifies section 7.1.1
+    schema_path = os.path.join(SCHEMAS_DIR, "QuestionnaireQuestion.schema.json")
+    schema = json_exists_and_load(schema_path)
+
+    # Assert: parent_question_id is string uuid and allows null
+    parent = _prop(schema, "parent_question_id")
+    assert parent, "Schema must define properties.parent_question_id."
+    # type string + format uuid
+    assert _is_uuid_string_schema(
+        parent
+    ), "parent_question_id must be type 'string' with format 'uuid'."
+    # allows null via nullable or union including 'null'
+    assert _allows_null(parent), (
+        "parent_question_id must be nullable (type union including 'null' or nullable: true)."
     )
 
-    text, err = _read_text(SPEC_PATH)
-    if err:
-        pytest.fail(err)
-    # Ensure at least one 7.1.x heading and one assert: line exist
-    sections = _extract_7_1_sections(text or "")
-    assert sections, "No 7.1.x subsections found in the spec — add 7.1.* headings."
-    has_any_assert = any(s.get("asserts") for s in sections)
-    assert has_any_assert, (
-        "No 'assert:' lines were found under Section 7.1 — add explicit assertions "
-        "for each 7.1.x subsection."
+    # Assert: visible_if_value permits exactly null, string, or array of strings
+    vif = _prop(schema, "visible_if_value")
+    assert vif, "Schema must define properties.visible_if_value."
+    allowed = set(_collect_allowed_types(vif))
+    assert allowed, (
+        "visible_if_value must constrain allowed types (string/array/null); found none."
+    )
+    # No extraneous types beyond {'string','array','null'}
+    assert allowed.issubset({"string", "array", "null"}), (
+        f"visible_if_value types must be subset of string|array|null; got {sorted(allowed)}"
+    )
+    # If array is allowed, its items must be strings
+    if "array" in allowed:
+        items = vif.get("items") or {}
+        assert isinstance(items, dict) and (
+            (items.get("type") == "string") or (items.get("type") in ["string"])  # explicit
+        ), "visible_if_value array items must be type string."
+
+
+# 7.1.2 — Response canonical value fields exist
+def test_epic_i_7_1_2_response_canonical_fields_exist():
+    """7.1.2: Response schema exposes canonical fields option_id/value_bool/value_number/value_text (nullable)."""
+    # Verifies section 7.1.2
+    schema_path = os.path.join(SCHEMAS_DIR, "Response.schema.json")
+    schema = json_exists_and_load(schema_path)
+
+    # option_id: string uuid (nullable allowed)
+    option_id = _prop(schema, "option_id")
+    assert option_id, "Response must define properties.option_id."
+    assert _is_uuid_string_schema(option_id), (
+        "option_id must be type 'string' with format 'uuid'."
+    )
+
+    # value_bool: boolean (nullable allowed)
+    value_bool = _prop(schema, "value_bool")
+    assert value_bool, "Response must define properties.value_bool."
+    assert "boolean" in _collect_allowed_types(value_bool), (
+        "value_bool must allow type 'boolean'."
+    )
+
+    # value_number: number (nullable allowed)
+    value_number = _prop(schema, "value_number")
+    assert value_number, "Response must define properties.value_number."
+    assert "number" in _collect_allowed_types(value_number), (
+        "value_number must allow type 'number'."
+    )
+
+    # value_text: string (nullable allowed)
+    value_text = _prop(schema, "value_text")
+    assert value_text, "Response must define properties.value_text."
+    assert "string" in _collect_allowed_types(value_text), (
+        "value_text must allow type 'string'."
+    )
+
+
+# 7.1.3 — AnswerOption canonical value field exists
+def test_epic_i_7_1_3_answer_option_canonical_value_field_exists():
+    """7.1.3: AnswerOption schema exposes canonical 'value' as required string."""
+    # Verifies section 7.1.3
+    schema_path = os.path.join(SCHEMAS_DIR, "AnswerOption.schema.json")
+    schema = json_exists_and_load(schema_path)
+
+    val = _prop(schema, "value")
+    assert val, "AnswerOption must define properties.value."
+    assert val.get("type") == "string", "AnswerOption.value must be type 'string'."
+    required = schema.get("required") or []
+    assert isinstance(required, list) and "value" in required, (
+        "AnswerOption.value must be present in the schema 'required' array."
+    )
+
+
+# 7.1.4 — ScreenView excludes rule/hidden containers
+def test_epic_i_7_1_4_screen_view_excludes_rule_hidden_containers():
+    """7.1.4: ScreenView lists visible questions only; no hidden/visibility rules containers present."""
+    # Verifies section 7.1.4
+    schema_path = os.path.join(SCHEMAS_DIR, "ScreenView.schema.json")
+    schema = json_exists_and_load(schema_path)
+
+    props = schema.get("properties", {}) or {}
+    assert isinstance(props, dict), "ScreenView schema must define an object with properties."
+
+    # Assert: questions collection is defined (array)
+    questions = props.get("questions") or {}
+    assert isinstance(questions, dict) and questions.get("type") == "array", (
+        "ScreenView must define properties.questions as an array."
+    )
+    assert "items" in questions, "ScreenView.questions must define 'items'."
+
+    # Assert: no hidden containers or rules present
+    forbidden = {"hidden_questions", "visibility_rules"}
+    present_forbidden = sorted([k for k in props.keys() if k in forbidden])
+    assert not present_forbidden, (
+        f"ScreenView.properties must not contain {forbidden}; found: {present_forbidden}"
+    )
+
+
+# 7.1.5 — AutosaveResult.suppressed_answers[] defined
+def test_epic_i_7_1_5_autosave_result_suppressed_answers_defined():
+    """7.1.5: AutosaveResult defines suppressed_answers as array of QuestionId (string uuid)."""
+    # Verifies section 7.1.5
+    schema_path = os.path.join(SCHEMAS_DIR, "AutosaveResult.schema.json")
+    schema = json_exists_and_load(schema_path)
+
+    sa = _prop(schema, "suppressed_answers")
+    assert sa, "AutosaveResult must define properties.suppressed_answers."
+    assert sa.get("type") == "array", "suppressed_answers must be an array."
+    items = sa.get("items") or {}
+    assert isinstance(items, dict), "suppressed_answers.items must be an object schema."
+    # items: either string+uuid or $ref to QuestionId
+    is_uuid_items = (items.get("type") == "string" and items.get("format") == "uuid")
+    is_qid_ref = isinstance(items.get("$ref"), str) and ("QuestionId" in items.get("$ref"))
+    assert is_uuid_items or is_qid_ref, (
+        "suppressed_answers.items must be string uuid or $ref to QuestionId schema."
+    )
+    # suppressed_answers optional (not required)
+    required = schema.get("required") or []
+    assert "suppressed_answers" not in (required or []), (
+        "suppressed_answers must be optional (not listed in required)."
+    )
+
+
+# 7.1.6 — AutosaveResult.visibility_delta.* defined
+def test_epic_i_7_1_6_autosave_result_visibility_delta_defined():
+    """7.1.6: AutosaveResult defines visibility_delta with now_visible/now_hidden arrays of QuestionId."""
+    # Verifies section 7.1.6
+    schema_path = os.path.join(SCHEMAS_DIR, "AutosaveResult.schema.json")
+    schema = json_exists_and_load(schema_path)
+
+    vd = _prop(schema, "visibility_delta")
+    assert vd, "AutosaveResult must define properties.visibility_delta."
+    assert vd.get("type") == "object", "visibility_delta must be an object."
+    vprops = vd.get("properties", {}) or {}
+    assert isinstance(vprops, dict), "visibility_delta.properties must be present."
+
+    # now_visible array of QuestionId
+    nv = vprops.get("now_visible") or {}
+    assert nv.get("type") == "array", "visibility_delta.now_visible must be an array."
+    nv_items = nv.get("items") or {}
+    nv_uuid = nv_items.get("type") == "string" and nv_items.get("format") == "uuid"
+    nv_ref = isinstance(nv_items.get("$ref"), str) and ("QuestionId" in nv_items.get("$ref"))
+    assert nv_uuid or nv_ref, (
+        "now_visible items must be string uuid or $ref to QuestionId schema."
+    )
+
+    # now_hidden array of QuestionId
+    nh = vprops.get("now_hidden") or {}
+    assert nh.get("type") == "array", "visibility_delta.now_hidden must be an array."
+    nh_items = nh.get("items") or {}
+    nh_uuid = nh_items.get("type") == "string" and nh_items.get("format") == "uuid"
+    nh_ref = isinstance(nh_items.get("$ref"), str) and ("QuestionId" in nh_items.get("$ref"))
+    assert nh_uuid or nh_ref, (
+        "now_hidden items must be string uuid or $ref to QuestionId schema."
+    )
+
+    # visibility_delta optional (not required)
+    required = schema.get("required") or []
+    assert "visibility_delta" not in (required or []), (
+        "visibility_delta must be optional (not listed in required)."
+    )
+
+
+# 7.1.7 — FeatureOutputs schema enforces deterministic keys
+def test_epic_i_7_1_7_feature_outputs_schema_deterministic_keys():
+    """7.1.7: FeatureOutputs sets additionalProperties=false and enumerates only allowed keys."""
+    # Verifies section 7.1.7
+    schema_path = os.path.join(SCHEMAS_DIR, "FeatureOutputs.schema.json")
+    schema = json_exists_and_load(schema_path)
+
+    # additionalProperties must be false at the top level
+    assert schema.get("additionalProperties") is False, (
+        "FeatureOutputs must set additionalProperties: false at the top level."
+    )
+    props = schema.get("properties", {}) or {}
+    assert isinstance(props, dict) and props, (
+        "FeatureOutputs.properties must enumerate allowed keys."
+    )
+    assert "patternProperties" not in schema, (
+        "FeatureOutputs must not use patternProperties for top-level keys."
+    )
+
+
+# 7.1.8 — AutosaveResult includes etag
+def test_epic_i_7_1_8_autosave_result_includes_etag():
+    """7.1.8: AutosaveResult exposes string etag and the PATCH 2xx response schema requires it."""
+    # Verifies section 7.1.8
+    # 1) Check the AutosaveResult schema defines an etag string
+    schema_path = os.path.join(SCHEMAS_DIR, "AutosaveResult.schema.json")
+    schema = json_exists_and_load(schema_path)
+
+    # Assert: etag property exists and is a string
+    etag = _prop(schema, "etag")
+    assert etag, "AutosaveResult must define properties.etag."
+    assert etag.get("type") == "string", "etag must be type 'string'."
+
+    # 2) Validate that the OpenAPI PATCH success response references a schema that requires 'etag'
+    spec = load_openapi()
+    components = spec.get("components", {}) or {}
+    comp_schemas = components.get("schemas", {}) or {}
+
+    def resolve_ref(ref: str) -> Dict[str, Any]:
+        # Only resolve local component schema refs for this assertion
+        if not ref.startswith("#/components/schemas/"):
+            pytest.fail(
+                f"PATCH success response must $ref a local components schema; got: {ref}"
+            )
+        name = ref.split("/")[-1]
+        resolved = comp_schemas.get(name)
+        assert isinstance(resolved, dict) and resolved, (
+            f"Missing referenced schema at components.schemas.{name}"
+        )
+        return resolved
+
+    patch_path = "/response-sets/{response_set_id}/answers/{question_id}"
+    op = get_operation(spec, patch_path, "patch")
+    assert op is not None, f"PATCH {patch_path} must exist."
+    responses = op.get("responses") or {}
+    # Locate a 2xx JSON response
+    success_codes = [k for k in responses.keys() if str(k).startswith("2")]
+    assert success_codes, f"PATCH {patch_path} must define a 2xx success response."
+    # Prefer 200 if present for determinism
+    code = "200" if "200" in success_codes else sorted(success_codes)[0]
+    success = responses.get(code) or {}
+    content = (success.get("content") or {}).get("application/json") or {}
+    assert content, (
+        f"PATCH {patch_path} {code} must define application/json content."
+    )
+    resp_schema = content.get("schema") or {}
+
+    # Resolve one level of $ref if present
+    if "$ref" in resp_schema:
+        resp_schema = resolve_ref(resp_schema["$ref"])  # resolved schema object
+
+    # The schema actually referenced for the PATCH success response must require 'etag'
+    required = resp_schema.get("required") or []
+    assert isinstance(required, list) and ("etag" in required), (
+        "PATCH success response schema must include 'etag' in its required array."
+    )
+
+
+# 7.1.9 — OpenAPI defines If-Match parameter for PATCH
+def test_epic_i_7_1_9_openapi_defines_if_match_parameter_for_patch():
+    """7.1.9: OpenAPI declares reusable If-Match header and references it from PATCH autosave."""
+    # Verifies section 7.1.9
+    spec = load_openapi()
+
+    components = spec.get("components", {}) or {}
+    params = components.get("parameters", {}) or {}
+    assert "IfMatch" in params, "#/components/parameters/IfMatch must exist."
+    ifm = params.get("IfMatch") or {}
+    assert ifm.get("in") == "header", "IfMatch.in must be 'header'."
+    assert ifm.get("name") == "If-Match", "IfMatch.name must be 'If-Match'."
+    schema = ifm.get("schema") or {}
+    assert schema.get("type") == "string", "IfMatch.schema.type must be 'string'."
+
+    # PATCH operation must reference the parameter
+    path = "/response-sets/{response_set_id}/answers/{question_id}"
+    op = get_operation(spec, path, "patch")
+    assert op is not None, f"PATCH {path} must exist."
+    op_params = op.get("parameters") or []
+    assert any(
+        isinstance(p, dict) and p.get("$ref", "").endswith("#/components/parameters/IfMatch") for p in op_params
+    ), "PATCH autosave must reference #/components/parameters/IfMatch via $ref."
+
+
+# 7.1.10 — OpenAPI defines Idempotency-Key parameter for PATCH
+def test_epic_i_7_1_10_openapi_defines_idempotency_key_for_patch():
+    """7.1.10: OpenAPI declares reusable Idempotency-Key header and references it from PATCH autosave."""
+    # Verifies section 7.1.10
+    spec = load_openapi()
+
+    components = spec.get("components", {}) or {}
+    params = components.get("parameters", {}) or {}
+    assert "IdempotencyKey" in params, "#/components/parameters/IdempotencyKey must exist."
+    ide = params.get("IdempotencyKey") or {}
+    assert ide.get("in") == "header", "IdempotencyKey.in must be 'header'."
+    assert ide.get("name") == "Idempotency-Key", "IdempotencyKey.name must be 'Idempotency-Key'."
+    schema = ide.get("schema") or {}
+    assert schema.get("type") == "string", "IdempotencyKey.schema.type must be 'string'."
+
+    # PATCH operation must reference the parameter
+    path = "/response-sets/{response_set_id}/answers/{question_id}"
+    op = get_operation(spec, path, "patch")
+    assert op is not None, f"PATCH {path} must exist."
+    op_params = op.get("parameters") or []
+    assert any(
+        isinstance(p, dict) and p.get("$ref", "").endswith("#/components/parameters/IdempotencyKey")
+        for p in op_params
+    ), "PATCH autosave must reference #/components/parameters/IdempotencyKey via $ref."
+
+
+# 7.1.11 — OpenAPI error responses use problem+json
+def test_epic_i_7_1_11_openapi_error_responses_use_problem_json():
+    """7.1.11: GET screen and PATCH autosave declare 404/409/422 with application/problem+json using Problem schema."""
+    # Verifies section 7.1.11
+    spec = load_openapi()
+
+    # Problem schema exists internally OR responses may reference an external Problem schema file
+    components = spec.get("components", {}) or {}
+    schemas = components.get("schemas", {}) or {}
+    has_internal_problem = "Problem" in schemas
+
+    def is_problem_ref(ref: str) -> bool:
+        # Accept either internal component ref or external file path ending with schemas/Problem.schema.json
+        return (
+            ref.endswith("#/components/schemas/Problem")
+            or ref.endswith("schemas/Problem.schema.json")
+            or "/schemas/Problem.schema.json" in ref
+        )
+
+    # GET screen endpoint errors
+    get_path = "/response-sets/{response_set_id}/screens/{screen_id}"
+    get_op = get_operation(spec, get_path, "get")
+    assert get_op is not None, f"GET {get_path} must exist."
+    for code in ["404", "422"]:
+        resp = (get_op.get("responses") or {}).get(code) or {}
+        assert resp, f"GET {get_path} must define {code} response."
+        content = (resp.get("content") or {}).get("application/problem+json") or {}
+        assert content, f"GET {get_path} {code} must declare application/problem+json content."
+        schema = content.get("schema") or {}
+        ref = schema.get("$ref", "")
+        assert ref, f"GET {get_path} {code} must reference a Problem schema via $ref."
+        assert is_problem_ref(ref), (
+            f"GET {get_path} {code} must reference Problem schema (internal or external)."
+        )
+
+    # PATCH autosave endpoint errors
+    patch_path = "/response-sets/{response_set_id}/answers/{question_id}"
+    patch_op = get_operation(spec, patch_path, "patch")
+    assert patch_op is not None, f"PATCH {patch_path} must exist."
+    for code in ["404", "409", "422"]:
+        resp = (patch_op.get("responses") or {}).get(code) or {}
+        assert resp, f"PATCH {patch_path} must define {code} response."
+        content = (resp.get("content") or {}).get("application/problem+json") or {}
+        assert content, f"PATCH {patch_path} {code} must declare application/problem+json content."
+        schema = content.get("schema") or {}
+        ref = schema.get("$ref", "")
+        assert ref, f"PATCH {patch_path} {code} must reference a Problem schema via $ref."
+        assert is_problem_ref(ref), (
+            f"PATCH {patch_path} {code} must reference Problem schema (internal or external)."
+        )
+
+    # At least one of: an internal Problem schema exists, or responses used an external reference.
+    # This ensures the API contract provides a Problem schema definition one way or another.
+    used_external = False
+    for op_path, method, op in iter_operations(spec):
+        for code, resp in (op.get("responses") or {}).items():
+            content = (resp.get("content") or {}).get("application/problem+json") or {}
+            schema = content.get("schema") or {}
+            ref = schema.get("$ref")
+            if isinstance(ref, str) and ("Problem.schema.json" in ref):
+                used_external = True
+                break
+        if used_external:
+            break
+    assert has_internal_problem or used_external, (
+        "OpenAPI must define Problem schema internally or reference an external schemas/Problem.schema.json."
     )

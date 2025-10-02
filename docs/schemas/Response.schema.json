@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/Response.schema.json",
+  "title": "Response",
+  "type": "object",
+  "properties": {
+    "option_id": { "type": "string", "format": "uuid", "nullable": true },
+    "value_bool": { "type": "boolean", "nullable": true },
+    "value_number": { "type": "number", "nullable": true },
+    "value_text": { "type": "string", "nullable": true }
+  }
+}
+

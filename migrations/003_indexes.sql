@@ -2,6 +2,7 @@
 
 -- QuestionnaireQuestion
 CREATE INDEX IF NOT EXISTS ix_question_answer_type ON questionnaire_question(answer_type);
+CREATE INDEX IF NOT EXISTS ix_question_parent ON questionnaire_question(parent_question_id);
 
 -- AnswerOption
 CREATE INDEX IF NOT EXISTS ix_answer_option_question ON answer_option(question_id);

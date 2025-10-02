@@ -22,7 +22,11 @@ from app.logic.repository_screens import (
     count_responses_for_screen,
     get_screen_metadata,
     list_questions_for_screen,
+    get_visibility_rules_for_screen,
 )
+from app.logic.repository_answers import get_existing_answer
+from app.logic.answer_canonical import canonicalize_answer_value
+from app.logic.visibility_rules import is_child_visible
 
 from app.logic.gating import evaluate_gating
 
@@ -45,7 +49,11 @@ def get_screen(response_set_id: str, screen_id: str, response: Response):
     if not meta:
         # Unknown screen id -> 404 Problem (problem+json)
         return JSONResponse(
-            {"title": "Screen not found", "status": 404},
+            {
+                "title": "Not Found",
+                "status": 404,
+                "detail": f"screen_id '{screen_id}' not found",
+            },
             status_code=404,
             media_type="application/problem+json",
         )
@@ -64,6 +72,27 @@ def get_screen(response_set_id: str, screen_id: str, response: Response):
         before_count = -1
     # Load questions bound to the screen
     questions = list_questions_for_screen(screen_key)
+    # Apply Epic I conditional visibility: filter out hidden child questions
+    visibility_rules = get_visibility_rules_for_screen(screen_key)
+
+    filtered: list[dict] = []
+    for q in questions:
+        qid = q.get("question_id")
+        parent_qid, vis_list = visibility_rules.get(qid, (None, None))
+        if not parent_qid:
+            # Base question, always visible
+            filtered.append(q)
+            continue
+        # Child question: visible only if parent has an answer matching visible_if_value
+        parent_ans = get_existing_answer(response_set_id, parent_qid)
+        if parent_ans is None:
+            # Unanswered parent hides child
+            continue
+        _opt, vtext, vnum, vbool = parent_ans
+        canon = canonicalize_answer_value(vtext, vnum, vbool)
+        if is_child_visible(canon, vis_list):
+            filtered.append(q)
+    questions = filtered
     # Emit ETag and log for correlation with subsequent If-Match checks
     etag = compute_screen_etag(response_set_id, screen_key)
     response.headers["ETag"] = etag

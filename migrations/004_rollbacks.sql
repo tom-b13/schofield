@@ -10,9 +10,9 @@ DROP INDEX IF EXISTS ix_response_option;
 DROP INDEX IF EXISTS ix_response_question;
 DROP INDEX IF EXISTS ix_response_set;
 DROP INDEX IF EXISTS ix_answer_option_question;
+DROP INDEX IF EXISTS ix_question_parent;
 DROP INDEX IF EXISTS ix_question_answer_type;
 DROP INDEX IF EXISTS uq_question_placeholder_code;
-DROP INDEX IF EXISTS ix_question_parent_question_id;
 
 -- Drop constraints in strict reverse of creation order from 002_constraints.sql
 ALTER TABLE questionnaire_question

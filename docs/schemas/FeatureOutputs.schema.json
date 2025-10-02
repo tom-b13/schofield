@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/FeatureOutputs.schema.json",
+  "title": "FeatureOutputs",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "etag": { "type": "string" },
+    "suppressed_answers": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "visibility_delta": {
+      "type": "object",
+      "properties": {
+        "now_visible": {
+          "type": "array",
+          "items": { "type": "string", "format": "uuid" }
+        },
+        "now_hidden": {
+          "type": "array",
+          "items": { "type": "string", "format": "uuid" }
+        }
+      }
+    }
+  }
+}
+

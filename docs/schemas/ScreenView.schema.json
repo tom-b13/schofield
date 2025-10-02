@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/ScreenView.schema.json",
+  "title": "ScreenView",
+  "type": "object",
+  "properties": {
+    "screen_id": { "type": "string", "format": "uuid" },
+    "response_set_id": { "type": "string", "format": "uuid" },
+    "screen_key": { "type": "string" },
+    "title": { "type": "string" },
+    "questions": {
+      "type": "array",
+      "items": { "type": "object" }
+    }
+  }
+}
+

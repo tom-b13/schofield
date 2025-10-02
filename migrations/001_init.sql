@@ -51,7 +51,8 @@ CREATE TABLE IF NOT EXISTS questionnaire_question (
     answer_type answer_kind NOT NULL,
     mandatory BOOLEAN NOT NULL DEFAULT FALSE,
     placeholder_code TEXT,
-    parent_question_id UUID
+    parent_question_id UUID,
+    visible_if_value JSONB
 );
 
 -- AnswerOption

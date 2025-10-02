@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/QuestionnaireQuestion.schema.json",
+  "title": "QuestionnaireQuestion",
+  "type": "object",
+  "properties": {
+    "parent_question_id": {
+      "type": "string",
+      "format": "uuid",
+      "nullable": true
+    },
+    "visible_if_value": {
+      "type": ["string", "array", "null"],
+      "items": { "type": "string" }
+    }
+  }
+}

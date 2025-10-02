@@ -396,6 +396,13 @@ def before_scenario(context: Any, scenario: Any) -> None:
     Any required gating preconditions are now handled just-in-time inside
     the POST /regenerate-check step implementation after Background data exists.
     """
+    # Initialize per-scenario vars dict for step coordination
+    # Clarke: ensure context.vars exists to avoid AttributeError in steps
+    try:
+        context.vars = {}
+    except Exception:
+        # Fallback in highly constrained contexts
+        setattr(context, "vars", {})
     # Preserve scenario handle for diagnostics in after_step
     context.scenario = scenario
 

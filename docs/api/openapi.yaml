@@ -84,6 +84,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScreenView'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '404':
           $ref: '#/components/responses/NotFound'
           content:
@@ -130,9 +136,12 @@ paths:
                 type: object
                 required:
                 - saved
+                - etag
                 properties:
                   saved:
                     type: boolean
+                  etag:
+                    type: string
         '409':
           $ref: '#/components/responses/Conflict'
           content:
@@ -144,7 +153,7 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ValidationProblem'
+                $ref: '#/components/schemas/Problem'
         '404':
           $ref: '#/components/responses/NotFound'
           content:

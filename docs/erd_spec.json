@@ -421,50 +421,16 @@
     {
       "name": "QuestionnaireQuestion",
       "fields": [
-        {
-          "name": "answer_type",
-          "type": "answer_kind"
-        },
-        {
-          "name": "external_qid",
-          "type": "text"
-        },
-        {
-          "name": "mandatory",
-          "type": "boolean"
-        },
-        {
-          "name": "parent_question_id",
-          "type": "uuid"
-        },
-        {
-          "name": "placeholder_code",
-          "type": "text"
-        },
-        {
-          "name": "question_id",
-          "type": "uuid"
-        },
-        {
-          "name": "question_order",
-          "type": "int"
-        },
-        {
-          "name": "question_text",
-          "type": "text"
-        },
-        {
-          "name": "screen_key",
-          "type": "text"
-        },
-        {
-          "name": "parent_question_id",
-          "type": "uuid"
-        },
-        {
-          "name": "visible_if_value",
-          "type": "jsonb"
-        }
+        { "name": "answer_type", "type": "answer_kind" },
+        { "name": "external_qid", "type": "text" },
+        { "name": "mandatory", "type": "boolean" },
+        { "name": "parent_question_id", "type": "uuid" },
+        { "name": "placeholder_code", "type": "text" },
+        { "name": "question_id", "type": "uuid" },
+        { "name": "question_order", "type": "int" },
+        { "name": "question_text", "type": "text" },
+        { "name": "screen_key", "type": "text" },
+        { "name": "visible_if_value", "type": "jsonb" }
       ],
       "primary_key": {
         "name": "pk_questionnaire_question",
