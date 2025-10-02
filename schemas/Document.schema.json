@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/Document.schema.json",
+  "title": "Document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "document_id",
+    "title",
+    "order_number",
+    "version"
+  ],
+  "properties": {
+    "document_id": {
+      "$ref": "schemas/DocumentId.schema.json"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "order_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}
