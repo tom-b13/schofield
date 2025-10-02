@@ -8,6 +8,9 @@ class QuestionToFieldGroup
 class QuestionnaireQuestion
 class Response
 class ResponseSet
+class Document
+class DocumentBlob
+class DocumentListState
 
 %% FK edges for tests (sorted)
 AnswerOption --> QuestionnaireQuestion
@@ -49,3 +52,6 @@ erDiagram
   QuestionnaireQuestion ||--o{ QuestionToScreen : "placed_in"
   QuestionnaireScreen ||--o{ QuestionToScreen : "composes"
   ScreenGroup ||--o{ QuestionToScreen : "subgroups"
+Document ||--|| DocumentBlob : "current_blob"
+
+%% Document list ETag state (singleton) — holds list_etag used for list concurrency

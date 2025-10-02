@@ -440,7 +440,7 @@
       },
       "foreign_keys": [
         {
-          "name": "fk_question_parent_question",
+          "name": "fk_question_parent",
           "columns": [
             "parent_question_id"
           ],
@@ -479,20 +479,6 @@
           "columns": [
             "parent_question_id"
           ]
-        }
-      ],
-      "foreign_keys": [
-        {
-          "name": "fk_question_parent",
-          "columns": [
-            "parent_question_id"
-          ],
-          "references": {
-            "entity": "QuestionnaireQuestion",
-            "columns": [
-              "question_id"
-            ]
-          }
         }
       ]
     },
@@ -648,6 +634,159 @@
           }
         }
       ]
+    },
+    {
+      "name": "Document",
+      "fields": [
+        {
+          "name": "document_id",
+          "type": "uuid"
+        },
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "order_number",
+          "type": "int"
+        },
+        {
+          "name": "version",
+          "type": "int"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_document",
+        "columns": [
+          "document_id"
+        ]
+      },
+      "unique": [
+        {
+          "name": "uq_document_order_number",
+          "columns": [
+            "order_number"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "chk_document_order_positive",
+          "expression": "order_number > 0"
+        },
+        {
+          "name": "chk_document_version_min",
+          "expression": "version >= 1"
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "DocumentBlob",
+      "fields": [
+        {
+          "name": "document_id",
+          "type": "uuid"
+        },
+        {
+          "name": "file_sha256",
+          "type": "char(64)"
+        },
+        {
+          "name": "filename",
+          "type": "text"
+        },
+        {
+          "name": "mime",
+          "type": "text"
+        },
+        {
+          "name": "byte_size",
+          "type": "bigint"
+        },
+        {
+          "name": "storage_url",
+          "type": "text"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_document_blob",
+        "columns": [
+          "document_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_document_blob_document",
+          "columns": [
+            "document_id"
+          ],
+          "references": {
+            "entity": "Document",
+            "columns": [
+              "document_id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_document_blob_sha256",
+          "columns": [
+            "file_sha256"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "chk_blob_sha256_len",
+          "expression": "char_length(file_sha256) = 64"
+        },
+        {
+          "name": "chk_blob_mime_docx",
+          "expression": "mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'"
+        },
+        {
+          "name": "chk_blob_size_min",
+          "expression": "byte_size >= 1"
+        }
+      ]
+    },
+    {
+      "name": "DocumentListState",
+      "fields": [
+        {
+          "name": "singleton_id",
+          "type": "smallint"
+        },
+        {
+          "name": "list_etag",
+          "type": "text"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_document_list_state",
+        "columns": [
+          "singleton_id"
+        ]
+      }
     }
   ],
   "encrypted_fields": [
@@ -657,21 +796,32 @@
     "GeneratedDocument.output_uri"
   ],
   "constraints_applied": [
-    "fk_question_parent_question",
-    "fk_generated_document_set",
+    "chk_blob_mime_docx",
+    "chk_blob_sha256_len",
+    "chk_blob_size_min",
+    "chk_document_order_positive",
+    "chk_document_version_min",
     "fk_answer_option_question",
+    "fk_document_blob_document",
+    "fk_generated_document_set",
     "fk_group_value_group",
     "fk_group_value_option",
     "fk_group_value_set",
     "fk_group_value_source_q",
     "fk_q2fg_field_group",
     "fk_q2fg_question",
+    "fk_question_parent",
+    "fk_question_parent_question",
     "fk_response_option",
     "fk_response_question",
     "fk_response_set",
     "fk_response_set_company",
+    "ix_document_blob_sha256",
     "pk_answer_option",
     "pk_company",
+    "pk_document",
+    "pk_document_blob",
+    "pk_document_list_state",
     "pk_field_group",
     "pk_generated_document",
     "pk_group_value",
@@ -680,17 +830,18 @@
     "pk_response",
     "pk_response_set",
     "uq_answer_option_question_value",
+    "uq_document_order_number",
     "uq_group_value_per_set",
     "uq_q2fg_question_group",
     "uq_question_external_qid",
     "uq_question_placeholder_code",
-    "uq_response_set_question",
-    "fk_question_parent"
+    "uq_response_set_question"
   ],
   "notes": [
     "Single handbook template parsed at merge; no template/mapping tables are persisted.",
     "Mapping is on QuestionnaireQuestion.placeholder_code with partial unique index.",
     "answer_kind includes enum_single for single-choice questions.",
-    "QuestionnaireQuestion now includes optional parent_question_id (self-referential) and visible_if_value (jsonb) to support server-side conditional visibility."
+    "QuestionnaireQuestion now includes optional parent_question_id (self-referential) and visible_if_value (jsonb) to support server-side conditional visibility.",
+    "Epic C adds a minimal document store: Document (ordered, versioned), DocumentBlob (current DOCX metadata), and DocumentListState (list ETag)."
   ]
 }

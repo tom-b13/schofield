@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/DocumentBlob.schema.json",
+  "title": "DocumentBlob",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "document_id",
+    "file_sha256",
+    "filename",
+    "mime",
+    "byte_size",
+    "storage_url"
+  ],
+  "properties": {
+    "document_id": {
+      "$ref": "schemas/DocumentId.schema.json"
+    },
+    "file_sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "filename": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mime": {
+      "type": "string",
+      "const": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    },
+    "byte_size": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "storage_url": {
+      "type": "string"
+    }
+  }
+}
