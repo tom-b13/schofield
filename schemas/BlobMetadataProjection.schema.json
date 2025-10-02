@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/BlobMetadataProjection.schema.json",
+  "title": "BlobMetadataProjection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "blob_metadata"
+  ],
+  "properties": {
+    "blob_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_sha256",
+        "filename",
+        "mime",
+        "byte_size",
+        "storage_url"
+      ],
+      "properties": {
+        "file_sha256": {
+          "$ref": "schemas/DocumentBlob.schema.json#/properties/file_sha256"
+        },
+        "filename": {
+          "$ref": "schemas/DocumentBlob.schema.json#/properties/filename"
+        },
+        "mime": {
+          "$ref": "schemas/DocumentBlob.schema.json#/properties/mime"
+        },
+        "byte_size": {
+          "$ref": "schemas/DocumentBlob.schema.json#/properties/byte_size"
+        },
+        "storage_url": {
+          "$ref": "schemas/DocumentBlob.schema.json#/properties/storage_url"
+        }
+      }
+    }
+  }
+}

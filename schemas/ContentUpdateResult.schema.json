@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/ContentUpdateResult.schema.json",
+  "title": "ContentUpdateResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "content_result"
+  ],
+  "properties": {
+    "content_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_id",
+        "version"
+      ],
+      "properties": {
+        "document_id": {
+          "$ref": "schemas/DocumentId.schema.json"
+        },
+        "version": {
+          "$ref": "schemas/Document.schema.json#/properties/version"
+        }
+      }
+    }
+  }
+}

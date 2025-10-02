@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/DocumentListResponse.schema.json",
+  "title": "DocumentListResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "list",
+    "list_etag"
+  ],
+  "properties": {
+    "list_etag": {
+      "type": "string",
+      "minLength": 1
+    },
+    "list": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "title",
+          "order_number",
+          "version"
+        ],
+        "properties": {
+          "document_id": {
+            "$ref": "schemas/DocumentId.schema.json"
+          },
+          "title": {
+            "$ref": "schemas/Document.schema.json#/properties/title"
+          },
+          "order_number": {
+            "$ref": "schemas/Document.schema.json#/properties/order_number"
+          },
+          "version": {
+            "$ref": "schemas/Document.schema.json#/properties/version"
+          }
+        }
+      }
+    }
+  }
+}
