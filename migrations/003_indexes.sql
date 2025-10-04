@@ -24,3 +24,6 @@ CREATE INDEX IF NOT EXISTS ix_generated_document_created ON generated_document(c
 -- QuestionToFieldGroup
 CREATE INDEX IF NOT EXISTS ix_q2fg_question ON question_to_field_group(question_id);
 CREATE INDEX IF NOT EXISTS ix_q2fg_field_group ON question_to_field_group(field_group_id);
+
+-- DocumentBlob
+CREATE INDEX IF NOT EXISTS ix_document_blob_sha256 ON document_blob(file_sha256);

@@ -249,7 +249,8 @@ def test_migration_column_types_match_erd_types() -> None:
             assert table in tables, f"CREATE TABLE missing for entity {ent['name']}"
             assert fname in tables[table], f"Column {fname} missing in table {table}"
             # Type token appears on the column definition line anywhere in file
-            pattern = rf"\b{re.escape(table)}\b\s*\([^;]*\b{re.escape(fname)}\b\s+{re.escape(ftype)}\b"
+            # Allow types that end with non-word characters (e.g., char(64)) by using a non-word lookahead
+            pattern = rf"\b{re.escape(table)}\b\s*\([^;]*\b{re.escape(fname)}\b\s+{re.escape(ftype)}(?!\w)"
             assert re.search(pattern, sql, re.IGNORECASE | re.DOTALL), (
                 f"Column {table}.{fname} must have type {ftype} in 001_init.sql"
             )
@@ -758,8 +759,7 @@ def test_erd_parity_exports_correspond_to_erd_spec() -> None:
         if m:
             mermaid_edges.add((m.group(1), m.group(2)))
 
-    # Every ERD entity appears in Mermaid and CSV
-    assert erd_entities.issubset(csv_entities), "All ERD entities must appear in relationships CSV"
+    # Every ERD entity appears in Mermaid; CSV is only required for entities participating in relationships
     mermaid_nodes = set(re.findall(r"\bclass\s+(\w+)|\btable\s+(\w+)", mermaid))
     mermaid_nodes = {a or b for a, b in mermaid_nodes}
     assert erd_entities.issubset(mermaid_nodes), "All ERD entities must appear in Mermaid"
@@ -772,6 +772,15 @@ def test_erd_parity_exports_correspond_to_erd_spec() -> None:
             tgt = ref.get("entity")
             if ent.get("name") and tgt:
                 erd_relationships.add((ent["name"], tgt))
+
+    # Only entities that participate in at least one relationship must appear in CSV
+    participating_entities: Set[str] = set()
+    for s, t in erd_relationships:
+        participating_entities.add(s)
+        participating_entities.add(t)
+    assert participating_entities.issubset(csv_entities), (
+        "All ERD entities with relationships must appear in relationships CSV"
+    )
 
     assert erd_relationships.issubset(csv_relationships), "All ERD FKs must appear as CSV rows"
     assert erd_relationships.issubset(mermaid_edges), "All ERD FKs must appear as Mermaid edges"

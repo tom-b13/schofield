@@ -32,10 +32,12 @@
             "$ref": "schemas/Document.schema.json#/properties/title"
           },
           "order_number": {
-            "$ref": "schemas/Document.schema.json#/properties/order_number"
+            "type": "integer",
+            "minimum": 1
           },
           "version": {
-            "$ref": "schemas/Document.schema.json#/properties/version"
+            "type": "integer",
+            "minimum": 1
           }
         }
       }

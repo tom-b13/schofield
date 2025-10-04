@@ -1,5 +1,6 @@
 source,target
 AnswerOption,QuestionnaireQuestion
+DocumentBlob,Document
 GeneratedDocument,ResponseSet
 GroupValue,AnswerOption
 GroupValue,FieldGroup

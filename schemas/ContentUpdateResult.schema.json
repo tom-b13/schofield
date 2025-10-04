@@ -20,7 +20,8 @@
           "$ref": "schemas/DocumentId.schema.json"
         },
         "version": {
-          "$ref": "schemas/Document.schema.json#/properties/version"
+          "type": "integer",
+          "minimum": 1
         }
       }
     }

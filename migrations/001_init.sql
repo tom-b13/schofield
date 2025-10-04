@@ -114,3 +114,31 @@ CREATE TABLE IF NOT EXISTS question_to_field_group (
     question_id UUID,
     notes TEXT
 );
+
+-- Document
+CREATE TABLE IF NOT EXISTS document (
+    document_id UUID PRIMARY KEY,
+    title TEXT NOT NULL,
+    order_number INT NOT NULL,
+    version INT NOT NULL,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ
+);
+
+-- DocumentBlob
+CREATE TABLE IF NOT EXISTS document_blob (
+    document_id UUID PRIMARY KEY,
+    file_sha256 char(64) NOT NULL,
+    filename TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    byte_size BIGINT NOT NULL,
+    storage_url TEXT NOT NULL,
+    updated_at TIMESTAMPTZ
+);
+
+-- DocumentListState
+CREATE TABLE IF NOT EXISTS document_list_state (
+    singleton_id SMALLINT PRIMARY KEY,
+    list_etag TEXT NOT NULL,
+    updated_at TIMESTAMPTZ
+);

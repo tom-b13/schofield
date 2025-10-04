@@ -1,4 +1,7 @@
--- Rollbacks (reverse order)
+-- Rollbacks (strict reverse of 003 -> 002 -> 001 creation order)
+
+-- 003: Indexes (drop in exact reverse of appearance in migrations/003_indexes.sql)
+DROP INDEX IF EXISTS ix_document_blob_sha256;
 DROP INDEX IF EXISTS ix_q2fg_field_group;
 DROP INDEX IF EXISTS ix_q2fg_question;
 DROP INDEX IF EXISTS ix_generated_document_created;
@@ -12,9 +15,14 @@ DROP INDEX IF EXISTS ix_response_set;
 DROP INDEX IF EXISTS ix_answer_option_question;
 DROP INDEX IF EXISTS ix_question_parent;
 DROP INDEX IF EXISTS ix_question_answer_type;
+
+-- 002: Constraints and named uniques (reverse of migrations/002_constraints.sql)
+ALTER TABLE document
+    DROP CONSTRAINT IF EXISTS uq_document_order_number;
+ALTER TABLE document_blob
+    DROP CONSTRAINT IF EXISTS fk_document_blob_document;
 DROP INDEX IF EXISTS uq_question_placeholder_code;
 
--- Drop constraints in strict reverse of creation order from 002_constraints.sql
 ALTER TABLE questionnaire_question
     DROP CONSTRAINT IF EXISTS uq_question_external_qid,
     DROP CONSTRAINT IF EXISTS fk_question_parent_question;
@@ -46,6 +54,11 @@ ALTER TABLE question_to_field_group
 ALTER TABLE answer_option
     DROP CONSTRAINT IF EXISTS uq_answer_option_question_value,
     DROP CONSTRAINT IF EXISTS fk_answer_option_question;
+
+-- 001: Tables (reverse of creation order in migrations/001_init.sql)
+DROP TABLE IF EXISTS document_list_state;
+DROP TABLE IF EXISTS document_blob;
+DROP TABLE IF EXISTS document;
 DROP TABLE IF EXISTS question_to_field_group;
 DROP TABLE IF EXISTS group_value;
 DROP TABLE IF EXISTS generated_document;
@@ -58,4 +71,5 @@ DROP TABLE IF EXISTS company;
 DROP TABLE IF EXISTS screens;
 DROP TABLE IF EXISTS questionnaires;
 
+-- Enum types
 DROP TYPE IF EXISTS answer_kind;

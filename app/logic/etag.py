@@ -39,3 +39,27 @@ def compute_screen_etag(response_set_id: str, screen_key: str) -> str:
     digest = hashlib.sha1(token).hexdigest()
     return f'W/"{digest}"'
 
+
+def doc_etag(version: int) -> str:
+    """Return a weak ETag string for a document version.
+
+    Mirrors the route behavior: W/"doc-v{version}".
+    """
+    return f'W/"doc-v{int(version)}"'
+
+
+def compute_document_list_etag(docs: list[dict]) -> str:
+    """Compute a stable ETag token for the documents list.
+
+    Produces a plain SHA1 hex digest (no quotes, not weak) matching
+    the existing behavior in the documents route.
+    The token incorporates document_id, title, order_number, and version,
+    ordered by order_number ascending.
+    """
+    if not docs:
+        return hashlib.sha1(b"empty").hexdigest()
+    parts: list[bytes] = []
+    for doc in sorted(docs, key=lambda doc_item: int(doc_item.get("order_number", 0))):
+        token = f"{doc['document_id']}|{doc['title']}|{int(doc['order_number'])}|{int(doc['version'])}"
+        parts.append(token.encode("utf-8"))
+    return hashlib.sha1(b"\n".join(parts)).hexdigest()

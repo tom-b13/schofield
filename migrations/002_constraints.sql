@@ -73,3 +73,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_question_placeholder_code
     ON questionnaire_question (placeholder_code)
     WHERE placeholder_code IS NOT NULL;
 
+
+-- 9) Document FKs
+ALTER TABLE document_blob
+    ADD CONSTRAINT fk_document_blob_document
+        FOREIGN KEY (document_id) REFERENCES document(document_id) ON DELETE CASCADE;
+
+-- 10) Document uniques
+ALTER TABLE document
+    ADD CONSTRAINT uq_document_order_number
+        UNIQUE (order_number);

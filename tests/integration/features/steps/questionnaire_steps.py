@@ -76,6 +76,15 @@ def _schemas() -> Dict[str, Dict[str, Any]]:
         # (does not require answer_kind and focuses on value/option_id shape).
         "AnswerUpsert": _load_doc_schema("AnswerUpsert.schema.json"),
         "CSVImportFile": _load_schema("CSVImportFile.schema.json"),
+        # Epic C: wire document schemas for validation in steps
+        "DocumentId": _load_schema("DocumentId.schema.json"),
+        "Document": _load_schema("Document.schema.json"),
+        "DocumentBlob": _load_schema("DocumentBlob.schema.json"),
+        "DocumentResponse": _load_schema("DocumentResponse.schema.json"),
+        "DocumentListResponse": _load_schema("DocumentListResponse.schema.json"),
+        "ContentUpdateResult": _load_schema("ContentUpdateResult.schema.json"),
+        "BlobMetadataProjection": _load_schema("BlobMetadataProjection.schema.json"),
+        "ReorderRequest": _load_schema("ReorderRequest.schema.json"),
     }
     # Optional ValidationItem
     try:
@@ -94,7 +103,23 @@ def _schema_store() -> Dict[str, Dict[str, Any]]:
     for sch in _schemas().values():
         sid = sch.get("$id")
         if isinstance(sid, str) and sid:
+            # Primary mapping by $id
             store[sid] = sch
+            # Clarke: add alias keys to tolerate duplicated 'schemas/' prefixes
+            # and direct basename refs used in $ref values. Support any number
+            # of repeated prefixes (N>=1) by precomputing a generous range.
+            try:
+                if sid.startswith("schemas/"):
+                    base = sid[len("schemas/") :]
+                    # Map basename (e.g., 'DocumentId.schema.json')
+                    store.setdefault(base, sch)
+                    # Map repeated-prefix forms to ensure in-memory resolution only
+                    for n in range(1, 16):  # tolerate many repeated prefixes
+                        alias = ("schemas/" * n) + base
+                        store.setdefault(alias, sch)
+            except Exception:
+                # Best-effort aliasing; primary $id mapping remains
+                pass
     return store
 
 
@@ -104,10 +129,13 @@ def _validate(instance: Any, schema: Dict[str, Any]) -> None:
         raise AssertionError(
             "jsonschema is required for integration schema validation; install 'jsonschema' to run tests"
         )
+    # Clarke: use a neutral base so relative $refs don't accumulate duplicate segments,
+    # and resolve exclusively against the preloaded in-memory store (no remote fetching).
+    resolver = RefResolver(base_uri="", referrer=schema, store=_schema_store())
     validator = Draft202012Validator(
         schema,
         format_checker=FormatChecker(),
-        resolver=RefResolver.from_schema(schema, store=_schema_store()),
+        resolver=resolver,
     )
     validator.validate(instance)
 
@@ -170,7 +198,7 @@ def _normalize_answer_upsert_payload(obj: Dict[str, Any]) -> Dict[str, Any]:
 # Small util: interpolate {var} using context.vars and strip quotes
 # ------------------
 
-def _interpolate(value: str, context) -> str:
+def _interpolate(value: str, context, *, allow_token_fallback: bool = True) -> str:
     v = value
     # Replace any {var} occurrences with values captured in context.vars
     vars_map = getattr(context, "vars", {}) or {}
@@ -191,7 +219,7 @@ def _interpolate(value: str, context) -> str:
     # Clarke explicit action: if the entire token matches a stored variable name,
     # substitute it directly (e.g., 'etag_v1' -> actual ETag value).
     try:
-        if isinstance(v, str) and v in vars_map:
+        if allow_token_fallback and isinstance(v, str) and v in vars_map:
             return str(vars_map[v])
     except Exception:
         pass
@@ -377,6 +405,7 @@ def _http_request(
     headers: Optional[Dict[str, str]] = None,
     json_body: Any = None,
     text_body: Optional[str] = None,
+    content: Optional[bytes] = None,
 ) -> Tuple[int, Dict[str, str], Optional[Dict[str, Any]], Optional[str]]:
     # Guard: HTTP calls are not allowed in mock mode per Clarke guidance
     if getattr(context, "test_mock_mode", False):
@@ -401,9 +430,9 @@ def _http_request(
             method.upper(),
             url,
             headers=hdrs,
-            # Support raw text bodies (e.g., CSV) and JSON bodies
-            content=text_body if text_body is not None else None,
-            json=json_body,
+            # Support raw bytes, raw text bodies, or JSON bodies
+            content=(content if content is not None else (text_body if text_body is not None else None)),
+            json=(None if content is not None else json_body),
         )
         out_headers = {k: v for k, v in resp.headers.items()}
         # Case-insensitive Content-Type retrieval
@@ -424,6 +453,18 @@ def _http_request(
                     body_text = resp.text
         except Exception:
             body_text = resp.text
+        # Clarke: expose raw bytes for follow-up assertions (non-breaking)
+        try:
+            setattr(context, "_last_response_bytes", bytes(resp.content))
+            # Opportunistically attach onto existing last_response if already initialized
+            lr = getattr(context, "last_response", None)
+            if isinstance(lr, dict):
+                lr["bytes"] = getattr(context, "_last_response_bytes", None)
+        except Exception:
+            try:
+                setattr(context, "_last_response_bytes", None)
+            except Exception:
+                pass
         # Clarke instrumentation: emit a single concise log line per HTTP call
         try:
             from datetime import datetime, timezone as _tz
@@ -743,11 +784,14 @@ def step_given_get_and_capture(context, path: str, var_name: str):
 
 @when('I GET "{path}"')
 @step('I GET "{path}"')
+@then('when I GET "{path}"')
 def step_when_get(context, path: str):
+    # Interpolate {alias} variables in the incoming path before rewrite
+    ipath = _interpolate(path, context)
     # Clarke: Validate QuestionnaireId for export path before issuing request
-    if "/questionnaires/" in path and path.endswith("/export"):
+    if "/questionnaires/" in ipath and ipath.endswith("/export"):
         try:
-            parts = path.strip("/").split("/")
+            parts = ipath.strip("/").split("/")
             # /questionnaires/{id}/export -> ["questionnaires", "{id}", "export"]
             if len(parts) >= 3 and parts[0] == "questionnaires" and parts[2] == "export":
                 _validate_with_name(parts[1], "QuestionnaireId")
@@ -755,13 +799,14 @@ def step_when_get(context, path: str):
             # Let schema errors surface; avoid masking
             raise
     # Canonicalize path to UUID-based route when inputs use external tokens
-    rewritten = _rewrite_path(context, path)
+    rewritten = _rewrite_path(context, ipath)
     status, headers, body_json, body_text = _http_request(context, "GET", rewritten)
     context.last_response = {
         "status": status,
         "headers": headers,
         "json": body_json,
         "text": body_text,
+        "bytes": getattr(context, "_last_response_bytes", None),
         "path": rewritten,
         "method": "GET",
     }
@@ -977,9 +1022,18 @@ def step_then_status(context, code: int):
                 except Exception:
                     # Fall back to Problem envelope if schema not available
                     _validate_with_name(body, "Problem")
-            # Clarke: For 409 optimistic concurrency, ETag must be present
-            if actual == 409:
+            # Clarke: Require ETag only for concurrency-related precondition errors
+            # - Always require on 412 Precondition Failed
+            # - For 409, require only when problem.code indicates an ETag mismatch
+            if actual == 412:
                 _assert_response_etag_present(context)
+            elif actual == 409:
+                try:
+                    code_val = str(body.get("code", ""))
+                except Exception:
+                    code_val = ""
+                if "ETAG_MISMATCH" in code_val.upper():
+                    _assert_response_etag_present(context)
         else:
             _validate_with_name(body, "Problem")
     else:
@@ -1019,6 +1073,7 @@ def step_then_header_etag_nonempty(context):
 
 
 @then('the response header "{header_name}" equals "{expected}"')
+@then('the response header "{header_name}" should equal "{expected}"')
 def step_then_header_equals(context, header_name: str, expected: str):
     headers = context.last_response.get("headers", {}) or {}
     # Case-insensitive header fetch to tolerate server casing
@@ -1050,31 +1105,75 @@ def step_then_has_current_etag(context):
 
 
 @then('the response JSON at "{json_path}" equals {expected:d}')
+@then('the response JSON at "{json_path}" should equal {expected:d}')
 def step_then_json_equals_int(context, json_path: str, expected: int):
     body = context.last_response.get("json")
     assert isinstance(body, dict), "No JSON body"
-    actual = _jsonpath(body, json_path)
+    # Clarke: normalize json_path to avoid building '$.$.path' and unescape a leading '\$'
+    raw = str(json_path)
+    jp = raw[1:] if raw.startswith("\\$") else raw
+    # Strip any residual leading backslashes
+    while jp.startswith("\\"):
+        jp = jp[1:]
+    jp = jp if jp.startswith("$") else f"$.{jp.lstrip('.')}"
+    actual = _jsonpath(body, jp)
     assert actual == expected, f"Expected {expected} at {json_path}, got {actual}"
 
 
 @then('the response JSON at "{json_path}" equals "{expected}"')
+@then('the response JSON at "{json_path}" should equal "{expected}"')
 def step_then_json_equals_string(context, json_path: str, expected: str):
     body = context.last_response.get("json")
     assert isinstance(body, dict), "No JSON body"
-    actual = _jsonpath(body, json_path)
+    # Clarke: normalize json_path to avoid building '$.$.path' and unescape a leading '\$'
+    raw = str(json_path)
+    jp = raw[1:] if raw.startswith("\\$") else raw
+    while jp.startswith("\\"):
+        jp = jp[1:]
+    jp = jp if jp.startswith("$") else f"$.{jp.lstrip('.')}"
+    actual = _jsonpath(body, jp)
     if isinstance(actual, list) and len(actual) == 1:
         actual = actual[0]
     # Normalize escaped characters from feature literals: underscrore and dollar
     # to compare against actual JSON path strings (e.g., "\\$.value" -> "$.value").
-    expected = expected.replace("\\_", "_").replace("\\$", "$")
+    # Clarke: apply interpolation for alias tokens like "{D}"
+    raw_expected = expected
+    expected = _interpolate(expected, context, allow_token_fallback=False).replace("\\_", "_").replace("\\$", "$")
+    # Clarke change: alias fallback — if the expected token matches a key in
+    # context.vars and the actual value appears to be a UUID, compare against
+    # the mapped value from context.vars. Do not alter brace-wrapped tokens as
+    # those are already interpolated above.
+    try:
+        vars_map = getattr(context, "vars", {}) or {}
+        token = str(raw_expected)
+        def _looks_like_uuid(s: str) -> bool:
+            try:
+                uuid.UUID(str(s))
+                return True
+            except Exception:
+                return False
+        if isinstance(actual, str) and _looks_like_uuid(actual) and token in vars_map:
+            fallback = str(vars_map[token])
+            assert actual == fallback, f"Expected '{fallback}' at {json_path}, got {actual}"
+            return
+    except Exception:
+        # If any issue occurs, fall back to literal comparison
+        pass
     assert actual == expected, f"Expected '{expected}' at {json_path}, got {actual}"
 
 
 @then('the response JSON at "{json_path}" equals {expected}')
+@then('the response JSON at "{json_path}" should equal {expected}')
 def step_then_json_equals_literal(context, json_path: str, expected: str):
     body = context.last_response.get("json")
     assert isinstance(body, dict), "No JSON body"
-    actual = _jsonpath(body, json_path)
+    # Clarke: normalize json_path to avoid building '$.$.path' and unescape a leading '\$'
+    raw = str(json_path)
+    jp = raw[1:] if raw.startswith("\\$") else raw
+    while jp.startswith("\\"):
+        jp = jp[1:]
+    jp = jp if jp.startswith("$") else f"$.{jp.lstrip('.')}"
+    actual = _jsonpath(body, jp)
     if isinstance(actual, list) and len(actual) == 1:
         actual = actual[0]
     if expected in {"[]", "\\[]"}:

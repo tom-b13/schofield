@@ -125,6 +125,159 @@
       }
     },
     {
+      "name": "Document",
+      "fields": [
+        {
+          "name": "created_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "document_id",
+          "type": "uuid"
+        },
+        {
+          "name": "order_number",
+          "type": "int"
+        },
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "version",
+          "type": "int"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_document",
+        "columns": [
+          "document_id"
+        ]
+      },
+      "unique": [
+        {
+          "name": "uq_document_order_number",
+          "columns": [
+            "order_number"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "chk_document_order_positive",
+          "expression": "order_number > 0"
+        },
+        {
+          "name": "chk_document_version_min",
+          "expression": "version >= 1"
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "DocumentBlob",
+      "fields": [
+        {
+          "name": "byte_size",
+          "type": "bigint"
+        },
+        {
+          "name": "document_id",
+          "type": "uuid"
+        },
+        {
+          "name": "file_sha256",
+          "type": "char(64)"
+        },
+        {
+          "name": "filename",
+          "type": "text"
+        },
+        {
+          "name": "mime",
+          "type": "text"
+        },
+        {
+          "name": "storage_url",
+          "type": "text"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_document_blob",
+        "columns": [
+          "document_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_document_blob_document",
+          "columns": [
+            "document_id"
+          ],
+          "references": {
+            "entity": "Document",
+            "columns": [
+              "document_id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_document_blob_sha256",
+          "columns": [
+            "file_sha256"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "chk_blob_sha256_len",
+          "expression": "char_length(file_sha256) = 64"
+        },
+        {
+          "name": "chk_blob_mime_docx",
+          "expression": "mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'"
+        },
+        {
+          "name": "chk_blob_size_min",
+          "expression": "byte_size >= 1"
+        }
+      ]
+    },
+    {
+      "name": "DocumentListState",
+      "fields": [
+        {
+          "name": "list_etag",
+          "type": "text"
+        },
+        {
+          "name": "singleton_id",
+          "type": "smallint"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_document_list_state",
+        "columns": [
+          "singleton_id"
+        ]
+      }
+    },
+    {
       "name": "FieldGroup",
       "fields": [
         {
@@ -342,6 +495,7 @@
         }
       ]
     },
+    
     {
       "name": "QuestionToFieldGroup",
       "fields": [
@@ -634,159 +788,6 @@
           }
         }
       ]
-    },
-    {
-      "name": "Document",
-      "fields": [
-        {
-          "name": "document_id",
-          "type": "uuid"
-        },
-        {
-          "name": "title",
-          "type": "text"
-        },
-        {
-          "name": "order_number",
-          "type": "int"
-        },
-        {
-          "name": "version",
-          "type": "int"
-        },
-        {
-          "name": "created_at",
-          "type": "timestamptz"
-        },
-        {
-          "name": "updated_at",
-          "type": "timestamptz"
-        }
-      ],
-      "primary_key": {
-        "name": "pk_document",
-        "columns": [
-          "document_id"
-        ]
-      },
-      "unique": [
-        {
-          "name": "uq_document_order_number",
-          "columns": [
-            "order_number"
-          ]
-        }
-      ],
-      "checks": [
-        {
-          "name": "chk_document_order_positive",
-          "expression": "order_number > 0"
-        },
-        {
-          "name": "chk_document_version_min",
-          "expression": "version >= 1"
-        }
-      ],
-      "indexes": []
-    },
-    {
-      "name": "DocumentBlob",
-      "fields": [
-        {
-          "name": "document_id",
-          "type": "uuid"
-        },
-        {
-          "name": "file_sha256",
-          "type": "char(64)"
-        },
-        {
-          "name": "filename",
-          "type": "text"
-        },
-        {
-          "name": "mime",
-          "type": "text"
-        },
-        {
-          "name": "byte_size",
-          "type": "bigint"
-        },
-        {
-          "name": "storage_url",
-          "type": "text"
-        },
-        {
-          "name": "updated_at",
-          "type": "timestamptz"
-        }
-      ],
-      "primary_key": {
-        "name": "pk_document_blob",
-        "columns": [
-          "document_id"
-        ]
-      },
-      "foreign_keys": [
-        {
-          "name": "fk_document_blob_document",
-          "columns": [
-            "document_id"
-          ],
-          "references": {
-            "entity": "Document",
-            "columns": [
-              "document_id"
-            ]
-          },
-          "on_delete": "cascade"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "ix_document_blob_sha256",
-          "columns": [
-            "file_sha256"
-          ]
-        }
-      ],
-      "checks": [
-        {
-          "name": "chk_blob_sha256_len",
-          "expression": "char_length(file_sha256) = 64"
-        },
-        {
-          "name": "chk_blob_mime_docx",
-          "expression": "mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'"
-        },
-        {
-          "name": "chk_blob_size_min",
-          "expression": "byte_size >= 1"
-        }
-      ]
-    },
-    {
-      "name": "DocumentListState",
-      "fields": [
-        {
-          "name": "singleton_id",
-          "type": "smallint"
-        },
-        {
-          "name": "list_etag",
-          "type": "text"
-        },
-        {
-          "name": "updated_at",
-          "type": "timestamptz"
-        }
-      ],
-      "primary_key": {
-        "name": "pk_document_list_state",
-        "columns": [
-          "singleton_id"
-        ]
-      }
     }
   ],
   "encrypted_fields": [
@@ -816,7 +817,6 @@
     "fk_response_question",
     "fk_response_set",
     "fk_response_set_company",
-    "ix_document_blob_sha256",
     "pk_answer_option",
     "pk_company",
     "pk_document",

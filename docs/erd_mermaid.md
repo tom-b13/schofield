@@ -1,6 +1,9 @@
 %% EPIC-A ERD (nodes for tests; keep sorted)
 class AnswerOption
 class Company
+class Document
+class DocumentBlob
+class DocumentListState
 class FieldGroup
 class GeneratedDocument
 class GroupValue
@@ -8,12 +11,10 @@ class QuestionToFieldGroup
 class QuestionnaireQuestion
 class Response
 class ResponseSet
-class Document
-class DocumentBlob
-class DocumentListState
 
 %% FK edges for tests (sorted)
 AnswerOption --> QuestionnaireQuestion
+DocumentBlob --> Document
 GeneratedDocument --> ResponseSet
 GroupValue --> AnswerOption
 GroupValue --> FieldGroup

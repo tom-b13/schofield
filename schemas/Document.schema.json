@@ -5,13 +5,13 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "document_id",
+    "id",
     "title",
     "order_number",
     "version"
   ],
   "properties": {
-    "document_id": {
+    "id": {
       "$ref": "schemas/DocumentId.schema.json"
     },
     "title": {
@@ -25,6 +25,14 @@
     "version": {
       "type": "integer",
       "minimum": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
     }
   }
 }
