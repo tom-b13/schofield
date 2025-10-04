@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://b13.ai/schemas/PlaceholderProbe.schema.json",
+  "title": "PlaceholderProbe",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "source_kind": { "type": "string", "enum": ["docx", "markdown", "html", "plain_text"] },
+    "raw_text": { "type": "string", "minLength": 1 },
+    "tokens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": { "type": "string" },
+          "start": { "type": "integer", "minimum": 0 },
+          "end": { "type": "integer", "minimum": 0 },
+          "kind": { "type": "string" }
+        },
+        "required": ["text"]
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy_name": { "type": "string" },
+        "clause_path": { "type": "string" },
+        "hints": { "type": "object" }
+      }
+    }
+  },
+  "required": ["source_kind", "raw_text"]
+}

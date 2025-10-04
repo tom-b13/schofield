@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://b13.ai/schemas/Placeholder.schema.json",
+  "title": "Placeholder",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "document_id": { "$ref": "https://b13.ai/schemas/DocumentId.schema.json" },
+    "question_id": { "$ref": "https://b13.ai/schemas/QuestionId.schema.json" },
+    "transform_id": { "type": "string", "minLength": 1 },
+    "payload_json": { "type": "object" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "document_id", "question_id", "transform_id", "payload_json", "created_at"]
+}

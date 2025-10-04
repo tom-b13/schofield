@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://b13.ai/schemas/CompanionHint.schema.json",
+  "title": "CompanionHint",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "type": { "type": "string", "enum": ["short_string"] },
+    "placeholder_key": { "type": "string", "minLength": 1 },
+    "option_value": { "type": "string", "minLength": 1 },
+    "visibility_hint": { "type": "string" }
+  },
+  "required": ["type", "placeholder_key", "option_value"]
+}

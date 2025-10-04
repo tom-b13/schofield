@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://b13.ai/schemas/PurgeResult.schema.json",
+  "title": "PurgeResult",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "deleted_placeholders": { "type": "integer", "minimum": 0 },
+    "updated_questions": { "type": "integer", "minimum": 0 },
+    "etag": { "type": "string" }
+  },
+  "required": ["deleted_placeholders", "updated_questions"]
+}

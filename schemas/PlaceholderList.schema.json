@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://b13.ai/schemas/PlaceholderList.schema.json",
+  "title": "PlaceholderList",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": { "$ref": "https://b13.ai/schemas/Placeholder.schema.json" }
+    },
+    "etag": { "type": "string" }
+  },
+  "required": ["items"]
+}

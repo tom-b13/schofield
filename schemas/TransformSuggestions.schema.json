@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://b13.ai/schemas/TransformSuggestions.schema.json",
+  "title": "TransformSuggestions",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": { "$ref": "https://b13.ai/schemas/TransformSuggestion.schema.json" }
+    },
+    "diagnostics": { "type": "object" }
+  },
+  "required": ["items"]
+}
