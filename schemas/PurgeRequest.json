@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/PurgeRequest.json",
+  "title": "PurgeRequest",
+  "type": "object",
+  "properties": {
+    "reason": {
+      "type": "string",
+      "enum": [
+        "deleted"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/AnswerKind.json",
+  "title": "AnswerKind",
+  "type": "string",
+  "enum": [
+    "short_string",
+    "long_text",
+    "boolean",
+    "number",
+    "enum_single"
+  ]
+}

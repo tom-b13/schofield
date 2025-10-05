@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/BindRequest.json",
+  "title": "BindRequest",
+  "type": "object",
+  "properties": {
+    "question_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "transform_id": {
+      "type": "string"
+    },
+    "placeholder": {
+      "$ref": "https://schemas.schofield.local/epic-d/PlaceholderProbe.json"
+    },
+    "probe": {
+      "$ref": "https://schemas.schofield.local/epic-d/ProbeReceipt.json"
+    },
+    "apply_mode": {
+      "type": "string",
+      "enum": [
+        "verify",
+        "apply"
+      ]
+    },
+    "option_labelling": {
+      "type": "string",
+      "enum": [
+        "value",
+        "value_label"
+      ]
+    },
+    "probe_hash": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "question_id",
+    "transform_id"
+  ],
+  "description": "Provide either (placeholder + probe_hash) or (probe).",
+  "additionalProperties": false
+}

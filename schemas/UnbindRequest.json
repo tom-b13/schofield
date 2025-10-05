@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/UnbindRequest.json",
+  "title": "UnbindRequest",
+  "type": "object",
+  "properties": {
+    "placeholder_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "placeholder_id"
+  ],
+  "additionalProperties": false
+}

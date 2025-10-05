@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/ListPlaceholdersResponse.json",
+  "title": "ListPlaceholdersResponse",
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "https://schemas.schofield.local/epic-d/Placeholder.json"
+      }
+    },
+    "etag": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "items"
+  ],
+  "additionalProperties": false
+}

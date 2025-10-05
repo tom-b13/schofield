@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/SuggestResponse.json",
+  "title": "SuggestResponse",
+  "type": "object",
+  "properties": {
+    "suggestion": {
+      "$ref": "https://schemas.schofield.local/epic-d/TransformSuggestion.json"
+    },
+    "probe": {
+      "$ref": "https://schemas.schofield.local/epic-d/ProbeReceipt.json"
+    }
+  },
+  "required": [
+    "suggestion",
+    "probe"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/BindResult.json",
+  "title": "BindResult",
+  "type": "object",
+  "properties": {
+    "bound": {
+      "type": "boolean"
+    },
+    "question_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "placeholder_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "answer_kind": {
+      "$ref": "https://schemas.schofield.local/epic-d/AnswerKind.json"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "$ref": "https://schemas.schofield.local/epic-d/OptionSpec.json"
+      }
+    },
+    "etag": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "bound",
+    "question_id",
+    "placeholder_id",
+    "answer_kind",
+    "etag"
+  ],
+  "additionalProperties": false
+}

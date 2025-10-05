@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/PurgeResponse.json",
+  "title": "PurgeResponse",
+  "type": "object",
+  "properties": {
+    "deleted_placeholders": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "updated_questions": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "etag": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "deleted_placeholders",
+    "updated_questions"
+  ],
+  "additionalProperties": false
+}

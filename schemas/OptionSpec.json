@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/OptionSpec.json",
+  "title": "OptionSpec",
+  "type": "object",
+  "properties": {
+    "value": {
+      "type": "string"
+    },
+    "label": {
+      "type": "string"
+    },
+    "placeholder_key": {
+      "type": "string"
+    },
+    "placeholder_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "value"
+  ],
+  "additionalProperties": false
+}

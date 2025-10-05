@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/TransformsPreviewResponse.json",
+  "title": "TransformsPreviewResponse",
+  "type": "object",
+  "properties": {
+    "answer_kind": {
+      "$ref": "https://schemas.schofield.local/epic-d/AnswerKind.json"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "$ref": "https://schemas.schofield.local/epic-d/OptionSpec.json"
+      }
+    }
+  },
+  "required": [
+    "answer_kind"
+  ],
+  "additionalProperties": false
+}

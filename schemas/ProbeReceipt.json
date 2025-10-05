@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/ProbeReceipt.json",
+  "title": "ProbeReceipt",
+  "type": "object",
+  "properties": {
+    "document_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "clause_path": {
+      "type": "string"
+    },
+    "resolved_span": {
+      "$ref": "https://schemas.schofield.local/epic-d/Span.json"
+    },
+    "placeholder_key": {
+      "type": "string"
+    },
+    "doc_etag": {
+      "type": "string"
+    },
+    "probe_hash": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "document_id",
+    "clause_path",
+    "resolved_span",
+    "probe_hash"
+  ],
+  "additionalProperties": false
+}

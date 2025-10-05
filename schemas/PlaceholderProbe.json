@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/PlaceholderProbe.json",
+  "title": "PlaceholderProbe",
+  "type": "object",
+  "properties": {
+    "raw_text": {
+      "type": "string"
+    },
+    "context": {
+      "$ref": "https://schemas.schofield.local/epic-d/PlaceholderProbeContext.json"
+    }
+  },
+  "required": [
+    "raw_text",
+    "context"
+  ],
+  "additionalProperties": false
+}
