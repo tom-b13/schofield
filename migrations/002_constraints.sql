@@ -83,3 +83,32 @@ ALTER TABLE document_blob
 ALTER TABLE document
     ADD CONSTRAINT uq_document_order_number
         UNIQUE (order_number);
+
+-- 11) Placeholder FKs
+ALTER TABLE placeholder
+    ADD CONSTRAINT fk_placeholder_document
+        FOREIGN KEY (document_id) REFERENCES document(document_id) ON DELETE CASCADE;
+ALTER TABLE placeholder
+    ADD CONSTRAINT fk_placeholder_question
+        FOREIGN KEY (question_id) REFERENCES questionnaire_question(question_id);
+
+-- 12) EnumOptionPlaceholderLink FKs
+ALTER TABLE enum_option_placeholder_link
+    ADD CONSTRAINT fk_eopl_option
+        FOREIGN KEY (option_id) REFERENCES answer_option(option_id) ON DELETE CASCADE;
+ALTER TABLE enum_option_placeholder_link
+    ADD CONSTRAINT fk_eopl_placeholder
+        FOREIGN KEY (placeholder_id) REFERENCES placeholder(placeholder_id) ON DELETE CASCADE;
+
+-- EnumOptionPlaceholderLink uniques
+ALTER TABLE enum_option_placeholder_link
+    ADD CONSTRAINT uq_eopl_option_unique
+        UNIQUE (option_id);
+
+-- 13) Placeholder & IdempotencyKey uniques
+ALTER TABLE placeholder
+    ADD CONSTRAINT uq_placeholder_doc_clause_span
+        UNIQUE (document_id, clause_path, span_start, span_end);
+ALTER TABLE idempotency_key
+    ADD CONSTRAINT uq_idempotency_key_unique
+        UNIQUE (idempotency_key);

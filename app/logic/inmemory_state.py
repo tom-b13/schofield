@@ -18,9 +18,26 @@ DOCUMENT_BLOBS_STORE: Dict[str, bytes] = {}
 # Idempotency tracking per document: document_id -> { idempotency_key -> version }
 IDEMPOTENCY_STORE: Dict[str, Dict[str, int]] = {}
 
+# Epic D in-memory state (no DB):
+# Placeholder storage and replay of idempotent binds.
+PLACEHOLDERS_BY_ID: Dict[str, Dict] = {}
+PLACEHOLDERS_BY_QUESTION: Dict[str, list[Dict]] = {}
+# Composite-key (Idempotency-Key + payload hash) -> placeholder_id
+IDEMPOTENT_BINDS: Dict[str, str] = {}
+# Full response replay store: Idempotency-Key -> {body, etag}
+IDEMPOTENT_RESULTS: Dict[str, dict] = {}
+# Track per-question model (answer_kind) and last ETag for conflict/precondition checks
+QUESTION_MODELS: Dict[str, str] = {}
+QUESTION_ETAGS: Dict[str, str] = {}
+
 __all__ = [
     "DOCUMENTS_STORE",
     "DOCUMENT_BLOBS_STORE",
     "IDEMPOTENCY_STORE",
+    "PLACEHOLDERS_BY_ID",
+    "PLACEHOLDERS_BY_QUESTION",
+    "IDEMPOTENT_BINDS",
+    "IDEMPOTENT_RESULTS",
+    "QUESTION_MODELS",
+    "QUESTION_ETAGS",
 ]
-

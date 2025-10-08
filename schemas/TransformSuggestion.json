@@ -18,6 +18,9 @@
       "items": {
         "$ref": "https://schemas.schofield.local/epic-d/OptionSpec.json"
       }
+    },
+    "probe": {
+      "$ref": "https://schemas.schofield.local/epic-d/ProbeReceipt.json"
     }
   },
   "required": [

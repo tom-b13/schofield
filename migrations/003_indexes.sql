@@ -27,3 +27,15 @@ CREATE INDEX IF NOT EXISTS ix_q2fg_field_group ON question_to_field_group(field_
 
 -- DocumentBlob
 CREATE INDEX IF NOT EXISTS ix_document_blob_sha256 ON document_blob(file_sha256);
+
+-- Placeholder
+CREATE INDEX IF NOT EXISTS ix_placeholder_document ON placeholder(document_id);
+CREATE INDEX IF NOT EXISTS ix_placeholder_question ON placeholder(question_id);
+CREATE INDEX IF NOT EXISTS ix_placeholder_clause ON placeholder(clause_path);
+
+-- EnumOptionPlaceholderLink
+CREATE INDEX IF NOT EXISTS ix_eopl_option ON enum_option_placeholder_link(option_id);
+CREATE INDEX IF NOT EXISTS ix_eopl_placeholder ON enum_option_placeholder_link(placeholder_id);
+
+-- IdempotencyKey
+CREATE INDEX IF NOT EXISTS ix_idempotency_expires ON idempotency_key(expires_at);

@@ -142,3 +142,32 @@ CREATE TABLE IF NOT EXISTS document_list_state (
     list_etag TEXT NOT NULL,
     updated_at TIMESTAMPTZ
 );
+
+-- Placeholder (Epic D)
+CREATE TABLE IF NOT EXISTS placeholder (
+    placeholder_id UUID PRIMARY KEY,
+    document_id UUID,
+    question_id UUID,
+    clause_path TEXT,
+    span_start INT,
+    span_end INT,
+    raw_text TEXT,
+    transform_id TEXT,
+    created_at TIMESTAMPTZ
+);
+
+-- EnumOptionPlaceholderLink (Epic D)
+CREATE TABLE IF NOT EXISTS enum_option_placeholder_link (
+    link_id UUID PRIMARY KEY,
+    option_id UUID,
+    placeholder_id UUID
+);
+
+-- IdempotencyKey (Epic D)
+CREATE TABLE IF NOT EXISTS idempotency_key (
+    key_id UUID PRIMARY KEY,
+    idempotency_key TEXT,
+    request_fingerprint char(64),
+    created_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ
+);

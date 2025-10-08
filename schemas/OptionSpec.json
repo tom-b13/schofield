@@ -5,7 +5,8 @@
   "type": "object",
   "properties": {
     "value": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^[A-Z_][A-Z\\d_]*$"
     },
     "label": {
       "type": "string"
@@ -14,8 +15,10 @@
       "type": "string"
     },
     "placeholder_id": {
-      "type": "string",
-      "format": "uuid"
+      "oneOf": [
+        { "type": "string", "format": "uuid" },
+        { "type": "null" }
+      ]
     }
   },
   "required": [

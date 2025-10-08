@@ -278,6 +278,36 @@
 }
 },
 {
+  "name": "EnumOptionPlaceholderLink",
+  "fields": [
+    { "name": "link_id", "type": "uuid" },
+    { "name": "option_id", "type": "uuid" },
+    { "name": "placeholder_id", "type": "uuid" }
+  ],
+  "primary_key": { "name": "pk_enum_option_placeholder_link", "columns": ["link_id"] },
+  "foreign_keys": [
+    {
+      "name": "fk_eopl_option",
+      "columns": ["option_id"],
+      "references": { "entity": "AnswerOption", "columns": ["option_id"] },
+      "on_delete": "cascade"
+    },
+    {
+      "name": "fk_eopl_placeholder",
+      "columns": ["placeholder_id"],
+      "references": { "entity": "Placeholder", "columns": ["placeholder_id"] },
+      "on_delete": "cascade"
+    }
+  ],
+  "unique": [
+    { "name": "uq_eopl_option_unique", "columns": ["option_id"] }
+  ],
+  "indexes": [
+    { "name": "ix_eopl_option", "columns": ["option_id"] },
+    { "name": "ix_eopl_placeholder", "columns": ["placeholder_id"] }
+  ]
+},
+{
 "name": "FieldGroup",
 "fields": [
 {
@@ -494,6 +524,65 @@
 ]
 }
 ]
+},
+{
+  "name": "IdempotencyKey",
+  "fields": [
+    { "name": "created_at", "type": "timestamptz" },
+    { "name": "expires_at", "type": "timestamptz" },
+    { "name": "idempotency_key", "type": "text" },
+    { "name": "key_id", "type": "uuid" },
+    { "name": "request_fingerprint", "type": "char(64)" }
+  ],
+  "primary_key": { "name": "pk_idempotency_key", "columns": ["key_id"] },
+  "unique": [
+    { "name": "uq_idempotency_key_unique", "columns": ["idempotency_key"] }
+  ],
+  "checks": [
+    { "name": "chk_idempotency_fp_len", "expression": "char_length(request_fingerprint) = 64" }
+  ],
+  "indexes": [
+    { "name": "ix_idempotency_expires", "columns": ["expires_at"] }
+  ]
+},
+{
+  "name": "Placeholder",
+  "fields": [
+    { "name": "clause_path", "type": "text" },
+    { "name": "created_at", "type": "timestamptz" },
+    { "name": "document_id", "type": "uuid" },
+    { "name": "placeholder_id", "type": "uuid" },
+    { "name": "question_id", "type": "uuid" },
+    { "name": "raw_text", "type": "text" },
+    { "name": "span_end", "type": "int" },
+    { "name": "span_start", "type": "int" },
+    { "name": "transform_id", "type": "text" }
+  ],
+  "primary_key": { "name": "pk_placeholder", "columns": ["placeholder_id"] },
+  "foreign_keys": [
+    {
+      "name": "fk_placeholder_document",
+      "columns": ["document_id"],
+      "references": { "entity": "Document", "columns": ["document_id"] },
+      "on_delete": "cascade"
+    },
+    {
+      "name": "fk_placeholder_question",
+      "columns": ["question_id"],
+      "references": { "entity": "QuestionnaireQuestion", "columns": ["question_id"] }
+    }
+  ],
+  "unique": [
+    { "name": "uq_placeholder_doc_clause_span", "columns": ["document_id", "clause_path", "span_start", "span_end"] }
+  ],
+  "checks": [
+    { "name": "chk_placeholder_span_bounds", "expression": "span_start >= 0 AND span_end > span_start" }
+  ],
+  "indexes": [
+    { "name": "ix_placeholder_clause", "columns": ["clause_path"] },
+    { "name": "ix_placeholder_document", "columns": ["document_id"] },
+    { "name": "ix_placeholder_question", "columns": ["question_id"] }
+  ]
 },
 {
 "name": "QuestionToFieldGroup",
@@ -817,100 +906,7 @@
 }
 }
 ]
-},
-
-```
-{
-  "name": "Placeholder",
-  "fields": [
-    { "name": "placeholder_id", "type": "uuid" },
-    { "name": "document_id", "type": "uuid" },
-    { "name": "question_id", "type": "uuid" },
-    { "name": "clause_path", "type": "text" },
-    { "name": "span_start", "type": "int" },
-    { "name": "span_end", "type": "int" },
-    { "name": "raw_text", "type": "text" },
-    { "name": "transform_id", "type": "text" },
-    { "name": "created_at", "type": "timestamptz" }
-  ],
-  "primary_key": { "name": "pk_placeholder", "columns": ["placeholder_id"] },
-  "foreign_keys": [
-    {
-      "name": "fk_placeholder_document",
-      "columns": ["document_id"],
-      "references": { "entity": "Document", "columns": ["document_id"] },
-      "on_delete": "cascade"
-    },
-    {
-      "name": "fk_placeholder_question",
-      "columns": ["question_id"],
-      "references": { "entity": "QuestionnaireQuestion", "columns": ["question_id"] }
-    }
-  ],
-  "unique": [
-    { "name": "uq_placeholder_doc_clause_span", "columns": ["document_id", "clause_path", "span_start", "span_end"] }
-  ],
-  "checks": [
-    { "name": "chk_placeholder_span_bounds", "expression": "span_start >= 0 AND span_end > span_start" }
-  ],
-  "indexes": [
-    { "name": "ix_placeholder_document", "columns": ["document_id"] },
-    { "name": "ix_placeholder_question", "columns": ["question_id"] },
-    { "name": "ix_placeholder_clause", "columns": ["clause_path"] }
-  ]
-},
-{
-  "name": "EnumOptionPlaceholderLink",
-  "fields": [
-    { "name": "link_id", "type": "uuid" },
-    { "name": "option_id", "type": "uuid" },
-    { "name": "placeholder_id", "type": "uuid" }
-  ],
-  "primary_key": { "name": "pk_enum_option_placeholder_link", "columns": ["link_id"] },
-  "foreign_keys": [
-    {
-      "name": "fk_eopl_option",
-      "columns": ["option_id"],
-      "references": { "entity": "AnswerOption", "columns": ["option_id"] },
-      "on_delete": "cascade"
-    },
-    {
-      "name": "fk_eopl_placeholder",
-      "columns": ["placeholder_id"],
-      "references": { "entity": "Placeholder", "columns": ["placeholder_id"] },
-      "on_delete": "cascade"
-    }
-  ],
-  "unique": [
-    { "name": "uq_eopl_option_unique", "columns": ["option_id"] }
-  ],
-  "indexes": [
-    { "name": "ix_eopl_option", "columns": ["option_id"] },
-    { "name": "ix_eopl_placeholder", "columns": ["placeholder_id"] }
-  ]
-},
-{
-  "name": "IdempotencyKey",
-  "fields": [
-    { "name": "key_id", "type": "uuid" },
-    { "name": "idempotency_key", "type": "text" },
-    { "name": "request_fingerprint", "type": "char(64)" },
-    { "name": "created_at", "type": "timestamptz" },
-    { "name": "expires_at", "type": "timestamptz" }
-  ],
-  "primary_key": { "name": "pk_idempotency_key", "columns": ["key_id"] },
-  "unique": [
-    { "name": "uq_idempotency_key_unique", "columns": ["idempotency_key"] }
-  ],
-  "checks": [
-    { "name": "chk_idempotency_fp_len", "expression": "char_length(request_fingerprint) = 64" }
-  ],
-  "indexes": [
-    { "name": "ix_idempotency_expires", "columns": ["expires_at"] }
-  ]
 }
-```
-
 ],
 "encrypted_fields": [
 "Company.legal_name",
@@ -963,19 +959,13 @@
 "fk_placeholder_question",
 "uq_placeholder_doc_clause_span",
 "chk_placeholder_span_bounds",
-"ix_placeholder_document",
-"ix_placeholder_question",
-"ix_placeholder_clause",
 "pk_enum_option_placeholder_link",
 "fk_eopl_option",
 "fk_eopl_placeholder",
 "uq_eopl_option_unique",
-"ix_eopl_option",
-"ix_eopl_placeholder",
 "pk_idempotency_key",
 "uq_idempotency_key_unique",
-"chk_idempotency_fp_len",
-"ix_idempotency_expires"
+"chk_idempotency_fp_len"
 ],
 "notes": [
 "Single handbook template parsed at merge; no template/mapping tables are persisted.",

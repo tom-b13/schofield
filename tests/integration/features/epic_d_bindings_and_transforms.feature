@@ -330,9 +330,7 @@ When I POST "/api/v1/documents/<doc_id>/bindings:purge" with JSON:
 Then the response status should be <status>
 And the response body should <body_check>
 
-```
 Examples:
   | doc_id   | status | body_check                                        |
   | doc-zzz  | 404    | be problem+json with "title" containing "not found" |
   | doc-noop | 200    | contain "deleted_placeholders" equal to 0         |
-```

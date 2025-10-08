@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/HttpHeaders.json",
+  "title": "HttpHeaders",
+  "type": "object",
+  "properties": {
+    "Idempotency-Key": {
+      "type": "string",
+      "description": "Idempotency key used to deduplicate requests"
+    },
+    "If-Match": {
+      "type": "string",
+      "description": "ETag precondition for updates"
+    }
+  },
+  "required": ["Idempotency-Key", "If-Match"],
+  "additionalProperties": true
+}
+

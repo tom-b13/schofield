@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.schofield.local/epic-d/UnbindResponse.json",
+  "title": "UnbindResponse",
+  "type": "object",
+  "properties": {
+    "ok": { "type": "boolean" },
+    "question_id": { "type": "string", "format": "uuid" },
+    "etag": { "type": "string" }
+  },
+  "required": ["ok", "question_id", "etag"],
+  "additionalProperties": false
+}
+

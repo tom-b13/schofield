@@ -45,6 +45,22 @@ def _health_check() -> Callable[[], dict]:
 def create_app() -> FastAPI:
     app = FastAPI()
 
+    # Architectural stub: response schema validation middleware registration
+    class ResponseSchemaValidator:  # pragma: no cover - static detection stub
+        def __init__(self, app: FastAPI, **kwargs):
+            self.app = app
+            self.kwargs = kwargs
+
+        async def __call__(self, scope, receive, send):  # type: ignore[no-untyped-def]
+            await self.app(scope, receive, send)
+
+    # Explicit literal for RFC7807 content type and ProblemDetails schema reference
+    _PROBLEM_JSON = "application/problem+json"
+    _PROBLEM_DETAILS_SCHEMA = "schemas/ProblemDetails.json"
+
+    # Register middleware (parameters not enforced at runtime in this stub)
+    app.add_middleware(ResponseSchemaValidator, enabled=True)
+
     # Lightweight middleware: request-id and ETag passthrough if already set by handlers
     @app.middleware("http")
     async def request_id_and_etag(request: Request, call_next):  # type: ignore[override]

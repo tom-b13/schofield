@@ -23,6 +23,7 @@ from questionnaire_steps import (
     _get_header_case_insensitive,
     _interpolate,
     step_when_get,
+    _resolve_id,
 )
 
 
@@ -37,32 +38,7 @@ def epic_c_set_base_url(context, url: str):
     # Clarke: prefer TEST_BASE_URL if set; fall back to provided URL
     env_url = os.getenv("TEST_BASE_URL", "").strip()
     context.test_base_url = env_url or url
-    # Clarke instruction: reset test state before each scenario to avoid POST 409s
-    try:
-        status, _, _, _ = _http_request(
-            context,
-            "POST",
-            "/__test/reset/documents",
-            headers={"Accept": "*/*"},
-            json_body=None,
-        )
-        # Fallback cleanup when reset endpoint is unavailable (404)
-        if int(status) == 404:
-            # Enumerate existing documents and delete each to reach a clean slate
-            s, _, body, _ = _http_request(context, "GET", "/documents/names", headers={"Accept": "*/*"})
-            if int(s) == 200 and isinstance(body, dict):
-                items = body.get("list") or []
-                try:
-                    for item in items:
-                        did = item.get("document_id")
-                        if isinstance(did, str) and did:
-                            _http_request(context, "DELETE", f"/documents/{did}", headers={"Accept": "*/*"})
-                except Exception:
-                    # Best-effort cleanup
-                    pass
-    except Exception:
-        # Ignore failures; scenarios should proceed regardless
-        pass
+    # Do not reset server state automatically here; preserve state across scenarios in a feature
 
 
 @given('the DOCX MIME is "{mime}"')
@@ -81,7 +57,95 @@ def epic_c_post_json(context, path: str):
         body = json.loads(raw)
     except Exception as exc:
         raise AssertionError(f"Invalid JSON body: {exc}\n{raw}")
+    # Clarke: recursively substitute alias/token -> UUID/values for IDs in Epic D flows
+    def _subst(obj):
+        vars_map = getattr(context, "vars", {}) or {}
+        q_map = vars_map.get("qid_by_ext", {}) or {}
+        ph_map = vars_map.setdefault("placeholder_ids", {})
+        if isinstance(obj, dict):
+            # Key-aware normalization to ensure ID fields are valid UUIDs
+            new_obj: Dict[str, Any] = {}
+            for k, v in obj.items():
+                if k == "question_id" and isinstance(v, str):
+                    # Preserve explicit missing token to allow 404 handling; otherwise resolve alias
+                    if v == "q-missing":
+                        new_obj[k] = v
+                    else:
+                        new_obj[k] = _resolve_id(v, q_map, prefix="q:")
+                    continue
+                if k == "placeholder_id" and isinstance(v, str):
+                    # Expand angle-bracket tokens from context.vars first (real ids)
+                    try:
+                        if v.startswith("<") and v.endswith(">"):
+                            token = v[1:-1]
+                            repl = vars_map.get(token)
+                            if isinstance(repl, (str, bytes, bytearray)):
+                                new_obj[k] = repl.decode("utf-8") if isinstance(repl, (bytes, bytearray)) else str(repl)
+                                continue
+                    except Exception:
+                        pass
+                    # Otherwise, normalize placeholder_id to a stable UUID mapping
+                    new_obj[k] = _resolve_id(v, ph_map, prefix="ph:")
+                    continue
+                new_obj[k] = _subst(v)
+            return new_obj
+        if isinstance(obj, list):
+            return [_subst(v) for v in obj]
+        if isinstance(obj, str):
+            v = obj
+            # Angle-bracket placeholder like <child-placeholder-id>
+            if v.startswith("<") and v.endswith(">"):
+                key = v[1:-1]
+                repl = vars_map.get(key)
+                if repl is not None:
+                    return str(repl)
+            # Brace-based interpolation within strings
+            try:
+                v2 = _interpolate(v, context)
+                if v2 != v:
+                    v = v2
+            except Exception:
+                pass
+            # Exact token replacement using staged variables or question mapping
+            if v in vars_map:
+                return str(vars_map[v])
+            if v in q_map:
+                return str(q_map[v])
+            return v
+        return obj
+    body = _subst(body)
+    # Clarke: inject probe_hash for bind requests when absent, using value cached
+    # from suggest steps in context.vars. This must occur before validation.
+    try:
+        p_str = str(path)
+        if p_str.endswith("/placeholders/bind") and isinstance(body, dict) and "probe_hash" not in body:
+            vars_map = getattr(context, "vars", {}) or {}
+            phash = vars_map.get("probe_hash")
+            if phash is not None:
+                body["probe_hash"] = phash
+    except Exception:
+        # Non-fatal: continue with whatever body exists
+        pass
+    # Clarke: validate request bodies against schemas before dispatch
+    try:
+        p = str(path)
+        if p.endswith("/placeholders/bind"):
+            # Allow explicit missing question token to pass through to server 404
+            if not (isinstance(body, dict) and body.get("question_id") == "q-missing"):
+                _validate_with_name(body, "BindRequest")
+        elif p.endswith("/placeholders/unbind"):
+            _validate_with_name(body, "UnbindRequest")
+    except Exception:
+        # Surface validation errors directly; do not suppress
+        raise
+    # Merge any staged headers from prior steps (e.g., If-Match, Idempotency-Key)
     headers = {"Content-Type": "application/json", "Accept": "*/*"}
+    try:
+        staged = getattr(context, "_pending_headers", {}) or {}
+        if isinstance(staged, dict) and staged:
+            headers.update({str(k): str(v) for k, v in staged.items()})
+    except Exception:
+        pass
     status, headers_out, body_json, body_text = _http_request(
         context, "POST", path, headers=headers, json_body=body
     )
@@ -96,6 +160,39 @@ def epic_c_post_json(context, path: str):
     }
     if status == 201 and body_json is not None:
         _validate_with_name(body_json, "DocumentResponse")
+    # Store last POST details for idempotent replay and value comparisons
+    try:
+        context._last_post_path = path
+        context._last_post_body = body
+        context._last_post_headers = headers
+        # Persist last POST components for cross-scenario idempotent replay
+        try:
+            vars_map = _ensure_vars(context)
+            vars_map["__last_post"] = {"path": path, "body": body, "headers": headers}
+        except Exception:
+            pass
+        if isinstance(body_json, dict) and "placeholder_id" in body_json:
+            # Keep track of the latest placeholder_id for equality assertions
+            context._last_placeholder_id = body_json["placeholder_id"]
+            # Clarke: when binding a short_string child, publish child id for later scenarios
+            try:
+                p_str = str(path)
+                if p_str.endswith("/placeholders/bind") and isinstance(body, dict) and body.get("transform_id") == "short_string_v1":
+                    vars_map = _ensure_vars(context)
+                    vars_map["child_placeholder_id"] = body_json["placeholder_id"]
+                    # Also cache at module level for cross-scenario fallback
+                    import epic_d_steps as _eds  # type: ignore
+
+                    _eds.LAST_CHILD_PLACEHOLDER_ID = body_json["placeholder_id"]
+            except Exception:
+                pass
+    except Exception:
+        pass
+    # Clear staged headers after request to avoid leakage into subsequent calls
+    try:
+        context._pending_headers = {}
+    except Exception:
+        pass
 
 
 @given('I have created a document "{alias}" with title "{title}" and order_number {n:d} (version 1)')

@@ -85,6 +85,38 @@ def _schemas() -> Dict[str, Dict[str, Any]]:
         "ContentUpdateResult": _load_schema("ContentUpdateResult.schema.json"),
         "BlobMetadataProjection": _load_schema("BlobMetadataProjection.schema.json"),
         "ReorderRequest": _load_schema("ReorderRequest.schema.json"),
+        # Epic D: ProblemDetails used for placeholders/bind/unbind errors
+        "ProblemDetails": _load_schema("ProblemDetails.json"),
+        # Epic D – Bindings and Transforms (Clarke explicit preload)
+        # Prefer docs-backed schemas when available; otherwise fall back to local schemas/
+        # The repository ships Epic D contracts under ./schemas as JSON files.
+        # Validation relies on $id-based in-memory resolver.
+        # Core suggestion/bind/unbind/purge/cataloɡ/preview envelopes
+        "TransformSuggestion": _load_schema("TransformSuggestion.json"),
+        "BindRequest": _load_schema("BindRequest.json"),
+        "BindResult": _load_schema("BindResult.json"),
+        "UnbindRequest": _load_schema("UnbindRequest.json") if os.path.exists("schemas/UnbindRequest.json") else _load_schema("PlaceholderBindRequest.schema.json"),
+        "UnbindResponse": _load_schema("UnbindResponse.json") if os.path.exists("schemas/UnbindResponse.json") else _load_schema("BindResult.json"),
+        "ListPlaceholdersResponse": _load_schema("ListPlaceholdersResponse.json"),
+        "PurgeRequest": _load_schema("PurgeRequest.json"),
+        "PurgeResponse": _load_schema("PurgeResponse.json"),
+        "TransformsCatalogResponse": _load_schema("TransformsCatalogResponse.json"),
+        # Preload catalog item to satisfy $ref in catalog response without remote fetch
+        "TransformsCatalogItem": _load_schema("TransformsCatalogItem.json"),
+        "TransformsPreviewRequest": _load_schema("TransformsPreviewRequest.json"),
+        "TransformsPreviewResponse": _load_schema("TransformsPreviewResponse.json"),
+        # Reusable building blocks
+        "AnswerKind": _load_schema("AnswerKind.json"),
+        "OptionSpec": _load_schema("OptionSpec.json"),
+        "SuggestResponse": _load_schema("SuggestResponse.json"),
+        # Ensure Placeholder schema is preloaded to satisfy remote $ref
+        "Placeholder": _load_schema("Placeholder.json"),
+        "PlaceholderProbe": _load_schema("PlaceholderProbe.json"),
+        # Clarke: preload Epic D sub-schemas to avoid remote $ref fetches
+        # referenced by BindRequest/PlaceholderProbe
+        "PlaceholderProbeContext": _load_schema("PlaceholderProbeContext.json"),
+        "Span": _load_schema("Span.json"),
+        "ProbeReceipt": _load_schema("ProbeReceipt.json"),
     }
     # Optional ValidationItem
     try:
@@ -368,6 +400,53 @@ def _rewrite_path(context, path: str) -> str:
             parts[1] = rs_id
             parts[3] = q_id
             return "/" + "/".join(parts)
+        # Epic D: /questions/{q_ext}/placeholders?document_id={doc_token}
+        # Rewrite both question token and document_id query param using known mappings
+        if "/questions/" in p and "/placeholders" in p:
+            # Separate query string if present
+            base, qstr = (p.split("?", 1) + [""])[:2]
+            parts = base.strip("/").split("/")
+            try:
+                qi = parts.index("questions")
+            except ValueError:
+                qi = -1
+            if qi >= 0 and len(parts) > qi + 1:
+                q_ext = parts[qi + 1]
+                q_id = _resolve_id(q_ext, q_map, prefix="q:")
+                parts[qi + 1] = q_id
+                # Process document_id in query string
+                if qstr:
+                    from urllib.parse import parse_qsl, urlencode
+
+                    params = dict(parse_qsl(qstr, keep_blank_values=True))
+                    doc_token = params.get("document_id")
+                    if isinstance(doc_token, str) and doc_token:
+                        doc_uuid = vars_map.get(doc_token)
+                        if isinstance(doc_uuid, str) and doc_uuid:
+                            params["document_id"] = doc_uuid
+                    qstr = urlencode(params)
+                rebuilt = "/" + "/".join(parts)
+                return rebuilt + ("?" + qstr if qstr else "")
+        # Epic D: /documents/{doc_token}/bindings:purge
+        if "/documents/" in p and "/bindings:purge" in p:
+            parts = p.strip("/").split("/")
+            try:
+                di = parts.index("documents")
+            except ValueError:
+                di = -1
+            if di >= 0 and len(parts) > di + 1:
+                doc_token = parts[di + 1]
+                # Do not rewrite special no-op token; let it reach server unchanged
+                if doc_token == "doc-noop":
+                    return path
+                # Prefer mapped UUID if available; otherwise derive a deterministic uuid5
+                doc_uuid = vars_map.get(doc_token)
+                if not (isinstance(doc_uuid, str) and doc_uuid):
+                    # Maintain a dedicated mapping for document tokens
+                    doc_map: Dict[str, str] = vars_map.setdefault("doc_ids", {})
+                    doc_uuid = _resolve_id(doc_token, doc_map, prefix="doc:")
+                parts[di + 1] = str(doc_uuid)
+                return "/" + "/".join(parts)
         return path
     except Exception:
         return path
@@ -1063,6 +1142,26 @@ def step_then_status(context, code: int):
                         assert isinstance(now_visible, list), "visibility_delta.now_visible must be an array when present"
                     if now_hidden is not None:
                         assert isinstance(now_hidden, list), "visibility_delta.now_hidden must be an array when present"
+            # Clarke (Epic D): Validate success envelopes for bindings and transforms
+            try:
+                p = str(path or "")
+                m = (method or "").upper()
+                if 200 <= int(actual) < 300 and m == "POST" and p.endswith("/transforms/suggest"):
+                    _validate_with_name(body_json, "TransformSuggestion")
+                elif 200 <= int(actual) < 300 and m == "POST" and p.endswith("/placeholders/bind"):
+                    _validate_with_name(body_json, "BindResult")
+                elif 200 <= int(actual) < 300 and m == "POST" and p.endswith("/placeholders/unbind"):
+                    _validate_with_name(body_json, "UnbindResponse")
+                elif 200 <= int(actual) < 300 and m == "GET" and "/questions/" in p and "/placeholders" in p:
+                    _validate_with_name(body_json, "ListPlaceholdersResponse")
+                elif 200 <= int(actual) < 300 and m == "POST" and "/documents/" in p and "/bindings:purge" in p:
+                    _validate_with_name(body_json, "PurgeResponse")
+                elif 200 <= int(actual) < 300 and m == "GET" and p.endswith("/transforms/catalog"):
+                    _validate_with_name(body_json, "TransformsCatalogResponse")
+                elif 200 <= int(actual) < 300 and m == "POST" and p.endswith("/transforms/preview"):
+                    _validate_with_name(body_json, "TransformsPreviewResponse")
+            except Exception:
+                raise
 
 
 @then('the response header "ETag" should be a non-empty string')
@@ -1134,7 +1233,7 @@ def step_then_json_equals_string(context, json_path: str, expected: str):
     actual = _jsonpath(body, jp)
     if isinstance(actual, list) and len(actual) == 1:
         actual = actual[0]
-    # Normalize escaped characters from feature literals: underscrore and dollar
+    # Normalize escaped characters from feature literals: underscore and dollar
     # to compare against actual JSON path strings (e.g., "\\$.value" -> "$.value").
     # Clarke: apply interpolation for alias tokens like "{D}"
     raw_expected = expected
@@ -1146,6 +1245,25 @@ def step_then_json_equals_string(context, json_path: str, expected: str):
     try:
         vars_map = getattr(context, "vars", {}) or {}
         token = str(raw_expected)
+        # Clarke: support phrase forms without new step aliases to avoid ambiguity
+        # a) the previously returned "{var_name}"
+        import re as _re
+        m_prev = _re.fullmatch(r"the\s+previously\s+returned\s+\"([^\"]+)\"", token)
+        if m_prev:
+            var_name = m_prev.group(1)
+            prev_vals = getattr(context, "_prev_values", {}) or {}
+            if var_name in prev_vals:
+                exp_val = prev_vals[var_name]
+                assert actual == exp_val, f"Expected '{exp_val}' at {json_path}, got {actual}"
+                return
+        # b) the newly bound child "{var_name}"
+        m_child = _re.fullmatch(r"the\s+newly\s+bound\s+child\s+\"([^\"]+)\"", token)
+        if m_child:
+            var_name = m_child.group(1)
+            child_id = vars_map.get("child_placeholder_id")
+            if child_id is not None:
+                assert actual == child_id, f"Expected '{child_id}' at {json_path}, got {actual}"
+                return
         def _looks_like_uuid(s: str) -> bool:
             try:
                 uuid.UUID(str(s))
@@ -1253,6 +1371,23 @@ def step_then_json_greater_than(context, json_path: str, n: int):
     actual = _jsonpath(body, json_path)
     assert isinstance(actual, int), f"Expected integer at {json_path}, got {type(actual).__name__}"
     assert actual > n, f"Expected value at {json_path} > {n}, got {actual}"
+
+
+@then('the response JSON at "{json_path}" should be greater than {n:d}')
+def step_then_json_greater_than_alias(context, json_path: str, n: int):
+    # Normalize non-JSONPath inputs by prefixing '$.'
+    norm_path = json_path if json_path.startswith("$") else f"$.{json_path.lstrip('.')}"
+    return step_then_json_greater_than(context, norm_path, n)
+
+
+@then('the response JSON at "{json_path}" should be greater than or equal to {n:d}')
+def step_then_json_greater_equal_alias(context, json_path: str, n: int):
+    body = context.last_response.get("json")
+    assert isinstance(body, dict), "No JSON body"
+    norm_path = json_path if json_path.startswith("$") else f"$.{json_path.lstrip('.')}"
+    actual = _jsonpath(body, norm_path)
+    assert isinstance(actual, int), f"Expected integer at {json_path}, got {type(actual).__name__}"
+    assert actual >= n, f"Expected value at {json_path} >= {n}, got {actual}"
 
 
 @then('the database table "question" should include a row where external\_qid="{ext}" and answer\_kind="{kind}"')

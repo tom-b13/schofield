@@ -6,9 +6,7 @@
   "properties": {
     "items": {
       "type": "array",
-      "items": {
-        "$ref": "https://schemas.schofield.local/epic-d/Placeholder.json"
-      }
+      "items": {"$ref": "https://schemas.schofield.local/epic-d/Placeholder.json"}
     },
     "etag": {
       "type": "string"
