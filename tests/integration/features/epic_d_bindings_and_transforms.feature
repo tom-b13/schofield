@@ -1,7 +1,8 @@
 Feature: Epic D – Placeholders, Bindings and Transforms
 
 Background:
-Given the API base URL is "/api/v1"
+Given a clean database
+And the API base URL is "/api/v1"
 And a document "doc-001" exists containing a clause at path "1.2"
 And questions exist:
 | question_id | text                                 |
