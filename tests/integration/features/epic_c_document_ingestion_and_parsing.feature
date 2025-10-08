@@ -3,7 +3,8 @@ Feature: Epic C — Document ingestion and parsing
   list concurrency via ETag, and deterministic retrieval.
 
   Background:
-    Given the API base URL is "http://localhost:8080"
+    Given a clean database
+    And the API base URL is "http://localhost:8080"
     And the DOCX MIME is "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
   # =========================
