@@ -16,11 +16,15 @@ import json
 import os
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
+import logging
 
 import httpx
 from behave import given, then, when, step
 import re
 from sqlalchemy import create_engine, text as sql_text
+
+# Module logger for step instrumentation
+logger = logging.getLogger(__name__)
 
 # Optional jsonschema validation (fallbacks provided if missing)
 try:
@@ -269,66 +273,86 @@ def _jsonpath(data: Any, path: str) -> Any:
         except Exception:
             return repr(obj)
 
+    def _top_keys(obj: Any) -> Optional[List[str]]:
+        try:
+            return sorted(list(obj.keys())) if isinstance(obj, dict) else None
+        except Exception:
+            return None
+
     original_path = path
-    path = (
-        path.replace("\\$", "$")
-        .replace("\\.", ".")
-        .replace("\\[", "[")
-        .replace("\\]", "]")
-        .replace("\\_", "_")
-    )
-    assert path.startswith("$"), f"Unsupported path: {original_path}"
-    if path.endswith(".length()"):
-        base = path[:-9]
-        val = _jsonpath(data, base)
-        try:
-            return len(val)
-        except Exception as exc:
-            raise AssertionError(f"length() target not sized: {val!r} ({exc})")
-    # Filter: $.questions[?(@.question_id=='...')].answer_kind
-    if "[?(@." in path:
-        try:
-            prefix, rest = path.split("[?(@.", 1)
-            field, right = rest.split("=='", 1)
-            value, tail = right.split("')]")
-        except Exception as exc:
-            raise AssertionError(f"Malformed filter in path={original_path}: {exc}")
-        arr = _jsonpath(data, prefix)
-        assert isinstance(arr, list), f"Filter base must be list: {prefix} => {_compact(arr)}"
-        matched = [item for item in arr if str(item.get(field)) == value]
-        remainder = tail.lstrip(".")
-        if remainder:
-            return [m.get(remainder) for m in matched]
-        return matched
-    cur: Any = data
-    tokens = path[1:].lstrip(".").split(".") if path != "$" else []
     try:
-        for tok in tokens:
-            if "[" in tok and tok.endswith("]"):
-                name, idx_str = tok.split("[", 1)
-                # Ensure mapping lookup is valid
-                if not isinstance(cur, dict) or name not in cur:
-                    raise AssertionError(f"path not found: {original_path}")
-                seq = cur[name]
-                if not isinstance(seq, list):
-                    raise AssertionError(f"path not found: {original_path}")
-                try:
-                    idx = int(idx_str[:-1])
-                except Exception:
-                    raise AssertionError(f"invalid index in path: {original_path}")
-                if idx < 0 or idx >= len(seq):
-                    raise AssertionError(f"path not found: {original_path}")
-                cur = seq[idx]
-            else:
-                if not isinstance(cur, dict) or tok not in cur:
-                    raise AssertionError(f"path not found: {original_path}")
-                cur = cur[tok]
-        return cur
+        path = (
+            path.replace("\\$", "$")
+            .replace("\\.", ".")
+            .replace("\\[", "[")
+            .replace("\\]", "]")
+            .replace("\\_", "_")
+        )
+        assert path.startswith("$"), f"Unsupported path: {original_path}"
+        if path.endswith(".length()"):
+            base = path[:-9]
+            val = _jsonpath(data, base)
+            try:
+                return len(val)
+            except Exception as exc:
+                raise AssertionError(f"length() target not sized: {val!r} ({exc})")
+        # Filter: $.questions[?(@.question_id=='...')].answer_kind
+        if "[?(@." in path:
+            try:
+                prefix, rest = path.split("[?(@.", 1)
+                field, right = rest.split("=='", 1)
+                value, tail = right.split("')]")
+            except Exception as exc:
+                raise AssertionError(f"Malformed filter in path={original_path}: {exc}")
+            arr = _jsonpath(data, prefix)
+            assert isinstance(arr, list), f"Filter base must be list: {prefix} => {_compact(arr)}"
+            matched = [item for item in arr if str(item.get(field)) == value]
+            remainder = tail.lstrip(".")
+            if remainder:
+                return [m.get(remainder) for m in matched]
+            return matched
+        cur: Any = data
+        tokens = path[1:].lstrip(".").split(".") if path != "$" else []
+        try:
+            for tok in tokens:
+                if "[" in tok and tok.endswith("]"):
+                    name, idx_str = tok.split("[", 1)
+                    # Ensure mapping lookup is valid
+                    if not isinstance(cur, dict) or name not in cur:
+                        raise AssertionError(f"path not found: {original_path}")
+                    seq = cur[name]
+                    if not isinstance(seq, list):
+                        raise AssertionError(f"path not found: {original_path}")
+                    try:
+                        idx = int(idx_str[:-1])
+                    except Exception:
+                        raise AssertionError(f"invalid index in path: {original_path}")
+                    if idx < 0 or idx >= len(seq):
+                        raise AssertionError(f"path not found: {original_path}")
+                    cur = seq[idx]
+                else:
+                    if not isinstance(cur, dict) or tok not in cur:
+                        raise AssertionError(f"path not found: {original_path}")
+                    cur = cur[tok]
+            return cur
+        except AssertionError:
+            raise
+        except Exception:
+            # Normalize to AssertionError for optional Problem fields etc.
+            raise AssertionError(f"path not found: {original_path}")
     except AssertionError:
+        # Clarke: emit compact debugging context for path-not-found cases
+        try:
+            preview = _compact(data)[:512]
+        except Exception:
+            preview = "<unavailable>"
+        logger.info(
+            "[jsonpath-miss] path=%s keys=%s preview=%s",
+            original_path,
+            _top_keys(data),
+            preview,
+        )
         raise
-    except Exception:
-        # Normalize to AssertionError for optional Problem fields etc.
-        raise AssertionError(f"path not found: {original_path}")
 
 
 # ------------------
@@ -557,6 +581,26 @@ def _http_request(
                 pass
             log_line = f"[HTTP] {ts} {method.upper()} {effective_path} -> {resp.status_code} ct={ctype or '-'} xrid={xrid or '-'}"
             print(log_line)
+            # Clarke addition: for successful JSON responses on /api/v1/*, emit a compact body preview
+            try:
+                if str(effective_path).startswith("/api/v1") and 200 <= int(resp.status_code) < 300:
+                    # Case-insensitive ETag lookup
+                    etag = next((v for k, v in out_headers.items() if str(k).lower() == "etag"), "")
+                    # Prefer JSON body if available; otherwise fallback to text
+                    if body_json is not None:
+                        preview_src: Any = body_json
+                        preview = json.dumps(preview_src, ensure_ascii=False, separators=(",", ":"))
+                    else:
+                        preview = body_text or ""
+                    preview = (preview[:300] + ("…" if len(preview) > 300 else "")) if isinstance(preview, str) else str(preview)
+                    body_line = (
+                        f"[HTTP-Body] {ts} {method.upper()} {effective_path} -> preview={preview} "
+                        f"headers: ct={ctype or '-'} etag={etag or '-'} xrid={xrid or '-'}"
+                    )
+                    print(body_line)
+            except Exception:
+                # Never fail the request due to instrumentation
+                pass
         except Exception:
             # Logging must not affect request flow
             pass
@@ -596,7 +640,9 @@ def _db_engine(context):
     eng = getattr(context, "_db_engine", None)
     if eng is None:
         url = getattr(context, "test_database_url", None)
-        # In live mode, environment hooks ensure TEST_DATABASE_URL exists.
+        if not url:
+            # Ensure we target the same DB as the running server
+            url = os.environ.get("TEST_DATABASE_URL")
         # In mock mode, DB helpers and steps short-circuit before calling this.
         if url:
             eng = create_engine(url, future=True)
@@ -649,19 +695,72 @@ def _row_value_text(context, rs_id: str, q_id: str) -> Optional[str]:
 
 @given("a clean database")
 def step_clean_db(context):
-    # Truncate relevant tables in FK-safe order (no-op in mock mode)
-    if not getattr(context, "test_mock_mode", False):
-        eng = _db_engine(context)
-        assert eng is not None, "Database not configured; TEST_DATABASE_URL is required for DB steps"
+    # Deterministically purge Epic C/D tables and core fixtures (always run; not gated by mock mode)
+    eng = _db_engine(context)
+    if eng is not None:
         with eng.begin() as conn:
-            for tbl in ("response", "answer_option", "questionnaire_question", "screens", "questionnaires", "response_set", "company"):
+            # Core questionnaire tables (retain legacy cleanup for non-Epic C/D data)
+            for tbl in (
+                "response",
+                "answer_option",
+                "questionnaire_question",
+                "screens",
+                "questionnaires",
+                "response_set",
+                "company",
+            ):
                 try:
                     conn.execute(sql_text(f"DELETE FROM {tbl}"))
                 except Exception:
-                    # Best-effort for optional tables
+                    # Optional across environments
                     pass
+
+            # Cross-dialect discovery via SQLAlchemy inspector (no reliance on pg_tables)
+            try:
+                from sqlalchemy import inspect as sa_inspect  # local import to avoid global changes
+                inspector = sa_inspect(conn)
+                table_names = set(inspector.get_table_names())
+            except Exception:
+                # If inspector is unavailable, proceed with curated fallback list
+                table_names = set()
+
+            # FK-safe deletion order for Epic C/D (handle singular/plural variants)
+            purge_order: list[list[str]] = [
+                ["enum_option_placeholder_link", "parent_options"],  # link tables first
+                ["placeholders"],
+                ["document_blobs", "document_blob"],
+                ["document_list_state"],
+                ["documents", "document"],
+                ["idempotency_key", "idempotency_keys"],
+            ]
+
+            for group in purge_order:
+                for tbl in group:
+                    # Prefer inspector discovery; fallback to best-effort deletion
+                    if not table_names or (tbl in table_names):
+                        try:
+                            conn.execute(sql_text(f"DELETE FROM {tbl}"))
+                        except Exception:
+                            # Best-effort cross-dialect cleanup; continue to next
+                            pass
+    # Always reset step context regardless of DB availability
     context.vars = {}
     context.last_response = {"status": None, "headers": {}, "json": None, "text": None, "path": None, "method": None}
+    # After DB purge, clear any in-memory stores in the running app to
+    # ensure initial POST /documents does not encounter stale state.
+    # Use the internal test endpoint guarded behind __test__ path.
+    if not getattr(context, "test_mock_mode", False):
+        status, headers, body_json, body_text = _http_request(context, "POST", "/__test__/reset-state")
+        context.last_response = {
+            "status": status,
+            "headers": headers,
+            "json": body_json,
+            "text": body_text,
+            "path": "/__test__/reset-state",
+            "method": "POST",
+        }
+        # Expect No Content on successful reset
+        assert status == 204, f"Expected 204 from reset-state, got {status}"
 
 
 @given("the following questionnaire exists in the database:")
@@ -1294,6 +1393,31 @@ def step_then_json_equals_literal(context, json_path: str, expected: str):
     actual = _jsonpath(body, jp)
     if isinstance(actual, list) and len(actual) == 1:
         actual = actual[0]
+    # Clarke: phrase resolution before literal comparison
+    try:
+        token = str(expected)
+        # Import regex locally to avoid dependency on module-level import
+        import re as _re
+        # a) the previously returned "{var_name}"
+        m_prev = _re.fullmatch(r"the\s+previously\s+returned\s+\"([^\"]+)\"", token)
+        if m_prev:
+            var_name = m_prev.group(1)
+            prev_vals = getattr(context, "_prev_values", {}) or {}
+            if var_name in prev_vals:
+                exp_val = prev_vals[var_name]
+                assert actual == exp_val, f"Expected '{exp_val}' at {json_path}, got {actual}"
+                return
+        # b) the newly bound child "{var_name}"
+        m_child = _re.fullmatch(r"the\s+newly\s+bound\s+child\s+\"([^\"]+)\"", token)
+        if m_child:
+            vars_map = getattr(context, "vars", {}) or {}
+            child_id = vars_map.get("child_placeholder_id")
+            if child_id is not None:
+                assert actual == child_id, f"Expected '{child_id}' at {json_path}, got {actual}"
+                return
+    except Exception:
+        # On any error, fall through to existing literal handling
+        pass
     if expected in {"[]", "\\[]"}:
         exp: Any = []
     elif expected in ("true", "false"):

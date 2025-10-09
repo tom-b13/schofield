@@ -38,6 +38,10 @@ from app.logic.inmemory_state import (
     IDEMPOTENCY_STORE,
     PLACEHOLDERS_BY_ID,
     PLACEHOLDERS_BY_QUESTION,
+    IDEMPOTENT_BINDS,
+    IDEMPOTENT_RESULTS,
+    QUESTION_MODELS,
+    QUESTION_ETAGS,
 )
 
 
@@ -56,6 +60,27 @@ def _not_implemented(detail: str = "") -> JSONResponse:
 # In-memory ephemeral store (test-only)
 # Single source of truth is defined in app.logic.inmemory_state
 # ----------------------
+
+
+@router.post("/__test__/reset-state", summary="Reset in-memory stores (test only)")
+def post_test_reset_state() -> Response:
+    """Clear all in-memory state used by Epic C/D.
+
+    This endpoint is test-only and ensures a clean slate between scenarios.
+    It resets document metadata, content blobs, idempotency maps and
+    placeholder/question caches. Returns 204 No Content.
+    """
+    DOCUMENTS_STORE.clear()
+    DOCUMENT_BLOBS_STORE.clear()
+    IDEMPOTENCY_STORE.clear()
+    # Clarke: Clear Epic D placeholder/model/idempotent state across scenarios
+    PLACEHOLDERS_BY_ID.clear()
+    PLACEHOLDERS_BY_QUESTION.clear()
+    IDEMPOTENT_BINDS.clear()
+    IDEMPOTENT_RESULTS.clear()
+    QUESTION_MODELS.clear()
+    QUESTION_ETAGS.clear()
+    return Response(status_code=204)
 
 
 @router.post("/documents", summary="Create a document")

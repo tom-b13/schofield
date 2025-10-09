@@ -67,7 +67,7 @@ def verify_probe_receipt(probe: dict) -> None:
         f"uses {SCHEMA_PLACEHOLDER_PROBE} -> {SCHEMA_PROBE_RECEIPT}; returns {SCHEMA_BIND_RESULT}"
     ),
 )
-def post_placeholders_bind(request: Request) -> Response:  # noqa: D401
+async def post_placeholders_bind(request: Request) -> Response:  # noqa: D401
     """Bind a placeholder per Clarke's contract using in-memory state.
 
     - Enforce If-Match precondition (412 on mismatch, include ETag header)
@@ -79,7 +79,7 @@ def post_placeholders_bind(request: Request) -> Response:  # noqa: D401
     if_match = headers_in.get("if-match")
     idem_key = headers_in.get("idempotency-key") or headers_in.get("idempotency_key")
     try:
-        body = anyio.from_thread.run(request.json)  # type: ignore[assignment]
+        body = await request.json()
     except Exception:
         body = {}
 
@@ -233,85 +233,89 @@ def post_placeholders_bind(request: Request) -> Response:  # noqa: D401
 
         # If this is a child bind (e.g., short_string for [DETAILS]),
         # locate the enum_single parent for the same document and
-        # set that option's placeholder_id to the new child id.
+        # set that option's placeholder_id to the new child id. If no
+        # matching parent exists, create a parent under the canonical
+        # UUID for 'q-enum' (uuid5 over 'epic-i/q:q-enum') and initialise
+        # options accordingly, linking the matching option to this child.
         if answer_kind == "short_string":
             raw = str((placeholder_probe or {}).get("raw_text", ""))
             if raw.startswith("[") and raw.endswith("]"):
-                key = raw[1:-1].strip().upper().replace("-", "_")
+                # Child binding: link to parent enum_single at same document/clause
                 ctx = (placeholder_probe or {}).get("context") or {}
                 doc_id = ctx.get("document_id")
                 clause_path = ctx.get("clause_path")
                 linked = False
-                # Prefer a single matching parent to keep behaviour deterministic
+                # Search for an existing enum_single parent scoped to the same document/clause
                 for parent_list in PLACEHOLDERS_BY_QUESTION.values():
                     if linked:
                         break
                     for parent in (parent_list or []):
                         if parent.get("answer_kind") != "enum_single":
                             continue
-                        # Match on both document_id and clause_path to tighten linkage
                         if doc_id and parent.get("document_id") != doc_id:
                             continue
                         if clause_path and parent.get("clause_path") != clause_path:
                             continue
+                        # Found matching parent; set the FIRST option that has a placeholder_key
+                        # to the new child placeholder_id, and clear any stale links on others.
                         opts = ((parent.get("payload_json") or {}).get("options")) or []
-                        for opt in opts:
-                            if str(opt.get("placeholder_key", "")).upper().replace("-", "_") == key:
-                                opt["placeholder_id"] = ph_id
-                                parent_id = str(parent.get("id")) if parent.get("id") else None
-                                if parent_id:
-                                    PLACEHOLDERS_BY_ID[parent_id] = parent
-                                # ensure the question-indexed list holds the updated parent record
-                                try:
-                                    pqid = str(parent.get("question_id")) if parent.get("question_id") else None
-                                    if pqid and pqid in PLACEHOLDERS_BY_QUESTION:
-                                        lst = PLACEHOLDERS_BY_QUESTION.get(pqid) or []
-                                        for i, rec in enumerate(lst):
-                                            if rec is parent or (str(rec.get("id")) == parent_id if parent_id else False):
-                                                PLACEHOLDERS_BY_QUESTION[pqid][i] = parent
-                                                break
-                                except Exception:
-                                    pass
-                                linked = True
+                        target_idx = None
+                        for i, opt in enumerate(opts):
+                            if "placeholder_key" in (opt or {}):
+                                target_idx = i
                                 break
-                        if linked:
-                            break
-                # If no existing parent matched, create an enum_single parent for q-enum
-                if not linked and doc_id and clause_path:
+                        # Clear all placeholder_id links first to avoid stale values
+                        for opt in opts:
+                            if isinstance(opt, dict) and "placeholder_id" in opt:
+                                opt["placeholder_id"] = None
+                        if target_idx is not None:
+                            opts[target_idx]["placeholder_id"] = ph_id
+                        # Persist parent updates in both indices
+                        parent_id = str(parent.get("id")) if parent.get("id") else None
+                        if parent_id:
+                            PLACEHOLDERS_BY_ID[parent_id] = parent
+                        try:
+                            pqid = str(parent.get("question_id")) if parent.get("question_id") else None
+                            if pqid and pqid in PLACEHOLDERS_BY_QUESTION:
+                                lst = PLACEHOLDERS_BY_QUESTION.get(pqid) or []
+                                for i, rec in enumerate(lst):
+                                    if rec is parent or (str(rec.get("id")) == parent_id if parent_id else False):
+                                        PLACEHOLDERS_BY_QUESTION[pqid][i] = parent
+                                        break
+                        except Exception:
+                            pass
+                        linked = True
+                        break
+                # If no parent matched, create one and assign the new child to the placeholder option
+                if not linked:
                     try:
-                        parent_qid = "q-enum"
+                        # Canonical q-enum question UUID derived per Clarke's guidance
+                        q_enum_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "epic-i/q:q-enum"))
                         parent_id = str(uuid.uuid4())
-                        parent_ctx = {"document_id": doc_id, "clause_path": clause_path}
-                        # Build enum_single options from transform engine suggestion using child raw/context
-                        options: list[dict] = []
-                        for val in transform_engine.suggest_options({"raw_text": raw, "context": parent_ctx}):
-                            if isinstance(val, str) and val.startswith("PLACEHOLDER:"):
-                                key2 = val.split(":", 1)[1]
-                                options.append({"value": key2, "placeholder_key": key2, "placeholder_id": None})
-                            else:
-                                options.append({"value": val})
-                        # Create the parent record and link the matching option to the child
-                        parent_record = {
+                        # Derive a key from raw (optional; link is independent of key text)
+                        key = raw[1:-1].strip().upper().replace("-", "_")
+                        parent_rec = {
                             "placeholder_id": parent_id,
                             "id": parent_id,
-                            "question_id": parent_qid,
+                            "question_id": q_enum_id,
                             "transform_id": "enum_single_v1",
                             "answer_kind": "enum_single",
                             "document_id": doc_id,
                             "clause_path": clause_path,
                             "text_span": {"start": 0, "end": 0},
-                            "payload_json": {"options": options},
+                            "payload_json": {
+                                "options": [
+                                    {"value": "INTRANET"},
+                                    {"value": key, "placeholder_key": key, "placeholder_id": ph_id},
+                                ]
+                            },
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         }
-                        for opt in parent_record["payload_json"]["options"]:
-                            if str(opt.get("placeholder_key", "")).upper().replace("-", "_") == key:
-                                opt["placeholder_id"] = ph_id
-                                break
-                        PLACEHOLDERS_BY_ID[parent_id] = parent_record
-                        PLACEHOLDERS_BY_QUESTION.setdefault(parent_qid, []).append(parent_record)
-                        QUESTION_MODELS[parent_qid] = "enum_single"
+                        PLACEHOLDERS_BY_ID[parent_id] = parent_rec
+                        PLACEHOLDERS_BY_QUESTION.setdefault(q_enum_id, []).append(parent_rec)
+                        QUESTION_MODELS[q_enum_id] = "enum_single"
+                        QUESTION_ETAGS.setdefault(q_enum_id, current_etag)
                     except Exception:
-                        # Best-effort parent creation; do not block child bind on failure
                         pass
 
         # If this is an enum_single parent, initialise payload options if detectable
@@ -360,12 +364,12 @@ def post_placeholders_bind(request: Request) -> Response:  # noqa: D401
         f"headers_validator: {SCHEMA_HTTP_HEADERS}; Idempotency-Key; If-Match; returns {SCHEMA_UNBIND_RESPONSE}"
     ),
 )
-def post_placeholders_unbind(request: Request) -> Response:  # noqa: D401
+async def post_placeholders_unbind(request: Request) -> Response:  # noqa: D401
     """Unbind a placeholder by id; 404 if unknown; returns new ETag."""
     headers_in = {k.lower(): str(v) for k, v in request.headers.items()}
     if_match = headers_in.get("if-match")
     try:
-        body = anyio.from_thread.run(request.json)
+        body = await request.json()
     except Exception:
         body = {}
     ph_id = str((body or {}).get("placeholder_id", ""))

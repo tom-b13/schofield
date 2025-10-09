@@ -45,19 +45,22 @@ def _not_implemented(detail: str = "") -> JSONResponse:
 def post_document_bindings_purge(id: str) -> Response:  # noqa: D401
     """Purge in-memory placeholders associated with a given document id.
 
-    - 404 when the document is unknown (not in DOCUMENTS_STORE)
-    - 200 with counters when known; counters may be zero
+    - Always 200 with counters; counters may be zero even when the document
+      is not present in DOCUMENTS_STORE or there are no matching placeholders.
     """
     # Treat as purgeable if either the document exists OR there are placeholders referencing it.
     if id not in DOCUMENTS_STORE:
         # Clarke: treat 'doc-noop' as a known no-op document and return 200
         if id == "doc-noop":
             return JSONResponse({"deleted_placeholders": 0, "updated_questions": 0}, status_code=200)
-        # If any placeholders exist for this id, proceed with purge (200)
-        has_any = any((rec or {}).get("document_id") == id for rec in PLACEHOLDERS_BY_ID.values())
+        # If no placeholders exist for this id, return 200 with zero counters (no-op)
+        has_any = any((rec or {}).get("document_id") == id for rec in PLACEHOLDERS_BY_ID.values()) or any(
+            (rec or {}).get("document_id") == id
+            for lst in PLACEHOLDERS_BY_QUESTION.values()
+            for rec in (lst or [])
+        )
         if not has_any:
-            problem = {"title": "document not found", "status": 404, "detail": "not found"}
-            return JSONResponse(problem, status_code=404, media_type="application/problem+json")
+            return JSONResponse({"deleted_placeholders": 0, "updated_questions": 0}, status_code=200)
 
     deleted = 0
     updated_questions = set()

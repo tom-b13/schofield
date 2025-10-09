@@ -44,28 +44,83 @@ def epic_d_stage_header(context, name: str, value: str):
     try:
         if isinstance(ivalue, str) and ivalue.startswith("<") and ivalue.endswith(">"):
             key = ivalue[1:-1]
-            repl = (getattr(context, "vars", {}) or {}).get(key)
+            vars_map = _ensure_vars(context)
+            repl = (vars_map or {}).get(key)
             if isinstance(repl, (str, bytes, bytearray)):
                 ivalue = repl.decode("utf-8") if isinstance(repl, (bytes, bytearray)) else str(repl)
+            else:
+                # Auto-resolve latest ETag tokens by issuing a GET to list placeholders
+                if key.startswith("latest-etag-for-"):
+                    try:
+                        ext = key[len("latest-etag-for-") :]
+                        q_map: Dict[str, str] = vars_map.setdefault("qid_by_ext", {})
+                        q_id = q_map.get(ext) or _resolve_id(ext, q_map, prefix="q:")
+                        doc_alias = vars_map.get("document_id") or vars_map.get("doc-001") or "doc-001"
+                        doc_resolved = vars_map.get(str(doc_alias), doc_alias)
+                        step_when_get(
+                            context,
+                            f"/api/v1/questions/{q_id}/placeholders?document_id={doc_resolved}",
+                        )
+                        from questionnaire_steps import _get_header_case_insensitive as _hget  # type: ignore
+
+                        latest = _hget(context.last_response.get("headers", {}) or {}, "ETag")
+                        if isinstance(latest, (bytes, bytearray)):
+                            try:
+                                latest = latest.decode("utf-8")
+                            except Exception:
+                                pass
+                        if isinstance(latest, str) and latest.strip():
+                            vars_map[key] = latest
+                            ivalue = latest
+                    except Exception:
+                        # Leave ivalue unresolved; resend logic below may still recover
+                        pass
     except Exception:
         pass
     staged[str(name)] = str(ivalue)
     context._pending_headers = staged
-    # If the prior bind/unbind attempt returned 412, immediately resend using merged headers
+    # Always merge newly staged headers into last-post caches so future replays use complete headers
     try:
+        # Merge with any previously remembered POST headers
+        prev_headers = (getattr(context, "_last_post_headers", {}) or {}).copy()
+        merged_headers = prev_headers.copy()
+        merged_headers.update({str(k): str(v) for k, v in staged.items()})
+        # Persist merged headers into caches even if we do not resend now
+        context._last_post_headers = merged_headers
+        try:
+            prev_path = getattr(context, "_last_post_path", None)
+            prev_body = getattr(context, "_last_post_body", None)
+            if isinstance(prev_path, str) and isinstance(prev_body, dict):
+                globals()["LAST_POST"] = {"path": prev_path, "body": prev_body, "headers": merged_headers}
+                import builtins as _bi  # type: ignore
+
+                setattr(_bi, "_EPIC_D_LAST_POST", {"path": prev_path, "body": prev_body, "headers": merged_headers})
+        except Exception:
+            pass
+
+        # If the prior attempt returned 412, we may need to resend depending on endpoint and header completeness
         last = getattr(context, "last_response", {}) or {}
         last_status = int(last.get("status", 0))
         last_path = str(last.get("path", ""))
         if last_status == 412 and (last_path.endswith("/placeholders/bind") or last_path.endswith("/placeholders/unbind")):
-            prev_headers = (getattr(context, "_last_post_headers", {}) or {}).copy()
-            prev_headers.update({str(k): str(v) for k, v in staged.items()})
-            prev_headers.setdefault("Content-Type", "application/json")
-            prev_headers.setdefault("Accept", "*/*")
-            prev_body = getattr(context, "_last_post_body", None)
-            prev_path = getattr(context, "_last_post_path", "/api/v1/placeholders/bind")
-            if isinstance(prev_body, dict):
+            # Case-insensitive header presence checks
+            hkeys = {str(k).lower() for k in merged_headers.keys()}
+            has_if_match = "if-match" in hkeys
+            has_idem = "idempotency-key" in hkeys
+            should_resend = False
+            if last_path.endswith("/placeholders/bind"):
+                # For bind: require both If-Match and Idempotency-Key before resending
+                should_resend = has_if_match and has_idem
+            else:
+                # For unbind: If-Match alone is sufficient
+                should_resend = has_if_match
+
+            if should_resend and isinstance(prev_body, dict) and isinstance(prev_path, str):
+                resend_headers = merged_headers.copy()
+                resend_headers.setdefault("Content-Type", "application/json")
+                resend_headers.setdefault("Accept", "*/*")
                 status, headers_out, body_json, body_text = _http_request(
-                    context, "POST", prev_path, headers=prev_headers, json_body=prev_body
+                    context, "POST", prev_path, headers=resend_headers, json_body=prev_body
                 )
                 context.last_response = {
                     "status": status,
@@ -80,14 +135,14 @@ def epic_d_stage_header(context, name: str, value: str):
                 try:
                     context._last_post_path = prev_path
                     context._last_post_body = prev_body
-                    context._last_post_headers = prev_headers
-                    globals()["LAST_POST"] = {"path": prev_path, "body": prev_body, "headers": prev_headers}
+                    context._last_post_headers = resend_headers
+                    globals()["LAST_POST"] = {"path": prev_path, "body": prev_body, "headers": resend_headers}
                     import builtins as _bi  # type: ignore
 
-                    setattr(_bi, "_EPIC_D_LAST_POST", {"path": prev_path, "body": prev_body, "headers": prev_headers})
+                    setattr(_bi, "_EPIC_D_LAST_POST", {"path": prev_path, "body": prev_body, "headers": resend_headers})
                 except Exception:
                     pass
-                # Clear pending headers after resend
+                # Clear pending headers after resend only
                 setattr(context, "_pending_headers", {})
     except Exception:
         # Non-fatal; leave headers staged for next request
@@ -134,6 +189,13 @@ def epic_d_json_should_have(context, path: str):
             # Clarke: publish generic and angle-bracket alias tokens
             vars_map["placeholder_id"] = val
             vars_map["child-placeholder-id"] = val
+            # Publish to process-global builtins cache for cross-scenario recovery
+            try:
+                import builtins as _bi  # type: ignore
+
+                setattr(_bi, "_EPIC_D_LAST_CHILD_ID", val)
+            except Exception:
+                pass
             # Also persist into previous-values map for equality steps
             prev = getattr(context, "_prev_values", None) or {}
             prev["placeholder_id"] = val
@@ -251,6 +313,16 @@ def epic_d_repeat_previous_post(context):
         path = prior.get("path")
         body = prior.get("body")
         headers = prior.get("headers")
+        # Merge any currently staged headers into the prior headers without clearing them
+        try:
+            staged_now = (getattr(context, "_pending_headers", {}) or {})
+            if isinstance(staged_now, dict) and staged_now:
+                h = {}
+                h.update({str(k): str(v) for k, v in headers.items()})
+                h.update({str(k): str(v) for k, v in staged_now.items()})
+                headers = h
+        except Exception:
+            pass
         # First POST using prior components
         status, headers_out, body_json, body_text = _http_request(
             context, "POST", path, headers=headers, json_body=body
@@ -478,6 +550,32 @@ def epic_d_have_child_from_previous(context, var_name: str):
         # Try local caches
         val = getattr(context, "_last_placeholder_id", None) or globals().get("LAST_CHILD_PLACEHOLDER_ID")
     if not val:
+        # Process-global caches (builtins): prefer explicit last-child id, then derive from last POST
+        try:
+            import builtins as _bi  # type: ignore
+
+            b_val = getattr(_bi, "_EPIC_D_LAST_CHILD_ID", None)
+            if isinstance(b_val, str) and b_val:
+                val = b_val
+            else:
+                prior = getattr(_bi, "_EPIC_D_LAST_POST", None)
+                # Attempt to recover placeholder_id from prior response/body caches if present
+                if isinstance(prior, dict):
+                    cand = None
+                    try:
+                        cand = ((prior.get("json") or {}) or {}).get("placeholder_id")
+                    except Exception:
+                        cand = None
+                    if not cand:
+                        try:
+                            cand = ((prior.get("body") or {}) or {}).get("placeholder_id")
+                        except Exception:
+                            cand = None
+                    if isinstance(cand, str) and cand:
+                        val = cand
+        except Exception:
+            pass
+    if not val:
         # Fallback GET to retrieve child id for q-nested
         q_map: Dict[str, str] = vars_map.setdefault("qid_by_ext", {})
         step_when_get(
@@ -503,6 +601,29 @@ def epic_d_have_child_from_previous(context, var_name: str):
     # Clarke: also publish common aliases for angle-bracket token replacement
     vars_map["placeholder_id"] = val
     vars_map["child-placeholder-id"] = val
+    # Always refresh and capture the latest ETag for q-nested after resolving child id
+    try:
+        q_map: Dict[str, str] = vars_map.setdefault("qid_by_ext", {})
+        q_nested = q_map.get("q-nested") or _resolve_id("q-nested", q_map, prefix="q:")
+        doc_alias = vars_map.get("document_id") or vars_map.get("doc-001") or "doc-001"
+        doc_resolved = vars_map.get(str(doc_alias), doc_alias)
+        step_when_get(
+            context,
+            f"/api/v1/questions/{q_nested}/placeholders?document_id={doc_resolved}",
+        )
+        from questionnaire_steps import _get_header_case_insensitive as _hget  # type: ignore
+
+        latest = _hget(context.last_response.get("headers", {}) or {}, "ETag")
+        if isinstance(latest, (bytes, bytearray)):
+            try:
+                latest = latest.decode("utf-8")
+            except Exception:
+                pass
+        if isinstance(latest, str) and latest.strip():
+            vars_map["latest-etag-for-q-nested"] = latest
+    except Exception:
+        # Best-effort capture only; do not fail the step on ETag resolution
+        pass
 
 
 @given('"{q_ext}" currently has exactly one bound placeholder')

@@ -115,7 +115,9 @@ def _extract_routes_from_file(path: Path) -> List[RouteDef]:
     return routes
 
 
-def _find_route_functions(module_path: Path, route_path: str) -> List[ast.FunctionDef]:
+def _find_route_functions(
+    module_path: Path, route_path: str
+) -> List[ast.FunctionDef | ast.AsyncFunctionDef]:
     """Return function defs decorated with router.<method>(route_path).
 
     Pure AST inspection; raises a pytest failure on parse errors.
@@ -126,9 +128,9 @@ def _find_route_functions(module_path: Path, route_path: str) -> List[ast.Functi
     except SyntaxError as exc:  # pragma: no cover - defensive
         pytest.fail(f"Failed to parse {module_path}: {exc}")
 
-    func_defs: List[ast.FunctionDef] = []
+    func_defs: List[ast.FunctionDef | ast.AsyncFunctionDef] = []
     for node in tree.body:
-        if isinstance(node, ast.FunctionDef):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             for dec in node.decorator_list:
                 if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute):
                     if dec.func.attr in {"get", "post", "put", "patch", "delete"}:
