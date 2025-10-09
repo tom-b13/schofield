@@ -169,6 +169,28 @@ def epic_c_post_json(context, path: str):
         try:
             vars_map = _ensure_vars(context)
             vars_map["__last_post"] = {"path": path, "body": body, "headers": headers}
+            # Capture Idempotency-Key specifically for replay when module caches are absent
+            try:
+                if status in (200, 201):
+                    idem = headers.get("Idempotency-Key")
+                    if isinstance(idem, str) and idem:
+                        vars_map["Idempotency-Key"] = idem
+            except Exception:
+                pass
+            # Also publish to Epic D module-level cache for strict replay
+            try:
+                import epic_d_steps as _eds  # type: ignore
+
+                _eds.LAST_POST = {"path": path, "body": body, "headers": headers}
+            except Exception:
+                pass
+            # And publish to a process-global cache to enable cross-module access
+            try:
+                import builtins as _bi  # type: ignore
+
+                setattr(_bi, "_EPIC_D_LAST_POST", {"path": path, "body": body, "headers": headers})
+            except Exception:
+                pass
         except Exception:
             pass
         if isinstance(body_json, dict) and "placeholder_id" in body_json:

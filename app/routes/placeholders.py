@@ -93,20 +93,32 @@ def post_placeholders_bind(request: Request) -> Response:  # noqa: D401
 
     # Compute current ETag for the question
     current_etag = QUESTION_ETAGS.get(qid) or doc_etag(1)
-    # Idempotency: exact replay short-circuit by Idempotency-Key BEFORE precondition
-    if idem_key and idem_key in IDEMPOTENT_RESULTS:
-        stored = IDEMPOTENT_RESULTS[idem_key]
+    # Prepare stable replay key: Idempotency-Key + SHA1(canonical body)
+    # Deep-canonicalise the payload structure to avoid ordering/whitespace drift
+    payload_struct = {
+        "qid": qid,
+        "transform_id": transform_id,
+        "placeholder": placeholder_probe,
+    }
+    try:
+        canonical_struct = json.loads(json.dumps(payload_struct, sort_keys=True))
+    except Exception:
+        canonical_struct = payload_struct
+    payload_key = json.dumps(canonical_struct, sort_keys=True, separators=(",", ":"))
+    idem_hash = hashlib.sha1(payload_key.encode("utf-8")).hexdigest()
+    composite = f"{idem_key}:{idem_hash}" if idem_key else None
+    # Idempotency: exact replay short-circuit by composite BEFORE precondition
+    if composite and composite in IDEMPOTENT_RESULTS:
+        stored = IDEMPOTENT_RESULTS[composite]
         try:
             body_out = dict(stored.get("body") or {})
         except Exception:
             body_out = stored.get("body") or {}
         et = stored.get("etag") or current_etag
+        # Return immediately without evaluating If-Match
         return JSONResponse(body_out, status_code=200, headers={"ETag": et})
 
     # Idempotency: memoize by Idempotency-Key + payload hash (for creation de-duplication)
-    payload_key = json.dumps({"qid": qid, "transform_id": transform_id, "placeholder": placeholder_probe}, sort_keys=True)
-    idem_hash = hashlib.sha1(payload_key.encode("utf-8")).hexdigest()
-    composite = f"{idem_key}:{idem_hash}" if idem_key else None
     if composite and composite in IDEMPOTENT_BINDS:
         ph_id = IDEMPOTENT_BINDS[composite]
         ak = QUESTION_MODELS.get(qid)
@@ -123,12 +135,12 @@ def post_placeholders_bind(request: Request) -> Response:  # noqa: D401
             opts = ((rec.get("payload_json") or {}).get("options")) if isinstance(rec, dict) else None
             if opts is not None:
                 resp["options"] = opts
-        # Persist IDEMPOTENT_RESULTS for idempotent replay path as well
-        if idem_key:
+        # Persist IDEMPOTENT_RESULTS for idempotent replay path under composite key
+        if composite:
             try:
-                IDEMPOTENT_RESULTS[idem_key] = {"body": dict(resp), "etag": current_etag}
+                IDEMPOTENT_RESULTS[composite] = {"body": dict(resp), "etag": current_etag}
             except Exception:
-                IDEMPOTENT_RESULTS[idem_key] = {"body": resp, "etag": current_etag}
+                IDEMPOTENT_RESULTS[composite] = {"body": resp, "etag": current_etag}
         return JSONResponse(resp, status_code=200, headers={"ETag": current_etag})
 
     # Precondition: If-Match must be present and match current or '*'
@@ -196,9 +208,12 @@ def post_placeholders_bind(request: Request) -> Response:  # noqa: D401
     if composite and composite in IDEMPOTENT_BINDS:
         ph_id = IDEMPOTENT_BINDS[composite]
     else:
-        ph_id = str(uuid.uuid4())
+        # Generate placeholder_id deterministically from composite (Idempotency-Key + payload hash)
         if composite:
+            ph_id = str(uuid.uuid5(uuid.NAMESPACE_URL, composite))
             IDEMPOTENT_BINDS[composite] = ph_id
+        else:
+            ph_id = str(uuid.uuid4())
 
         # Persist placeholder record
         ctx = (placeholder_probe or {}).get("context") or {}
@@ -216,39 +231,88 @@ def post_placeholders_bind(request: Request) -> Response:  # noqa: D401
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        # If this is a child bind (e.g., short_string for [DETAILS]), attempt to link into existing enum_single parent
+        # If this is a child bind (e.g., short_string for [DETAILS]),
+        # locate the enum_single parent for the same document and
+        # set that option's placeholder_id to the new child id.
         if answer_kind == "short_string":
             raw = str((placeholder_probe or {}).get("raw_text", ""))
             if raw.startswith("[") and raw.endswith("]"):
                 key = raw[1:-1].strip().upper().replace("-", "_")
-                # Limit linkage to parents for the same document_id when known
                 ctx = (placeholder_probe or {}).get("context") or {}
                 doc_id = ctx.get("document_id")
+                clause_path = ctx.get("clause_path")
+                linked = False
+                # Prefer a single matching parent to keep behaviour deterministic
                 for parent_list in PLACEHOLDERS_BY_QUESTION.values():
+                    if linked:
+                        break
                     for parent in (parent_list or []):
-                        if parent.get("answer_kind") == "enum_single" and (
-                            not doc_id or parent.get("document_id") == doc_id
-                        ):
-                            opts = ((parent.get("payload_json") or {}).get("options")) or []
-                            for opt in opts:
-                                if str(opt.get("placeholder_key", "")).upper().replace("-", "_") == key:
-                                    opt["placeholder_id"] = ph_id
-                                    # Persist updated parent back into ID index when possible
-                                    parent_id = str(parent.get("id")) if parent.get("id") else None
-                                    if parent_id:
-                                        PLACEHOLDERS_BY_ID[parent_id] = parent
-                                    # also ensure the question-indexed list holds the updated parent record
-                                    try:
-                                        pqid = str(parent.get("question_id")) if parent.get("question_id") else None
-                                        if pqid and pqid in PLACEHOLDERS_BY_QUESTION:
-                                            lst = PLACEHOLDERS_BY_QUESTION.get(pqid) or []
-                                            for i, rec in enumerate(lst):
-                                                if rec is parent or (str(rec.get("id")) == parent_id if parent_id else False):
-                                                    # Directly update the list element for deterministic GET visibility
-                                                    PLACEHOLDERS_BY_QUESTION[pqid][i] = parent
-                                                    break
-                                    except Exception:
-                                        pass
+                        if parent.get("answer_kind") != "enum_single":
+                            continue
+                        # Match on both document_id and clause_path to tighten linkage
+                        if doc_id and parent.get("document_id") != doc_id:
+                            continue
+                        if clause_path and parent.get("clause_path") != clause_path:
+                            continue
+                        opts = ((parent.get("payload_json") or {}).get("options")) or []
+                        for opt in opts:
+                            if str(opt.get("placeholder_key", "")).upper().replace("-", "_") == key:
+                                opt["placeholder_id"] = ph_id
+                                parent_id = str(parent.get("id")) if parent.get("id") else None
+                                if parent_id:
+                                    PLACEHOLDERS_BY_ID[parent_id] = parent
+                                # ensure the question-indexed list holds the updated parent record
+                                try:
+                                    pqid = str(parent.get("question_id")) if parent.get("question_id") else None
+                                    if pqid and pqid in PLACEHOLDERS_BY_QUESTION:
+                                        lst = PLACEHOLDERS_BY_QUESTION.get(pqid) or []
+                                        for i, rec in enumerate(lst):
+                                            if rec is parent or (str(rec.get("id")) == parent_id if parent_id else False):
+                                                PLACEHOLDERS_BY_QUESTION[pqid][i] = parent
+                                                break
+                                except Exception:
+                                    pass
+                                linked = True
+                                break
+                        if linked:
+                            break
+                # If no existing parent matched, create an enum_single parent for q-enum
+                if not linked and doc_id and clause_path:
+                    try:
+                        parent_qid = "q-enum"
+                        parent_id = str(uuid.uuid4())
+                        parent_ctx = {"document_id": doc_id, "clause_path": clause_path}
+                        # Build enum_single options from transform engine suggestion using child raw/context
+                        options: list[dict] = []
+                        for val in transform_engine.suggest_options({"raw_text": raw, "context": parent_ctx}):
+                            if isinstance(val, str) and val.startswith("PLACEHOLDER:"):
+                                key2 = val.split(":", 1)[1]
+                                options.append({"value": key2, "placeholder_key": key2, "placeholder_id": None})
+                            else:
+                                options.append({"value": val})
+                        # Create the parent record and link the matching option to the child
+                        parent_record = {
+                            "placeholder_id": parent_id,
+                            "id": parent_id,
+                            "question_id": parent_qid,
+                            "transform_id": "enum_single_v1",
+                            "answer_kind": "enum_single",
+                            "document_id": doc_id,
+                            "clause_path": clause_path,
+                            "text_span": {"start": 0, "end": 0},
+                            "payload_json": {"options": options},
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        for opt in parent_record["payload_json"]["options"]:
+                            if str(opt.get("placeholder_key", "")).upper().replace("-", "_") == key:
+                                opt["placeholder_id"] = ph_id
+                                break
+                        PLACEHOLDERS_BY_ID[parent_id] = parent_record
+                        PLACEHOLDERS_BY_QUESTION.setdefault(parent_qid, []).append(parent_record)
+                        QUESTION_MODELS[parent_qid] = "enum_single"
+                    except Exception:
+                        # Best-effort parent creation; do not block child bind on failure
+                        pass
 
         # If this is an enum_single parent, initialise payload options if detectable
         if answer_kind == "enum_single":
@@ -280,12 +344,12 @@ def post_placeholders_bind(request: Request) -> Response:  # noqa: D401
         opts = ((rec.get("payload_json") or {}).get("options")) if isinstance(rec, dict) else None
         if opts is not None:
             resp["options"] = opts
-    # Persist full success response for Idempotency-Key based replays
-    if idem_key:
+    # Persist full success response for composite-key based replays
+    if composite:
         try:
-            IDEMPOTENT_RESULTS[idem_key] = {"body": dict(resp), "etag": current_etag}
+            IDEMPOTENT_RESULTS[composite] = {"body": dict(resp), "etag": current_etag}
         except Exception:
-            IDEMPOTENT_RESULTS[idem_key] = {"body": resp, "etag": current_etag}
+            IDEMPOTENT_RESULTS[composite] = {"body": resp, "etag": current_etag}
     return JSONResponse(resp, status_code=200, headers={"ETag": current_etag})
 
 
@@ -391,6 +455,11 @@ async def get_question_placeholders(
         }
         out = {k: rec.get(k) for k in allowed if k in rec}
         items.append(out)
+    # Keep output stable: order by created_at ascending when available
+    try:
+        items.sort(key=lambda r: r.get("created_at") or "")
+    except Exception:
+        pass
     etag = QUESTION_ETAGS.get(str(id)) or doc_etag(1)
     return JSONResponse({"items": items, "etag": etag}, status_code=200, headers={"ETag": etag})
 
