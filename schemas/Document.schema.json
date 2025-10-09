@@ -12,7 +12,7 @@
   ],
   "properties": {
     "id": {
-      "$ref": "schemas/DocumentId.schema.json"
+      "$ref": "./document_id.schema.json"
     },
     "title": {
       "type": "string",

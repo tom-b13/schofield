@@ -19,10 +19,10 @@
       ],
       "properties": {
         "document_id": {
-          "$ref": "schemas/DocumentId.schema.json"
+          "$ref": "./document_id.schema.json"
         },
         "title": {
-          "$ref": "schemas/Document.schema.json#/properties/title"
+          "$ref": "./Document.schema.json#/properties/title"
         },
         "order_number": {
           "type": "integer",

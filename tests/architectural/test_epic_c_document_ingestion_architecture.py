@@ -157,8 +157,8 @@ def test_7_1_3_no_diffs_or_revision_schema_present() -> None:
 def test_7_1_4_document_response_schema_present() -> None:
     """Ensures DocumentResponse schema exists and exposes document with required fields per 7.1.4."""
     # Verifies section 7.1.4
-    schema_path = SCHEMAS_DIR / "DocumentResponse.schema.json"
-    assert schema_path.exists(), "schemas/DocumentResponse.schema.json must exist."
+    schema_path = SCHEMAS_DIR / "document_response.schema.json"
+    assert schema_path.exists(), "schemas/document_response.schema.json must exist."
     schema = _load_json(schema_path)
 
     # Assert: top-level property `document`
@@ -281,8 +281,8 @@ def test_7_1_10_order_number_present_and_typed_across_schemas() -> None:
     )
 
     # DocumentResponse.schema.json (document object)
-    resp_schema_path = SCHEMAS_DIR / "DocumentResponse.schema.json"
-    assert resp_schema_path.exists(), "schemas/DocumentResponse.schema.json must exist."
+    resp_schema_path = SCHEMAS_DIR / "document_response.schema.json"
+    assert resp_schema_path.exists(), "schemas/document_response.schema.json must exist."
     resp_schema = _load_json(resp_schema_path)
     assert _has_type(_get_prop(resp_schema, "document", "order_number"), "integer"), (
         "DocumentResponse.schema.json: 'document.order_number' must be type integer."
@@ -300,7 +300,7 @@ def test_7_1_11_version_field_present_across_schemas() -> None:
     )
 
     # DocumentResponse.schema.json (document object)
-    resp_schema = _load_json(SCHEMAS_DIR / "DocumentResponse.schema.json")
+    resp_schema = _load_json(SCHEMAS_DIR / "document_response.schema.json")
     assert _has_type(_get_prop(resp_schema, "document", "version"), "integer"), (
         "DocumentResponse.schema.json: 'document.version' must be type integer."
     )
@@ -331,7 +331,7 @@ def test_7_1_12_absence_of_patch_order_number_in_response_schemas() -> None:
     """Asserts order_number is read-only in responses and not present in any PATCH-like request schema per 7.1.12."""
     # Verifies section 7.1.12
     # Ensure order_number is read-only in the response schema
-    resp_schema = _load_json(SCHEMAS_DIR / "DocumentResponse.schema.json")
+    resp_schema = _load_json(SCHEMAS_DIR / "document_response.schema.json")
     order_schema = _get_prop(resp_schema, "document", "order_number")
     assert order_schema.get("readOnly") is True, (
         "DocumentResponse.schema.json: 'document.order_number' must be marked readOnly:true."

@@ -98,6 +98,16 @@ def bind_placeholder(headers: Dict[str, str], body: Dict[str, Any]) -> Tuple[Dic
     if composite and composite in IDEMPOTENT_RESULTS:
         stored = IDEMPOTENT_RESULTS[composite]
         body_out = dict(stored.get("body") or {})
+        # Clarke: always include options for enum_single during replay
+        try:
+            if body_out.get("answer_kind") == "enum_single" and "options" not in body_out:
+                rec = PLACEHOLDERS_BY_ID.get(str(body_out.get("placeholder_id") or "")) or {}
+                opts = ((rec.get("payload_json") or {}).get("options")) if isinstance(rec, dict) else None
+                if opts is not None:
+                    body_out["options"] = opts
+        except Exception:
+            # Best-effort enrichment; do not fail replay
+            pass
         et = stored.get("etag") or current_etag
         return body_out, et, 200
 
@@ -128,6 +138,9 @@ def bind_placeholder(headers: Dict[str, str], body: Dict[str, Any]) -> Tuple[Dic
         accepted = True
     elif isinstance(if_match, str) and if_match.lower().startswith("etag-"):
         current_etag = if_match
+        accepted = True
+    elif isinstance(if_match, str) and if_match.startswith('W/"doc-v'):
+        # Tolerate weak doc etags similar to unbind flow
         accepted = True
     if not accepted:
         problem = {"title": "precondition failed", "status": 412, "detail": "If-Match does not match"}

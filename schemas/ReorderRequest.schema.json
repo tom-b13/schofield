@@ -20,7 +20,7 @@
         ],
         "properties": {
           "document_id": {
-            "$ref": "schemas/DocumentId.schema.json"
+            "$ref": "schemas/document_id.schema.json"
           },
           "order_number": {
             "type": "integer",

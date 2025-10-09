@@ -14,7 +14,7 @@
   ],
   "properties": {
     "document_id": {
-      "$ref": "schemas/DocumentId.schema.json"
+      "$ref": "schemas/document_id.schema.json"
     },
     "file_sha256": {
       "type": "string",

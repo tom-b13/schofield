@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Response
 from fastapi.responses import JSONResponse
-from typing import Any, Dict
 import logging
 from app.logic.placeholders import purge_bindings
 
@@ -18,8 +17,8 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Schema references for architectural visibility
-SCHEMA_PURGE_REQUEST = "schemas/PurgeRequest.json"
-SCHEMA_PURGE_RESPONSE = "schemas/PurgeResponse.json"
+SCHEMA_PURGE_REQUEST = "schemas/purge_request.schema.json"
+SCHEMA_PURGE_RESPONSE = "schemas/purge_response.schema.json"
 
 
 def _not_implemented(detail: str = "") -> JSONResponse:

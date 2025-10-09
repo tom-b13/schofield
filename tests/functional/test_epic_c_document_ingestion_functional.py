@@ -820,7 +820,7 @@ def test_7211_post_create_document_metadata(mocker):
     assert result.get("status_code") == 201
 
     # Assert: Response JSON validates against DocumentResponse schema
-    _validate(result.get("json") or {}, "schemas/DocumentResponse.schema.json")
+    _validate(result.get("json") or {}, "schemas/document_response.schema.json")
 
     # Assert: document_id should be UUID v4
     doc = (result.get("json") or {}).get("document", {})
@@ -850,14 +850,14 @@ def test_7211_post_create_document_metadata(mocker):
     # Assert: Positive control — re-validate after fresh parse
     encoded = json.dumps(result.get("json") or {}).encode("utf-8")
     reparsed = json.loads(encoded.decode("utf-8"))
-    _validate(reparsed, "schemas/DocumentResponse.schema.json")
+    _validate(reparsed, "schemas/document_response.schema.json")
 
     # Assert: Negative control — mutate version type to string and expect validator to reject
     bad = json.loads(json.dumps(reparsed))
     if "document" in bad:
         bad["document"]["version"] = "1"
     with pytest.raises(Exception):
-        _validate(bad, "schemas/DocumentResponse.schema.json")
+        _validate(bad, "schemas/document_response.schema.json")
 
 
 def test_7212_put_content_increments_version(mocker):
@@ -952,7 +952,7 @@ def test_7214_patch_updates_title_only(mocker):
     assert result.get("status_code") == 200
 
     # Assert: response validates against DocumentResponse
-    _validate(result.get("json") or {}, "schemas/DocumentResponse.schema.json")
+    _validate(result.get("json") or {}, "schemas/document_response.schema.json")
 
     # Assert: title updated, order_number and version unchanged
     doc = (result.get("json") or {}).get("document", {})

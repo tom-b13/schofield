@@ -3,6 +3,5 @@
   "$id": "schemas/DocumentId.schema.json",
   "title": "DocumentId",
   "type": "string",
-  "format": "uuid",
-  "description": "Unique identifier for a document"
+  "format": "uuid"
 }

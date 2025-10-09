@@ -3,6 +3,5 @@
   "$id": "https://example.com/schemas/QuestionId.schema.json",
   "title": "QuestionId",
   "type": "string",
-  "format": "uuid",
-  "description": "Unique identifier for question objects."
+  "format": "uuid"
 }

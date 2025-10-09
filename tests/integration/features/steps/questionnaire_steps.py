@@ -40,9 +40,70 @@ except Exception:
 # ------------------
 
 def _load_schema(name: str) -> Dict[str, Any]:
-    path = f"schemas/{name}"
-    with open(path, "r", encoding="utf-8") as fh:
-        return json.load(fh)
+    """Robust schema resolver per Clarke guidance.
+
+    Resolution strategy (in order):
+    - Look under ./schemas then ./docs/schemas
+    - Accept exact filename as passed (e.g., "BindResult.json")
+    - Also try replacing ".json" with ".schema.json" (PascalCase preserved)
+    - Also try snake_case variant with ".schema.json"
+
+    This avoids FileNotFoundError when steps request <Name>.json but the
+    repository contains <name>.schema.json, and ensures no external network
+    fetches are needed for $ref resolution downstream.
+    """
+
+    def _to_snake(s: str) -> str:
+        # Convert CamelCase / PascalCase or MixedCase to snake_case
+        try:
+            import re as _re
+            s1 = _re.sub("(.)([A-Z][a-z]+)", r"\1_\2", s)
+            s2 = _re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1)
+            return s2.replace("__", "_").lower()
+        except Exception:
+            return s.lower()
+
+    # Build candidate filenames (prefer snake_case.schema.json over PascalCase)
+    candidates: List[str] = [name]
+    if name.endswith(".json") and not name.endswith(".schema.json"):
+        base = name[:-5]
+        snake = f"{_to_snake(base)}.schema.json"
+        pascal = f"{base}.schema.json"
+        # Clarke: prefer snake_case first, then PascalCase
+        candidates = [snake, pascal, name]
+
+    search_roots = ("schemas", "docs/schemas")
+    tried: List[str] = []
+
+    # Collect matches so we can select by $id prefix if both exist
+    matches: List[str] = []
+    for root in search_roots:
+        for fname in candidates:
+            path = f"{root}/{fname}"
+            tried.append(path)
+            if os.path.exists(path):
+                matches.append(path)
+
+    # If multiple matches, load the one whose $id starts with the Epic D host
+    EPIC_D_PREFIX = "https://schemas.schofield.local/"
+    for path in matches:
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            sid = data.get("$id")
+            if isinstance(sid, str) and sid.startswith(EPIC_D_PREFIX):
+                return data
+        except Exception:
+            # Fallback to normal ordered search if this candidate cannot load
+            continue
+
+    # Fallback: return the first available candidate by preferred order
+    for path in matches:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    raise FileNotFoundError(
+        f"Schema not found for {name!r}; tried: {', '.join(tried)}"
+    )
 
 
 def _load_doc_schema(name: str) -> Dict[str, Any]:
@@ -74,40 +135,43 @@ def _schemas() -> Dict[str, Dict[str, Any]]:
         "CSVExportSnapshot": _load_schema("CSVExportSnapshot.schema.json"),
         "ResponseSetId": _load_schema("ResponseSetId.schema.json"),
         "ScreenId": _load_schema("ScreenId.schema.json"),
-        "QuestionId": _load_schema("QuestionId.schema.json"),
+        "QuestionId": _load_schema("question_id.schema.json"),
         "QuestionnaireId": _load_schema("QuestionnaireId.schema.json"),
         # Use the docs/schemas variant for AnswerUpsert to align with spec
         # (does not require answer_kind and focuses on value/option_id shape).
         "AnswerUpsert": _load_doc_schema("AnswerUpsert.schema.json"),
         "CSVImportFile": _load_schema("CSVImportFile.schema.json"),
         # Epic C: wire document schemas for validation in steps
-        "DocumentId": _load_schema("DocumentId.schema.json"),
+        "DocumentId": _load_schema("document_id.schema.json"),
         "Document": _load_schema("Document.schema.json"),
         "DocumentBlob": _load_schema("DocumentBlob.schema.json"),
-        "DocumentResponse": _load_schema("DocumentResponse.schema.json"),
+        "DocumentResponse": _load_schema("document_response.schema.json"),
         "DocumentListResponse": _load_schema("DocumentListResponse.schema.json"),
         "ContentUpdateResult": _load_schema("ContentUpdateResult.schema.json"),
         "BlobMetadataProjection": _load_schema("BlobMetadataProjection.schema.json"),
         "ReorderRequest": _load_schema("ReorderRequest.schema.json"),
         # Epic D: ProblemDetails used for placeholders/bind/unbind errors
-        "ProblemDetails": _load_schema("ProblemDetails.json"),
+        "ProblemDetails": _load_schema("problem_details.schema.json"),
         # Epic D – Bindings and Transforms (Clarke explicit preload)
         # Prefer docs-backed schemas when available; otherwise fall back to local schemas/
         # The repository ships Epic D contracts under ./schemas as JSON files.
         # Validation relies on $id-based in-memory resolver.
         # Core suggestion/bind/unbind/purge/cataloɡ/preview envelopes
-        "TransformSuggestion": _load_schema("TransformSuggestion.json"),
-        "BindRequest": _load_schema("BindRequest.json"),
-        "BindResult": _load_schema("BindResult.json"),
-        "UnbindRequest": _load_schema("UnbindRequest.json") if os.path.exists("schemas/UnbindRequest.json") else _load_schema("PlaceholderBindRequest.schema.json"),
-        "UnbindResponse": _load_schema("UnbindResponse.json") if os.path.exists("schemas/UnbindResponse.json") else _load_schema("BindResult.json"),
+        "TransformSuggestion": _load_schema("transform_suggestion.schema.json"),
+        "BindRequest": _load_schema("bind_request.schema.json"),
+        "BindResult": _load_schema("bind_result.schema.json"),
+        # Clarke: resolve UnbindRequest/UnbindResponse via name-only lookups
+        # without BindResult/PlaceholderBindRequest fallbacks; the shared
+        # loader already prefers docs/schemas when appropriate.
+        "UnbindRequest": _load_schema("unbind_request.schema.json"),
+        "UnbindResponse": _load_schema("UnbindResponse.json"),
         "ListPlaceholdersResponse": _load_schema("ListPlaceholdersResponse.json"),
         "PurgeRequest": _load_schema("PurgeRequest.json"),
         "PurgeResponse": _load_schema("PurgeResponse.json"),
         "TransformsCatalogResponse": _load_schema("TransformsCatalogResponse.json"),
         # Preload catalog item to satisfy $ref in catalog response without remote fetch
-        "TransformsCatalogItem": _load_schema("TransformsCatalogItem.json"),
-        "TransformsPreviewRequest": _load_schema("TransformsPreviewRequest.json"),
+        "TransformsCatalogItem": _load_schema("transforms_catalog_item.schema.json"),
+        "TransformsPreviewRequest": _load_schema("transforms_preview_request.schema.json"),
         "TransformsPreviewResponse": _load_schema("TransformsPreviewResponse.json"),
         # Reusable building blocks
         "AnswerKind": _load_schema("AnswerKind.json"),
@@ -115,7 +179,9 @@ def _schemas() -> Dict[str, Dict[str, Any]]:
         "SuggestResponse": _load_schema("SuggestResponse.json"),
         # Ensure Placeholder schema is preloaded to satisfy remote $ref
         "Placeholder": _load_schema("Placeholder.json"),
-        "PlaceholderProbe": _load_schema("PlaceholderProbe.json"),
+        # Clarke: map to snake_case variant to guarantee $id matches remote
+        # https://schemas.schofield.local/epic-d/PlaceholderProbe.json
+        "PlaceholderProbe": _load_schema("placeholder_probe.schema.json"),
         # Clarke: preload Epic D sub-schemas to avoid remote $ref fetches
         # referenced by BindRequest/PlaceholderProbe
         "PlaceholderProbeContext": _load_schema("PlaceholderProbeContext.json"),
@@ -149,13 +215,49 @@ def _schema_store() -> Dict[str, Dict[str, Any]]:
                     base = sid[len("schemas/") :]
                     # Map basename (e.g., 'DocumentId.schema.json')
                     store.setdefault(base, sch)
+                    # Clarke: also map lowercase basename and prefixed-lowercase forms
+                    lower_base = base.lower()
+                    store.setdefault(lower_base, sch)
                     # Map repeated-prefix forms to ensure in-memory resolution only
                     for n in range(1, 16):  # tolerate many repeated prefixes
                         alias = ("schemas/" * n) + base
                         store.setdefault(alias, sch)
+                        # Lowercase-prefixed variants (e.g., 'schemas/document_id.schema.json')
+                        alias_lower = ("schemas/" * n) + lower_base
+                        store.setdefault(alias_lower, sch)
             except Exception:
                 # Best-effort aliasing; primary $id mapping remains
                 pass
+    # Clarke explicit aliases for Epic C schemas to avoid RefResolutionError on
+    # refs like 'schemas/document_id.schema.json' regardless of $id form.
+    try:
+        s = _schemas()
+        epic_c_aliases = {
+            # Canonical snake_case basenames
+            "document_id.schema.json": s.get("DocumentId"),
+            "document_response.schema.json": s.get("DocumentResponse"),
+            "document.schema.json": s.get("Document"),
+            "document_blob.schema.json": s.get("DocumentBlob"),
+            "document_list_response.schema.json": s.get("DocumentListResponse"),
+            "content_update_result.schema.json": s.get("ContentUpdateResult"),
+            "blob_metadata_projection.schema.json": s.get("BlobMetadataProjection"),
+            "reorder_request.schema.json": s.get("ReorderRequest"),
+        }
+        for base_name, sch in epic_c_aliases.items():
+            if not isinstance(sch, dict):
+                continue
+            # Bare basename
+            store.setdefault(base_name, sch)
+            # Lowercase basename (already lowercase here, kept for symmetry)
+            store.setdefault(base_name.lower(), sch)
+            # With single and repeated 'schemas/' prefixes
+            for n in range(1, 6):
+                alias = ("schemas/" * n) + base_name
+                store.setdefault(alias, sch)
+                store.setdefault(alias.lower(), sch)
+    except Exception:
+        # Non-fatal; primary store still usable
+        pass
     return store
 
 

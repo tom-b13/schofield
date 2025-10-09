@@ -56,7 +56,7 @@ def create_app() -> FastAPI:
 
     # Explicit literal for RFC7807 content type and ProblemDetails schema reference
     _PROBLEM_JSON = "application/problem+json"
-    _PROBLEM_DETAILS_SCHEMA = "schemas/ProblemDetails.json"
+    _PROBLEM_DETAILS_SCHEMA = "schemas/problem_details.schema.json"
 
     # Register middleware (parameters not enforced at runtime in this stub)
     app.add_middleware(ResponseSchemaValidator, enabled=True)

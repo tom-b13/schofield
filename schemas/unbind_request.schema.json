@@ -4,9 +4,16 @@
   "title": "UnbindRequest",
   "type": "object",
   "properties": {
+    "question_id": {
+      "type": "string",
+      "format": "uuid"
+    },
     "placeholder_id": {
       "type": "string",
       "format": "uuid"
+    },
+    "probe": {
+      "$ref": "https://schemas.schofield.local/epic-d/ProbeReceipt.json"
     }
   },
   "required": [

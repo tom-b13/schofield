@@ -254,8 +254,9 @@ def test_7_1_3_preview_endpoint_is_isolated_from_persistence() -> None:
 def test_7_1_4_headers_schema_and_validator_wiring() -> None:
     """Asserts bind/unbind route decorators wire idempotency and ETag headers."""
     # Verifies section 7.1.4
-    headers_path = SCHEMAS_DIR / "HttpHeaders.json"
-    assert headers_path.exists(), "schemas/HttpHeaders.json must exist."
+    alt = ["HttpHeaders.json", "http_headers.schema.json"]
+    headers_path = next((SCHEMAS_DIR / n for n in alt if (SCHEMAS_DIR / n).exists()), None)
+    assert headers_path is not None, "Either HttpHeaders.json or http_headers.schema.json must exist."
     headers = _load_json(headers_path)
     # Assert schema defines Idempotency-Key and If-Match
     props = headers.get("properties") or {}
@@ -341,7 +342,15 @@ def test_7_1_4_headers_schema_and_validator_wiring() -> None:
                         return True
                     if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
                         sval = sub.value.lower()
-                        if any(tok in sval for tok in ("httpheaders.json", "idempotency-key", "if-match")):
+                        if any(
+                            tok in sval
+                            for tok in (
+                                "httpheaders.json",
+                                "http_headers.schema.json",
+                                "idempotency-key",
+                                "if-match",
+                            )
+                        ):
                             return True
         return False
 
@@ -373,8 +382,21 @@ def test_7_1_4_headers_schema_and_validator_wiring() -> None:
 def test_7_1_5_placeholderprobe_reused_by_suggest_and_bind() -> None:
     """Asserts PlaceholderProbe schema is referenced by suggest and bind."""
     # Verifies section 7.1.5
-    probe_path = SCHEMAS_DIR / "PlaceholderProbe.json"
-    assert probe_path.exists(), "schemas/PlaceholderProbe.json must exist."
+    probe_path = next(
+        (
+            (SCHEMAS_DIR / n)
+            for n in [
+                "PlaceholderProbe.json",
+                "placeholder_probe.schema.json",
+                "PlaceholderProbe.schema.json",
+            ]
+            if (SCHEMAS_DIR / n).exists()
+        ),
+        None,
+    )
+    assert (
+        probe_path is not None
+    ), "Either PlaceholderProbe.json or placeholder_probe.schema.json must exist."
     routes_by_path = _route_index_by_path()
     suggest_defs = routes_by_path.get("/transforms/suggest", [])
     bind_defs = routes_by_path.get("/placeholders/bind", [])
@@ -382,12 +404,17 @@ def test_7_1_5_placeholderprobe_reused_by_suggest_and_bind() -> None:
     assert bind_defs, "Bind handler not found; expected '/placeholders/bind'."
     suggest_src = _read_text(suggest_defs[0].file)
     bind_src = _read_text(bind_defs[0].file)
-    assert "PlaceholderProbe.json" in suggest_src, (
-        "Suggest handler should reference schemas/PlaceholderProbe.json"
+    assert ("PlaceholderProbe.json" in suggest_src) or ("placeholder_probe.schema.json" in suggest_src), (
+        "Suggest handler should reference PlaceholderProbe (CamelCase or snake_case.schema.json)"
     )
-    # Bind may reference ProbeReceipt or PlaceholderProbe; allow either as per spec
-    assert ("PlaceholderProbe.json" in bind_src) or ("ProbeReceipt.json" in bind_src), (
-        "Bind handler should reference PlaceholderProbe or ProbeReceipt schema"
+    # Bind may reference ProbeReceipt or PlaceholderProbe; allow CamelCase or snake_case equivalents
+    assert (
+        ("PlaceholderProbe.json" in bind_src)
+        or ("ProbeReceipt.json" in bind_src)
+        or ("placeholder_probe.schema.json" in bind_src)
+        or ("probe_receipt.schema.json" in bind_src)
+    ), (
+        "Bind handler should reference PlaceholderProbe/ProbeReceipt schema (CamelCase or snake_case)"
     )
 
 
@@ -395,16 +422,30 @@ def test_7_1_5_placeholderprobe_reused_by_suggest_and_bind() -> None:
 def test_7_1_6_probereceipt_schema_present_and_referenced() -> None:
     """Asserts ProbeReceipt schema exists and is referenced by suggest and bind."""
     # Verifies section 7.1.6
-    probe_receipt = SCHEMAS_DIR / "ProbeReceipt.json"
-    suggest_resp = SCHEMAS_DIR / "SuggestResponse.json"
-    assert probe_receipt.exists(), "schemas/ProbeReceipt.json must exist."
-    assert suggest_resp.exists(), "schemas/SuggestResponse.json must exist."
+    probe_receipt = next(
+        (
+            SCHEMAS_DIR / n
+            for n in ["ProbeReceipt.json", "probe_receipt.schema.json"]
+            if (SCHEMAS_DIR / n).exists()
+        ),
+        None,
+    )
+    suggest_resp = next(
+        (
+            SCHEMAS_DIR / n
+            for n in ["SuggestResponse.json", "suggest_response.schema.json"]
+            if (SCHEMAS_DIR / n).exists()
+        ),
+        None,
+    )
+    assert probe_receipt is not None, "Either ProbeReceipt.json or probe_receipt.schema.json must exist."
+    assert suggest_resp is not None, "Either SuggestResponse.json or suggest_response.schema.json must exist."
     resp_schema = _load_json(suggest_resp)
     probe_prop = _get_prop(resp_schema, "probe")
     ref = probe_prop.get("$ref")
-    assert isinstance(ref, str) and ref.endswith("ProbeReceipt.json"), (
-        "SuggestResponse.probe must $ref ProbeReceipt.json"
-    )
+    assert isinstance(ref, str) and (
+        ref.endswith("ProbeReceipt.json") or ref.endswith("probe_receipt.schema.json")
+    ), ("SuggestResponse.probe must $ref ProbeReceipt.json or probe_receipt.schema.json")
 
     # Bind references ProbeReceipt in request or validator wiring
     routes_by_path = _route_index_by_path()
@@ -419,10 +460,17 @@ def test_7_1_6_probereceipt_schema_present_and_referenced() -> None:
         pytest.fail(f"Failed to parse {bind_mod}: {exc}")
     found = False
     for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and node.id.lower().startswith("probereceipt"):
+        if isinstance(node, ast.Name) and node.id and node.id.lower().replace("_", "").startswith("probereceipt"):
             found = True
             break
-        if isinstance(node, ast.Constant) and isinstance(node.value, str) and "ProbeReceipt.json" in node.value:
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and (
+                "ProbeReceipt.json" in node.value
+                or "probe_receipt.schema.json" in node.value
+            )
+        ):
             found = True
             break
     assert found, "Bind handler should reference ProbeReceipt schema via symbol or $ref"
@@ -432,8 +480,8 @@ def test_7_1_6_probereceipt_schema_present_and_referenced() -> None:
 def test_7_1_7_transformsuggestion_schema_has_kind_and_options() -> None:
     """Asserts TransformSuggestion schema defines answer_kind and options list."""
     # Verifies section 7.1.7
-    path = SCHEMAS_DIR / "TransformSuggestion.json"
-    assert path.exists(), "schemas/TransformSuggestion.json must exist."
+    path = SCHEMAS_DIR / "transform_suggestion.schema.json"
+    assert path.exists(), "schemas/transform_suggestion.schema.json must exist."
     schema = _load_json(path)
     # answer_kind property exists and uses AnswerKind enum (ref or inline enum)
     ak = _get_prop(schema, "answer_kind")
@@ -538,8 +586,8 @@ def test_7_1_10_stable_option_ordering_hook_present() -> None:
 def test_7_1_11_problem_details_schema_and_wiring() -> None:
     """Asserts ProblemDetails schema exists and error handlers emit problem+json."""
     # Verifies section 7.1.11
-    pd_path = SCHEMAS_DIR / "ProblemDetails.json"
-    assert pd_path.exists(), "schemas/ProblemDetails.json must exist."
+    pd_path = SCHEMAS_DIR / "problem_details.schema.json"
+    assert pd_path.exists(), "schemas/problem_details.schema.json must exist."
     # Constrain to likely error-handling modules
     candidates = [
         *(PROJECT_ROOT / "app").rglob("*error*.py"),
@@ -557,7 +605,7 @@ def test_7_1_11_problem_details_schema_and_wiring() -> None:
         except SyntaxError:
             # Fall back to raw scan if parse fails
             text = _read_text(py)
-            if "ProblemDetails.json" in text:
+            if "problem_details.schema.json" in text:
                 found_problem_json_ref = True
             if "application/problem+json" in text:
                 found_content_type = True
@@ -567,7 +615,7 @@ def test_7_1_11_problem_details_schema_and_wiring() -> None:
                 found_content_type = True
             if isinstance(node, ast.ImportFrom) and node.module and "ProblemDetails" in node.module:
                 found_problem_json_ref = True
-            if isinstance(node, ast.Constant) and isinstance(node.value, str) and "ProblemDetails.json" in node.value:
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and "problem_details.schema.json" in node.value:
                 found_problem_json_ref = True
     assert found_content_type, "Error middleware must emit application/problem+json responses"
     assert found_problem_json_ref, "Expected explicit ProblemDetails schema reference in error-handling modules"
@@ -577,40 +625,74 @@ def test_7_1_11_problem_details_schema_and_wiring() -> None:
 def test_7_1_12_all_referenced_schemas_exist_under_root() -> None:
     """Asserts all referenced schemas exist under the root schemas/ directory."""
     # Verifies section 7.1.12
-    required = [
-        "PlaceholderProbe.json",
-        "ProbeReceipt.json",
-        "TransformSuggestion.json",
-        "OptionSpec.json",
-        "AnswerKind.json",
-        "SuggestResponse.json",
-        "BindRequest.json",
-        "BindResult.json",
-        "UnbindResponse.json",
-        "ListPlaceholdersResponse.json",
-        "Placeholder.json",
-        "Span.json",
-        "TransformsCatalogResponse.json",
-        "TransformsCatalogItem.json",
-        "TransformsPreviewRequest.json",
-        "TransformsPreviewResponse.json",
-        "PurgeRequest.json",
-        "PurgeResponse.json",
-        "ProblemDetails.json",
-        "HttpHeaders.json",
-    ]
-    missing = [name for name in required if not (SCHEMAS_DIR / name).exists()]
-    assert not missing, f"Missing schema files under schemas/: {missing}"
+    def _schema_exists_any(names: List[str]) -> bool:
+        return any((SCHEMAS_DIR / n).exists() for n in names)
+
+    # Map logical schema keys to acceptable filename variants (CamelCase or snake_case.schema.json)
+    required_map = {
+        "PlaceholderProbe": ["PlaceholderProbe.json", "placeholder_probe.schema.json"],
+        "ProbeReceipt": ["ProbeReceipt.json", "probe_receipt.schema.json"],
+        "TransformSuggestion": ["transform_suggestion.schema.json"],
+        "OptionSpec": ["OptionSpec.json"],
+        "AnswerKind": ["AnswerKind.json"],
+        "SuggestResponse": ["SuggestResponse.json", "suggest_response.schema.json"],
+        "BindRequest": ["bind_request.schema.json", "placeholder_bind_request.schema.json"],
+        "BindResult": ["BindResult.json", "bind_result.schema.json"],
+        "UnbindResponse": ["UnbindResponse.json", "unbind_response.schema.json"],
+        "ListPlaceholdersResponse": [
+            "ListPlaceholdersResponse.json",
+            "list_placeholders_response.schema.json",
+        ],
+        "Placeholder": ["Placeholder.json", "Placeholder.schema.json"],
+        "Span": ["Span.json"],
+        "TransformsCatalogResponse": [
+            "TransformsCatalogResponse.json",
+            "transforms_catalog_response.schema.json",
+        ],
+        "TransformsCatalogItem": ["transforms_catalog_item.schema.json"],
+        "TransformsPreviewRequest": [
+            "transforms_preview_request.schema.json",
+        ],
+        "TransformsPreviewResponse": [
+            "TransformsPreviewResponse.json",
+            "transforms_preview_response.schema.json",
+        ],
+        "PurgeRequest": ["PurgeRequest.json", "purge_request.schema.json"],
+        "PurgeResponse": ["PurgeResponse.json", "purge_response.schema.json"],
+        "ProblemDetails": ["problem_details.schema.json"],
+        "HttpHeaders": ["HttpHeaders.json", "http_headers.schema.json"],
+    }
+
+    missing = [key for key, alts in required_map.items() if not _schema_exists_any(alts)]
+    assert not missing, f"Missing schema files under schemas/ for keys: {missing}"
 
 
 # 7.1.13 — Purge request/response schemas present
 def test_7_1_13_purge_request_and_response_schemas_present() -> None:
     """Asserts purge request/response schemas exist and have integer counters."""
     # Verifies section 7.1.13
-    req = SCHEMAS_DIR / "PurgeRequest.json"
-    resp = SCHEMAS_DIR / "PurgeResponse.json"
-    assert req.exists(), "schemas/PurgeRequest.json must exist."
-    assert resp.exists(), "schemas/PurgeResponse.json must exist."
+    req = next(
+        (
+            SCHEMAS_DIR / n
+            for n in ["PurgeRequest.json", "purge_request.schema.json"]
+            if (SCHEMAS_DIR / n).exists()
+        ),
+        None,
+    )
+    resp = next(
+        (
+            SCHEMAS_DIR / n
+            for n in ["PurgeResponse.json", "purge_response.schema.json"]
+            if (SCHEMAS_DIR / n).exists()
+        ),
+        None,
+    )
+    assert (
+        req is not None
+    ), "Either PurgeRequest.json or purge_request.schema.json must exist."
+    assert (
+        resp is not None
+    ), "Either PurgeResponse.json or purge_response.schema.json must exist."
     schema = _load_json(resp)
     deleted = _get_prop(schema, "deleted_placeholders")
     updated = _get_prop(schema, "updated_questions")
@@ -623,10 +705,22 @@ def test_7_1_14_placeholder_list_item_schema_fields() -> None:
     """Asserts Placeholder/ListPlaceholdersResponse fields and date-time format."""
     # Verifies section 7.1.14
     ph = SCHEMAS_DIR / "Placeholder.json"
-    lresp = SCHEMAS_DIR / "ListPlaceholdersResponse.json"
+    lresp = next(
+        (
+            SCHEMAS_DIR / n
+            for n in [
+                "ListPlaceholdersResponse.json",
+                "list_placeholders_response.schema.json",
+            ]
+            if (SCHEMAS_DIR / n).exists()
+        ),
+        None,
+    )
     span = SCHEMAS_DIR / "Span.json"
     assert ph.exists(), "schemas/Placeholder.json must exist."
-    assert lresp.exists(), "schemas/ListPlaceholdersResponse.json must exist."
+    assert (
+        lresp is not None
+    ), "Either ListPlaceholdersResponse.json or list_placeholders_response.schema.json must exist."
     assert span.exists(), "schemas/Span.json must exist."
     ph_schema = _load_json(ph)
     # Required fields on Placeholder
@@ -789,19 +883,34 @@ def test_7_1_18_response_schema_validation_middleware_enabled() -> None:
     # Verify Epic D routes declare response schemas (string refs in code)
     routes_by_path = _route_index_by_path()
     expected_map = {
-        "/transforms/suggest": "SuggestResponse.json",
-        "/transforms/preview": "TransformsPreviewResponse.json",
-        "/transforms/catalog": "TransformsCatalogResponse.json",
-        "/placeholders/bind": "BindResult.json",
-        "/placeholders/unbind": "UnbindResponse.json",
-        "/questions/{id}/placeholders": "ListPlaceholdersResponse.json",
-        "/documents/{id}/bindings:purge": "PurgeResponse.json",
+        "/transforms/suggest": ["SuggestResponse.json", "suggest_response.schema.json"],
+        "/transforms/preview": [
+            "TransformsPreviewResponse.json",
+            "transforms_preview_response.schema.json",
+        ],
+        "/transforms/catalog": [
+            "TransformsCatalogResponse.json",
+            "transforms_catalog_response.schema.json",
+        ],
+        "/placeholders/bind": ["BindResult.json", "bind_result.schema.json"],
+        "/placeholders/unbind": ["UnbindResponse.json", "unbind_response.schema.json"],
+        "/questions/{id}/placeholders": [
+            "ListPlaceholdersResponse.json",
+            "list_placeholders_response.schema.json",
+        ],
+        "/documents/{id}/bindings:purge": ["PurgeResponse.json", "purge_response.schema.json"],
     }
-    for route_path, schema_name in expected_map.items():
+
+    def _src_contains_any(src: str, names: List[str]) -> bool:
+        return any(name in src for name in names)
+
+    for route_path, schema_names in expected_map.items():
         defs = routes_by_path.get(route_path, [])
         assert defs, f"Expected route '{route_path}' to be registered"
         src = _read_text(defs[0].file)
-        assert schema_name in src, f"{route_path} should reference schemas/{schema_name}"
+        assert _src_contains_any(src, schema_names), (
+            f"{route_path} should reference one of schemas: {schema_names}"
+        )
 
 
 # 7.1.19 — Deterministic transform engine exposed as a discrete service
@@ -950,19 +1059,32 @@ def test_7_1_22_placeholder_persistence_fks_and_cascade() -> None:
 def test_7_1_23_catalog_schemas_present_and_deterministic_ordering() -> None:
     """Asserts catalog response schemas exist and handler applies deterministic ordering."""
     # Verifies section 7.1.23
-    resp = SCHEMAS_DIR / "TransformsCatalogResponse.json"
-    item = SCHEMAS_DIR / "TransformsCatalogItem.json"
-    assert resp.exists(), "schemas/TransformsCatalogResponse.json must exist."
-    assert item.exists(), "schemas/TransformsCatalogItem.json must exist."
+    resp = next(
+        (
+            SCHEMAS_DIR / n
+            for n in [
+                "TransformsCatalogResponse.json",
+                "transforms_catalog_response.schema.json",
+            ]
+            if (SCHEMAS_DIR / n).exists()
+        ),
+        None,
+    )
+    item = SCHEMAS_DIR / "transforms_catalog_item.schema.json"
+    assert resp is not None, (
+        "Either TransformsCatalogResponse.json or transforms_catalog_response.schema.json must exist."
+    )
+    assert item.exists(), "schemas/transforms_catalog_item.schema.json must exist."
     # Handler references and ordering hint
     routes_by_path = _route_index_by_path()
     catalog_defs = routes_by_path.get("/transforms/catalog", [])
     assert catalog_defs, "Catalog handler not found; expected '/transforms/catalog'."
     catalog_path = catalog_defs[0].file
     src = _read_text(catalog_path)
-    assert "TransformsCatalogResponse.json" in src, (
-        "Catalog handler should reference TransformsCatalogResponse.json"
-    )
+    assert (
+        "TransformsCatalogResponse.json" in src
+        or "transforms_catalog_response.schema.json" in src
+    ), ("Catalog handler should reference catalog response schema (CamelCase or snake_case)")
     # Strengthen: ensure sort is applied within the decorated function
     fn_defs = _find_route_functions(catalog_path, "/transforms/catalog")
     assert fn_defs, "Could not locate catalog route function via decorator AST."
@@ -1069,16 +1191,31 @@ def test_7_1_27_all_epic_d_routes_wire_response_schemas() -> None:
     # Verifies section 7.1.27
     routes_by_path = _route_index_by_path()
     expected_map = {
-        "/transforms/suggest": "SuggestResponse.json",
-        "/transforms/preview": "TransformsPreviewResponse.json",
-        "/transforms/catalog": "TransformsCatalogResponse.json",
-        "/placeholders/bind": "BindResult.json",
-        "/placeholders/unbind": "UnbindResponse.json",
-        "/questions/{id}/placeholders": "ListPlaceholdersResponse.json",
-        "/documents/{id}/bindings:purge": "PurgeResponse.json",
+        "/transforms/suggest": ["SuggestResponse.json", "suggest_response.schema.json"],
+        "/transforms/preview": [
+            "TransformsPreviewResponse.json",
+            "transforms_preview_response.schema.json",
+        ],
+        "/transforms/catalog": [
+            "TransformsCatalogResponse.json",
+            "transforms_catalog_response.schema.json",
+        ],
+        "/placeholders/bind": ["BindResult.json", "bind_result.schema.json"],
+        "/placeholders/unbind": ["UnbindResponse.json", "unbind_response.schema.json"],
+        "/questions/{id}/placeholders": [
+            "ListPlaceholdersResponse.json",
+            "list_placeholders_response.schema.json",
+        ],
+        "/documents/{id}/bindings:purge": ["PurgeResponse.json", "purge_response.schema.json"],
     }
-    for route_path, schema_name in expected_map.items():
+
+    def _src_contains_any(src: str, names: List[str]) -> bool:
+        return any(name in src for name in names)
+
+    for route_path, schema_names in expected_map.items():
         defs = routes_by_path.get(route_path, [])
         assert defs, f"Expected route '{route_path}' to be registered"
         src = _read_text(defs[0].file)
-        assert schema_name in src, f"{route_path} should reference schemas/{schema_name}"
+        assert _src_contains_any(src, schema_names), (
+            f"{route_path} should reference one of schemas: {schema_names}"
+        )

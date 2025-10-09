@@ -17,7 +17,7 @@
       ],
       "properties": {
         "document_id": {
-          "$ref": "schemas/DocumentId.schema.json"
+          "$ref": "./document_id.schema.json"
         },
         "version": {
           "type": "integer",

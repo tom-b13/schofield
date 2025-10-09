@@ -12,13 +12,8 @@ from typing import Optional
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 from app.logic.etag import doc_etag
-import app.logic.transform_engine as transform_engine
-import hashlib
 import json
-import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict
-import anyio
 import logging
 from app.logic.inmemory_state import (
     PLACEHOLDERS_BY_ID,
@@ -33,12 +28,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Schema references for architectural visibility
-SCHEMA_HTTP_HEADERS = "schemas/HttpHeaders.json"
-SCHEMA_PROBE_RECEIPT = "schemas/ProbeReceipt.json"
-SCHEMA_PLACEHOLDER_PROBE = "schemas/PlaceholderProbe.json"
-SCHEMA_BIND_RESULT = "schemas/BindResult.json"
-SCHEMA_UNBIND_RESPONSE = "schemas/UnbindResponse.json"
-SCHEMA_LIST_PLACEHOLDERS_RESPONSE = "schemas/ListPlaceholdersResponse.json"
+SCHEMA_HTTP_HEADERS = "schemas/http_headers.schema.json"
+SCHEMA_PROBE_RECEIPT = "schemas/probe_receipt.schema.json"
+SCHEMA_PLACEHOLDER_PROBE = "schemas/placeholder_probe.schema.json"
+SCHEMA_BIND_RESULT = "schemas/bind_result.schema.json"
+SCHEMA_UNBIND_RESPONSE = "schemas/unbind_response.schema.json"
+SCHEMA_LIST_PLACEHOLDERS_RESPONSE = "schemas/list_placeholders_response.schema.json"
 
 
 def _not_implemented(detail: str = "") -> JSONResponse:

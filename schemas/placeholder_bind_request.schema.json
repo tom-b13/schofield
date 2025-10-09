@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://b13.ai/schemas/PlaceholderBindRequest.schema.json",
+  "title": "PlaceholderBindRequest",
+  "type": "object",
+  "properties": {
+    "placeholder": { "$ref": "https://b13.ai/schemas/PlaceholderProbe.schema.json" },
+    "probe": { "$ref": "https://b13.ai/schemas/ProbeReceipt.json" }
+  },
+  "required": ["placeholder"],
+  "additionalProperties": false
+}
