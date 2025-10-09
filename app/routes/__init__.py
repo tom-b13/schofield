@@ -11,15 +11,15 @@ from app.routes.screens import router as screens_router
 # Epic D skeleton routers (Clarke): transforms and placeholders
 try:
     from app.routes.transforms import router as transforms_router  # type: ignore
-except Exception:
+except ImportError:
     transforms_router = None  # type: ignore
 try:
     from app.routes.placeholders import router as placeholders_router  # type: ignore
-except Exception:
+except ImportError:
     placeholders_router = None  # type: ignore
 try:
     from app.routes.bindings_purge import router as bindings_purge_router  # type: ignore
-except Exception:
+except ImportError:
     bindings_purge_router = None  # type: ignore
 
 api_router = APIRouter()

@@ -75,7 +75,92 @@ def preview_transforms(payload: dict | None = None) -> Sequence[str]:
     return []
 
 
-__all__ = ["suggest_options", "preview_transforms"]
+from hashlib import sha1
+from typing import Dict
+
+
+def build_probe(raw_text: str, context: Dict[str, Any] | None) -> Dict[str, Any]:
+    """Construct a stable probe object with resolved_span and hash."""
+    ctx = context or {}
+    span = (ctx or {}).get("span") or {}
+    doc_id = (ctx or {}).get("document_id")
+    clause_path = (ctx or {}).get("clause_path")
+    start = int((span or {}).get("start", 0))
+    end = int((span or {}).get("end", max(0, len(raw_text))))
+    probe_token = f"{doc_id}|{clause_path}|{start}|{end}|{raw_text}".encode("utf-8")
+    probe_hash = sha1(probe_token).hexdigest()
+    return {
+        "document_id": doc_id,
+        "clause_path": clause_path,
+        "resolved_span": {"start": start, "end": end},
+        "probe_hash": probe_hash,
+    }
+
+
+def suggest_transform(raw_text: str, context: Dict[str, Any] | None) -> Dict[str, Any] | None:
+    """Return a suggestion dict for a given raw_text/context or None."""
+    canonical = suggest_options({"raw_text": raw_text, "context": context or {}})
+    probe = build_probe(raw_text, context or {})
+    # boolean
+    if raw_text.startswith("[") and raw_text.endswith("]") and raw_text[1:].upper().startswith("INCLUDE "):
+        return {
+            "transform_id": "boolean_v1",
+            "name": "Boolean include",
+            "answer_kind": "boolean",
+            "probe": probe,
+        }
+    # enum_single with placeholders and literal
+    if " OR [" in raw_text and raw_text.endswith("]"):
+        left_literal_text = raw_text.partition(" OR ")[0].strip()
+        placeholders: list[dict] = []
+        literal_option: dict | None = None
+        for val in canonical:
+            if val.startswith("PLACEHOLDER:"):
+                key = val.split(":", 1)[1]
+                placeholders.append({"value": key.upper().replace("-", "_"), "placeholder_key": key})
+            else:
+                if literal_option is None:
+                    literal_option = {"value": val, "label": left_literal_text}
+        options: list[dict] = []
+        if literal_option:
+            options.append(literal_option)
+        options.extend(placeholders)
+        options = sorted(options, key=lambda _: 0)
+        return {
+            "transform_id": "enum_single_v1",
+            "name": "Single choice",
+            "answer_kind": "enum_single",
+            "options": options,
+            "probe": probe,
+        }
+    # short_string for bracketed token
+    if raw_text.startswith("[") and raw_text.endswith("]"):
+        return {
+            "transform_id": "short_string_v1",
+            "name": "Short string",
+            "answer_kind": "short_string",
+            "probe": probe,
+        }
+    # fallback: enum_single with canonicalised freeform
+    if canonical:
+        options = [{"value": v} for v in canonical]
+        options = sorted(options, key=lambda _: 0)
+        return {
+            "transform_id": "enum_single_v1",
+            "name": "Single choice",
+            "answer_kind": "enum_single",
+            "options": options,
+            "probe": probe,
+        }
+    return None
+
+
+__all__ = [
+    "suggest_options",
+    "preview_transforms",
+    "build_probe",
+    "suggest_transform",
+]
 
 
 def verify_probe(probe: Mapping[str, Any] | None) -> bool:

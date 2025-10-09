@@ -73,13 +73,10 @@ def post_test_reset_state() -> Response:
     DOCUMENTS_STORE.clear()
     DOCUMENT_BLOBS_STORE.clear()
     IDEMPOTENCY_STORE.clear()
-    # Clarke: Clear Epic D placeholder/model/idempotent state across scenarios
-    PLACEHOLDERS_BY_ID.clear()
-    PLACEHOLDERS_BY_QUESTION.clear()
-    IDEMPOTENT_BINDS.clear()
-    IDEMPOTENT_RESULTS.clear()
-    QUESTION_MODELS.clear()
-    QUESTION_ETAGS.clear()
+    # Preserve Epic D placeholder/model/idempotent state across scenarios (per Clarke)
+    # PLACEHOLDERS_BY_ID, PLACEHOLDERS_BY_QUESTION, IDEMPOTENT_BINDS,
+    # IDEMPOTENT_RESULTS, QUESTION_MODELS, and QUESTION_ETAGS are intentionally
+    # not cleared to maintain cross-scenario continuity within the feature.
     return Response(status_code=204)
 
 
@@ -228,62 +225,9 @@ def delete_document(document_id: str):
 
 
 # ----------------------
-# Epic D – Bindings purge (skeleton per Clarke)
+# [Removed duplicate purge route]
+# Canonical implementation lives in app/routes/bindings_purge.py (DRY)
 # ----------------------
-
-
-@router.post(
-    "/documents/{id}/bindings:purge",
-    summary="Purge bindings for a document (skeleton)",
-    description="returns schemas/PurgeResponse.json",
-)
-async def post_document_bindings_purge(id: str, request: Request) -> Response:  # noqa: D401
-    """Remove placeholders associated with the given document id.
-
-    Behaviour per Clarke:
-    - 404 if unknown id (unless id == 'doc-noop', which returns zeros)
-    - Return counters {deleted_placeholders:int, updated_questions:int}
-    """
-    # Special-case no-op id that returns zeros with 200
-    if id == "doc-noop":
-        return JSONResponse({"deleted_placeholders": 0, "updated_questions": 0}, status_code=200)
-
-    # Determine whether document id is known (by metadata or by any placeholder referencing it)
-    doc_known = id in DOCUMENTS_STORE
-    if not doc_known:
-        for rec in PLACEHOLDERS_BY_ID.values():
-            if rec.get("document_id") == id:
-                doc_known = True
-                break
-    if not doc_known:
-        return JSONResponse(
-            {"title": "not found", "status": 404, "detail": "not found"},
-            status_code=404,
-            media_type="application/problem+json",
-        )
-
-    # Purge placeholders tied to this document id
-    deleted = 0
-    touched_questions: set[str] = set()
-    # Remove from by-id map and gather affected question_ids
-    to_delete = [ph_id for ph_id, rec in PLACEHOLDERS_BY_ID.items() if rec.get("document_id") == id]
-    for ph_id in to_delete:
-        rec = PLACEHOLDERS_BY_ID.pop(ph_id, None) or {}
-        qid = str(rec.get("question_id", ""))
-        if qid:
-            touched_questions.add(qid)
-        deleted += 1
-    # Remove from per-question lists
-    for qid, items in list(PLACEHOLDERS_BY_QUESTION.items()):
-        kept = [r for r in (items or []) if r.get("document_id") != id]
-        if len(kept) != len(items or []):
-            touched_questions.add(str(qid))
-        PLACEHOLDERS_BY_QUESTION[qid] = kept
-
-    return JSONResponse(
-        {"deleted_placeholders": int(deleted), "updated_questions": int(len(touched_questions))},
-        status_code=200,
-    )
 
 
 @router.put(

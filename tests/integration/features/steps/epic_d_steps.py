@@ -57,13 +57,21 @@ def epic_d_stage_header(context, name: str, value: str):
                         q_id = q_map.get(ext) or _resolve_id(ext, q_map, prefix="q:")
                         doc_alias = vars_map.get("document_id") or vars_map.get("doc-001") or "doc-001"
                         doc_resolved = vars_map.get(str(doc_alias), doc_alias)
-                        step_when_get(
-                            context,
-                            f"/api/v1/questions/{q_id}/placeholders?document_id={doc_resolved}",
+                        url = f"/api/v1/questions/{q_id}/placeholders?document_id={doc_resolved}"
+                        # Snapshot current last_response to avoid mutating it during staging
+                        prev_last = getattr(context, "last_response", None)
+                        status, headers_out, _body_json, _body_text = _http_request(
+                            context, "GET", url, headers={"Accept": "*/*"}
                         )
-                        from questionnaire_steps import _get_header_case_insensitive as _hget  # type: ignore
-
-                        latest = _hget(context.last_response.get("headers", {}) or {}, "ETag")
+                        # Extract ETag from returned headers case-insensitively
+                        latest = None
+                        try:
+                            for hk, hv in (headers_out or {}).items():
+                                if str(hk).lower() == "etag":
+                                    latest = hv
+                                    break
+                        except Exception:
+                            latest = None
                         if isinstance(latest, (bytes, bytearray)):
                             try:
                                 latest = latest.decode("utf-8")
@@ -72,6 +80,12 @@ def epic_d_stage_header(context, name: str, value: str):
                         if isinstance(latest, str) and latest.strip():
                             vars_map[key] = latest
                             ivalue = latest
+                        # Restore previous last_response so staging does not change assertion target
+                        if prev_last is not None:
+                            try:
+                                context.last_response = prev_last
+                            except Exception:
+                                pass
                     except Exception:
                         # Leave ivalue unresolved; resend logic below may still recover
                         pass
