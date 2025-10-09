@@ -790,7 +790,12 @@
 {
 "name": "value_text",
 "type": "text"
+},
+{
+"name": "state_version",
+"type": "int"
 }
+
 ],
 "primary_key": {
 "name": "pk_response",
@@ -833,7 +838,8 @@
 "columns": [
 "response_set_id"
 ]
-}
+},
+"on_delete": "cascade"
 }
 ],
 "unique": [
@@ -879,6 +885,10 @@
 },
 {
 "name": "created_by",
+"type": "text"
+},
+{
+"name": "name",
 "type": "text"
 },
 {
