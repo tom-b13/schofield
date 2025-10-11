@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from typing import Callable, Iterable, List, Tuple
 
+from app.models.visibility import NowVisible
+
 
 def compute_visibility_delta(
     pre_visible: Iterable[str],
     post_visible: Iterable[str],
     has_answer: Callable[[str], bool],
-) -> Tuple[list[str], list[str], list[str]]:
+) -> Tuple[list, list[str], list[str]]:
     """Compute visibility delta and suppressed answers.
 
     - now_visible: questions newly visible (in post but not in pre)
@@ -27,7 +29,11 @@ def compute_visibility_delta(
     pre_set = set(pre_visible)
     post_set = set(post_visible)
 
-    now_visible = sorted(list(post_set - pre_set))
+    # Return now_visible as a list of objects with at least the 'question' field
+    # to satisfy Epic E contract expectations. Answer is optional and omitted
+    # when not readily available without extra I/O.
+    _new_visible_ids = sorted(list(post_set - pre_set))
+    now_visible = [{"question": qid} for qid in _new_visible_ids]
     now_hidden = sorted(list(pre_set - post_set))
 
     suppressed_answers: List[str] = []
@@ -36,4 +42,3 @@ def compute_visibility_delta(
             suppressed_answers.append(qid)
 
     return now_visible, now_hidden, suppressed_answers
-

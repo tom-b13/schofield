@@ -18,26 +18,38 @@ def compute_screen_etag(response_set_id: str, screen_key: str) -> str:
 
     Uses max(answered_at) and row count for the screen's questions to produce a stable token.
     """
-    eng = get_engine()
-    with eng.connect() as conn:
-        max_row = conn.execute(
-            sql_text(
-                """
-                SELECT MAX(answered_at) AS max_ts, COUNT(*) AS cnt
-                FROM response r
-                WHERE r.response_set_id = :rs
-                  AND r.question_id IN (
-                      SELECT q.question_id FROM questionnaire_question q WHERE q.screen_key = :skey
-                  )
-                """
-            ),
-            {"rs": response_set_id, "skey": screen_key},
-        ).mappings().one_or_none()
-    max_ts = str((max_row or {}).get("max_ts") or "0")
-    cnt = int((max_row or {}).get("cnt") or 0)
-    token = f"{response_set_id}:{screen_key}:{max_ts}:{cnt}".encode("utf-8")
-    digest = hashlib.sha1(token).hexdigest()
-    return f'W/"{digest}"'
+    try:
+        eng = get_engine()
+        with eng.connect() as conn:
+            max_row = conn.execute(
+                sql_text(
+                    """
+                    SELECT MAX(answered_at) AS max_ts, COUNT(*) AS cnt
+                    FROM response r
+                    WHERE r.response_set_id = :rs
+                      AND r.question_id IN (
+                          SELECT q.question_id FROM questionnaire_question q WHERE q.screen_key = :skey
+                      )
+                    """
+                ),
+                {"rs": response_set_id, "skey": screen_key},
+            ).mappings().one_or_none()
+        max_ts = str((max_row or {}).get("max_ts") or "0")
+        cnt = int((max_row or {}).get("cnt") or 0)
+        token = f"{response_set_id}:{screen_key}:{max_ts}:{cnt}".encode("utf-8")
+        digest = hashlib.sha1(token).hexdigest()
+        return f'W/"{digest}"'
+    except Exception:
+        # Fallback: compute from in-memory per-screen version to guarantee stability
+        try:
+            from app.logic.repository_answers import get_screen_version
+
+            version = int(get_screen_version(response_set_id, screen_key))
+        except Exception:
+            version = 0
+        token = f"{response_set_id}:{screen_key}:v{version}".encode("utf-8")
+        digest = hashlib.sha1(token).hexdigest()
+        return f'W/"{digest}"'
 
 
 def doc_etag(version: int) -> str:

@@ -106,6 +106,9 @@ def create_app() -> FastAPI:
 
     # Routers
     app.include_router(api_router, prefix="/api/v1")
+    # Include test-support router (no prefix) to expose '/__test__/events'
+    from app.routes.test_support import router as test_support_router
+    app.include_router(test_support_router)
 
     # Health endpoint (out of prefix for simplicity in local runs)
     health_check = _health_check()

@@ -5,6 +5,10 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.routes.answers import router as answers_router
+try:
+    from app.routes.response_sets import router as response_sets_router  # type: ignore
+except ImportError:
+    response_sets_router = None  # type: ignore
 from app.routes.documents import router as documents_router
 from app.routes.questionnaires import router as questionnaires_router
 from app.routes.screens import router as screens_router
@@ -26,6 +30,8 @@ api_router = APIRouter()
 api_router.include_router(questionnaires_router, tags=["Questionnaires", "Import", "Export"])  # tags applied per-operation
 api_router.include_router(screens_router, tags=["ScreenView", "Gating"])  # tags applied per-operation
 api_router.include_router(answers_router, tags=["Autosave"])  # tags applied per-operation
+if response_sets_router is not None:
+    api_router.include_router(response_sets_router, tags=["ResponseSets"])  # Epic E skeleton routes
 api_router.include_router(documents_router, tags=["Documents"])  # Epic C skeleton routes
 if transforms_router is not None:
     api_router.include_router(transforms_router, tags=["Transforms"])  # Epic D skeleton

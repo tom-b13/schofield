@@ -24,6 +24,7 @@ from questionnaire_steps import (
     _interpolate,
     step_when_get,
     _resolve_id,
+    _rewrite_path,
 )
 
 
@@ -146,8 +147,12 @@ def epic_c_post_json(context, path: str):
             headers.update({str(k): str(v) for k, v in staged.items()})
     except Exception:
         pass
+    # Ensure any '/response-sets/...' paths have tokens rewritten before dispatch
+    post_path = _interpolate(path, context)
+    if isinstance(post_path, str) and "/response-sets/" in post_path:
+        post_path = _rewrite_path(context, post_path)
     status, headers_out, body_json, body_text = _http_request(
-        context, "POST", path, headers=headers, json_body=body
+        context, "POST", post_path, headers=headers, json_body=body
     )
     context.last_response = {
         "status": status,
@@ -155,10 +160,20 @@ def epic_c_post_json(context, path: str):
         "json": body_json,
         "text": body_text,
         "bytes": getattr(context, "_last_response_bytes", None),
-        "path": path,
+        "path": post_path,
         "method": "POST",
     }
-    if status == 201 and body_json is not None:
+    # Validate as DocumentResponse only for /documents POSTs; do not apply to
+    # unrelated endpoints such as /response-sets which have different shapes.
+    try:
+        normalized_path = str(post_path)
+    except Exception:
+        normalized_path = str(path)
+    if (
+        status == 201
+        and body_json is not None
+        and (normalized_path.rstrip("/").endswith("/documents") or normalized_path.startswith("/documents"))
+    ):
         _validate_with_name(body_json, "DocumentResponse")
     # Store last POST details for idempotent replay and value comparisons
     try:
@@ -464,11 +479,38 @@ def epic_c_patch_json(context, path: str):
         body = json.loads(raw)
     except Exception as exc:
         raise AssertionError(f"Invalid JSON body: {exc}\n{raw}")
+    # Rewrite tokenized response-sets paths to real UUIDs before dispatch
+    p_path = _interpolate(path, context)
+    if isinstance(p_path, str) and "/response-sets/" in p_path:
+        p_path = _rewrite_path(context, p_path)
+    # Merge any staged headers (e.g., runtime-failure toggles) before dispatch
+    headers = {"Content-Type": "application/json", "Accept": "*/*"}
+    try:
+        staged = getattr(context, "_pending_headers", {}) or {}
+        if isinstance(staged, dict) and staged:
+            headers.update({str(k): str(v) for k, v in staged.items()})
+    except Exception:
+        pass
+    # If no 'If-Match' staged and path targets '/response-sets/', set from context vars
+    try:
+        needs_if_match = True
+        for k in list(headers.keys()):
+            if str(k).lower() == "if-match" and str(headers[k]).strip():
+                needs_if_match = False
+                break
+        if needs_if_match and isinstance(p_path, str) and "/response-sets/" in p_path:
+            vars_map = getattr(context, "vars", {}) or {}
+            token = vars_map.get("stale_etag") or vars_map.get("etag")
+            if isinstance(token, (str, bytes, bytearray)):
+                headers["If-Match"] = token.decode("utf-8") if isinstance(token, (bytes, bytearray)) else str(token)
+    except Exception:
+        # Non-fatal; proceed without auto If-Match if vars missing
+        pass
     status, headers_out, body_json, body_text = _http_request(
         context,
         "PATCH",
-        _interpolate(path, context),
-        headers={"Content-Type": "application/json", "Accept": "*/*"},
+        p_path,
+        headers=headers,
         json_body=body,
     )
     context.last_response = {
@@ -477,11 +519,12 @@ def epic_c_patch_json(context, path: str):
         "json": body_json,
         "text": body_text,
         "bytes": getattr(context, "_last_response_bytes", None),
-        "path": path,
+        "path": p_path,
         "method": "PATCH",
     }
     if status == 200 and body_json is not None:
         _validate_with_name(body_json, "DocumentResponse")
+    # Do not clear _pending_headers here; caller may reuse for subsequent requests if needed
 
 
 # ----------------------
@@ -489,6 +532,7 @@ def epic_c_patch_json(context, path: str):
 # ----------------------
 
 @then('the response JSON at "{json_path}" should be a valid UUIDv4')
+@then('the JSON at "{json_path}" is a valid UUID')
 def epic_c_assert_uuid_v4(context, json_path: str):
     body = context.last_response.get("json")
     assert isinstance(body, (dict, list)), "No JSON body"
@@ -724,9 +768,36 @@ def epic_c_seed_docs_ordered(context):
 
 @when('I DELETE "{path}"')
 def epic_c_delete_path(context, path: str):
-    # Interpolate aliases in path
-    ipath = _interpolate(path, context)
-    status, headers_out, body_json, body_text = _http_request(context, "DELETE", ipath)
+    # Interpolate aliases in path and handle optional inline header capture due to greedy match
+    raw = _interpolate(path, context)
+    header_name = None
+    header_value = None
+    ipath = raw
+    try:
+        # Detect pattern: <path>" with header "<Name>: <Value>
+        marker = '" with header "'
+        if marker in raw:
+            # Split once at the marker and strip surrounding quotes if any
+            left, right = raw.split(marker, 1)
+            ipath = left
+            # Remove a trailing '"' at end of path if present
+            if ipath.endswith('"'):
+                ipath = ipath[:-1]
+            # Parse header "Name: Value" (strip trailing quote if present)
+            if right.endswith('"'):
+                right = right[:-1]
+            if ":" in right:
+                hname, hval = right.split(":", 1)
+                header_name = hname.strip()
+                header_value = hval.strip()
+    except Exception:
+        # Fallback to using the raw path unchanged
+        ipath = raw
+    # Prepare headers
+    headers = {"Accept": "*/*"}
+    if header_name and header_value:
+        headers[header_name] = header_value
+    status, headers_out, body_json, body_text = _http_request(context, "DELETE", ipath, headers=headers)
     context.last_response = {
         "status": status,
         "headers": headers_out,

@@ -774,6 +774,10 @@
 "type": "uuid"
 },
 {
+"name": "state_version",
+"type": "int"
+},
+{
 "name": "value_bool",
 "type": "boolean"
 },
@@ -790,10 +794,6 @@
 {
 "name": "value_text",
 "type": "text"
-},
-{
-"name": "state_version",
-"type": "int"
 }
 
 ],

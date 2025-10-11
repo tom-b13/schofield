@@ -24,8 +24,10 @@ PLACEHOLDERS_BY_ID: Dict[str, Dict] = {}
 PLACEHOLDERS_BY_QUESTION: Dict[str, list[Dict]] = {}
 # Composite-key (Idempotency-Key + payload hash) -> placeholder_id
 IDEMPOTENT_BINDS: Dict[str, str] = {}
-# Full response replay store: Idempotency-Key -> {body, etag}
+# Full response replay store (generic): Idempotency-Key -> {body, etag}
 IDEMPOTENT_RESULTS: Dict[str, dict] = {}
+# Epic E answers replay store: Idempotency-Key -> {body, etag, screen_etag}
+ANSWERS_IDEMPOTENT_RESULTS: Dict[str, dict] = {}
 # Track per-question model (answer_kind) and last ETag for conflict/precondition checks
 QUESTION_MODELS: Dict[str, str] = {}
 QUESTION_ETAGS: Dict[str, str] = {}
@@ -38,6 +40,7 @@ __all__ = [
     "PLACEHOLDERS_BY_QUESTION",
     "IDEMPOTENT_BINDS",
     "IDEMPOTENT_RESULTS",
+    "ANSWERS_IDEMPOTENT_RESULTS",
     "QUESTION_MODELS",
     "QUESTION_ETAGS",
 ]

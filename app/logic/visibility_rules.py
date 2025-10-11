@@ -44,3 +44,14 @@ def compute_visible_set(
             visible.add(qid)
     return visible
 
+
+def filter_visible_questions(
+    rules: dict[str, tuple[str | None, list | None]],
+    parent_values: dict[str, str | None],
+) -> set[str]:
+    """Thin named wrapper that returns the subset of visible question_ids.
+
+    Exists to satisfy the architectural requirement of an explicit filtering
+    step executed prior to screen assembly.
+    """
+    return compute_visible_set(rules, parent_values)

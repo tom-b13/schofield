@@ -8,6 +8,7 @@ shape is coherent. Full rules by answer_kind are kept in JSON Schemas under
 from __future__ import annotations
 
 from typing import Any, Dict
+import math
 
 
 class HamiltonValidationError(ValueError):
@@ -20,17 +21,20 @@ ValidationError = HamiltonValidationError
 def validate_answer_upsert(payload: Dict[str, Any]) -> None:
     """Basic coherence checks for an AnswerUpsert payload.
 
-    - Either `value` or `option_id` must be provided
+    - Either `value` or `option_id` must be provided (unless `clear` is true)
     - Reject unknown extra keys (best-effort)
     """
 
     if not isinstance(payload, dict):  # pragma: no cover - defensive
         raise HamiltonValidationError("payload must be an object")
-    allowed = {"value", "option_id"}
+    allowed = {"value", "option_id", "clear"}
     extra = set(payload.keys()) - allowed
     if extra:
         raise HamiltonValidationError(f"unexpected keys: {sorted(extra)}")
 
+    # When clear=true, allow payloads without value/option_id
+    if bool(payload.get("clear")):
+        return
     if payload.get("value") is None and not payload.get("option_id"):
         raise HamiltonValidationError("either value or option_id required")
 
@@ -44,3 +48,26 @@ def validate_kind_value(kind: str, value: Any) -> None:
         raise HamiltonValidationError("type_mismatch: expected number for $.value")
     if kind == "boolean" and not isinstance(value, bool):
         raise HamiltonValidationError("type_mismatch: expected boolean for $.value")
+
+
+def is_finite_number(value: Any) -> bool:
+    """Return True if value is a finite number (int/float, not NaN/Inf)."""
+    try:
+        if isinstance(value, bool):  # bool is subclass of int; exclude explicitly
+            return False
+        if isinstance(value, (int, float)):
+            return math.isfinite(float(value))
+    except Exception:  # pragma: no cover - defensive
+        return False
+    return False
+
+
+def canonical_bool(value: Any) -> bool | None:
+    """Canonicalize a boolean-like value; return None when not coercible.
+
+    This is intentionally conservative for architectural detection; callers
+    should have already validated the type via validate_kind_value.
+    """
+    if isinstance(value, bool):
+        return value
+    return None

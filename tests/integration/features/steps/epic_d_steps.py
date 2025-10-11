@@ -219,6 +219,12 @@ def epic_d_json_should_have(context, path: str):
     assert val is not None, f"Expected path {json_path} to exist"
 
 
+# Clarke alias for absence assertion used by Epic E
+@then('the JSON at "{path}" is absent')
+def epic_d_json_absent_alias(context, path: str):
+    return epic_d_json_path_absent(context, path)
+
+
 @then('the response JSON at "{path}" should contain at least 1 element')
 def epic_d_json_array_min_len(context, path: str):
     body = context.last_response.get("json")
