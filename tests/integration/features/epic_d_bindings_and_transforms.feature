@@ -1,346 +1,337 @@
-Feature: Epic E – Response Ingestion API (house-style)
-Exercise all happy paths and key sad paths for creating response sets, reading screens, saving/clearing answers, batching, and deleting sets.
+Feature: Epic D – Placeholders, Bindings and Transforms
 
 Background:
 Given a clean database
-And the API base url is "/api/v1"
-And a questionnaire exists with screen_key "profile" containing:
-| question_id                            | kind         | label          | options                                                                                                  |
-| 11111111-1111-1111-1111-111111111111   | number       | Age            |                                                                                                          |
-| 22222222-2222-2222-2222-222222222222   | boolean      | Newsletter?    |                                                                                                          |
-| 33333333-3333-3333-3333-333333333333   | enum_single  | Country        | [{"option_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","value":"GB","label":"United Kingdom"}]            |
-| 44444444-4444-4444-4444-444444444444   | short_string | Alias          |                                                                                                          |
-And an event sink is attached for "response.saved" and "response_set.deleted"
+And the API base URL is "/api/v1"
+And a document "doc-001" exists containing a clause at path "1.2"
+And questions exist:
+| question_id | text                                 |
+| q-short     | What is the contact name?            |
+| q-boolean   | Include whistleblowing clause?       |
+| q-enum      | Where is the policy published?       |
+| q-nested    | Who is responsible for this policy?  |
+And the system has no existing placeholders for these questions
+And the current question ETags are known:
+| question_id | etag      |
+| q-short     | etag-s-1  |
+| q-boolean   | etag-b-1  |
+| q-enum      | etag-e-1  |
+| q-nested    | etag-n-1  |
 
-# -------------------------
-
-# Happy paths
-
-# -------------------------
-
-@happy @post @response_set
-Scenario: Create response set returns identifier, name, etag, created_at
-When I POST "/response-sets" with body:
-"""
-{ "name": "Client Intake 2025-03" }
-"""
-And headers:
-| Content-Type | application/json |
-Then the response status should be 201
-And the response JSON at "$.response_set_id" should be a valid UUID
-And the response JSON at "$.name" should equal "Client Intake 2025-03"
-And the response JSON at "$.etag" should be a non-empty string
-And the response JSON at "$.created_at" should be an RFC3339 UTC timestamp
-
-@happy @get @screen
-Scenario: Read screen returns screen_view with Screen-ETag header
-Given I create a response set named "Client Intake A" and capture "response_set_id"
-When I GET "/response-sets/{response_set_id}/screens/profile"
-Then the response status should be 200
-And the response header "Screen-ETag" should equal the response JSON at "$.screen_view.etag"
-And the response JSON at "$.screen_view.screen_key" should equal "profile"
-And the response JSON at "$.screen_view.questions" should be an array
-
-@happy @patch @number
-Scenario: Save finite number to number-kind question
-Given I have a current ETag for question "11111111-1111-1111-1111-111111111111" in response_set "{response_set_id}" as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/11111111-1111-1111-1111-111111111111" with body:
-"""
-{ "value": 42 }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response status should be 200
-And the response JSON at "$.saved.question_id" should equal "11111111-1111-1111-1111-111111111111"
-And the response JSON at "$.etag" should not equal "{etag}"
-And the response JSON at "$.screen_view.questions[?(@.question_id=='11111111-1111-1111-1111-111111111111')].answer.number" should equal 42
-
-@happy @patch @boolean
-Scenario: Save boolean literal to boolean-kind question
-Given I have a current ETag for question "22222222-2222-2222-2222-222222222222" in response_set "{response_set_id}" as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/22222222-2222-2222-2222-222222222222" with body:
-"""
-{ "value": true }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response status should be 200
-And the response JSON at "$.saved.question_id" should equal "22222222-2222-2222-2222-222222222222"
-And the response JSON at "$.etag" should not equal "{etag}"
-And the response JSON at "$.screen_view.questions[?(@.question_id=='22222222-2222-2222-2222-222222222222')].answer.bool" should equal true
-
-@happy @patch @enum
-Scenario: Save enum_single by option_id is represented as option_id
-Given I have a current ETag for question "33333333-3333-3333-3333-333333333333" in response_set "{response_set_id}" as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/33333333-3333-3333-3333-333333333333" with body:
-"""
-{ "option_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response status should be 200
-And the response JSON at "$.screen_view.questions[?(@.question_id=='33333333-3333-3333-3333-333333333333')].answer.option_id" should equal "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-
-@happy @patch @enum
-Scenario: Save enum_single by canonical value token resolves to option_id
-Given I have a current ETag for question "33333333-3333-3333-3333-333333333333" in response_set "{response_set_id}" as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/33333333-3333-3333-3333-333333333333" with body:
-"""
-{ "value": "GB" }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response status should be 200
-And the response JSON at "$.screen_view.questions[?(@.question_id=='33333333-3333-3333-3333-333333333333')].answer.option_id" should equal "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-
-@happy @patch @text
-Scenario: Save short_string round-trips unchanged
-Given I have a current ETag for question "44444444-4444-4444-4444-444444444444" in response_set "{response_set_id}" as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/44444444-4444-4444-4444-444444444444" with body:
-"""
-{ "value": "alpha-42" }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response status should be 200
-And the response JSON at "$.screen_view.questions[?(@.question_id=='44444444-4444-4444-4444-444444444444')].answer.text" should equal "alpha-42"
-
-@happy @patch @clear
-Scenario: PATCH clear=true removes the answer and updates Screen-ETag
-Given the question "22222222-2222-2222-2222-222222222222" has a stored answer in response_set "{response_set_id}"
-And I have a current ETag for that question as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/22222222-2222-2222-2222-222222222222" with body:
-"""
-{ "clear": true }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response status should be 200
-And the response JSON at "$.screen_view.questions[?(@.question_id=='22222222-2222-2222-2222-222222222222')].answer" should be absent
-And the response header "Screen-ETag" should equal the response JSON at "$.screen_view.etag"
-
-@happy @delete @answer
-Scenario: DELETE answer returns 204 and updated ETag header
-Given the question "11111111-1111-1111-1111-111111111111" has a stored answer in response_set "{response_set_id}"
-And I have a current ETag for that question as "{etag}"
-When I DELETE "/response-sets/{response_set_id}/answers/11111111-1111-1111-1111-111111111111"
-And headers:
-| If-Match | {etag} |
-Then the response status should be 204
-And the response header "ETag" should be a non-empty string different to "{etag}"
-
-@happy @events
-Scenario: Save emits response.saved event
-Given I have a current ETag for question "44444444-4444-4444-4444-444444444444" in response_set "{response_set_id}" as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/44444444-4444-4444-4444-444444444444" with body:
-"""
-{ "value": "gamma" }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response status should be 200
-And the event sink should contain exactly one "response.saved" event with:
-| payload.response_set_id | {response_set_id}                      |
-| payload.question_id     | 44444444-4444-4444-4444-444444444444   |
-| payload.state_version   | integer >= 0                           |
-
-@happy @batch
-Scenario: Batch upsert with merge strategy succeeds and preserves item order
-Given I capture current ETags for:
-| question_id                            | etag_var   |
-| 11111111-1111-1111-1111-111111111111   | {etag_q1}  |
-| 22222222-2222-2222-2222-222222222222   | {etag_q2}  |
-When I POST "/response-sets/{response_set_id}/answers:batch" with body:
+@happy @suggest-short_string
+Scenario: Suggest transform for a short text placeholder
+When I POST "/api/v1/transforms/suggest" with JSON:
 """
 {
-"update_strategy": "merge",
-"items": [
-{ "question_id": "11111111-1111-1111-1111-111111111111", "etag": "{etag_q1}", "body": { "value": 7 } },
-{ "question_id": "22222222-2222-2222-2222-222222222222", "etag": "{etag_q2}", "body": { "value": false } }
-]
+"raw_text": "[CONTACT NAME]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 40, "end": 54 } }
 }
 """
-And headers:
-| Content-Type | application/json |
 Then the response status should be 200
-And the response JSON at "$.batch_result.items[0].question_id" should equal "11111111-1111-1111-1111-111111111111"
-And the response JSON at "$.batch_result.items[1].question_id" should equal "22222222-2222-2222-2222-222222222222"
-And the response JSON at "$.batch_result.items[*].outcome" should all equal "success"
+And the response JSON at "answer_kind" should be "short_string"
+And the response JSON should have a "probe.probe_hash"
+And the response JSON at "probe.document_id" should be "doc-001"
+And the response JSON at "probe.clause_path" should be "1.2"
+And the response JSON at "options" should be absent
 
-@happy @delete @response_set
-Scenario: Delete response set cascades answers and emits event
-Given I have a current ETag for response_set "{response_set_id}" as "{etag_set}"
-When I DELETE "/response-sets/{response_set_id}"
-And headers:
-| If-Match | {etag_set} |
-Then the response status should be 204
-And the event sink should contain exactly one "response_set.deleted" event with:
-| payload.response_set_id | {response_set_id} |
-
-# -------------------------
-
-# Key sad paths (contractual)
-
-# -------------------------
-
-@sad @patch @precondition
-Scenario: PATCH without required If-Match header
-Given I have a response set "{response_set_id}"
-When I PATCH "/response-sets/{response_set_id}/answers/11111111-1111-1111-1111-111111111111" with body:
-"""
-{ "value": 9 }
-"""
-And headers:
-| Content-Type | application/json |
-Then the response content type should be "application/problem+json"
-And the response JSON at "$.code" should equal "PRE_IF_MATCH_MISSING"
-
-@sad @patch @precondition
-Scenario: PATCH with stale ETag
-Given I have a response set "{response_set_id}" and a stale ETag for "11111111-1111-1111-1111-111111111111" as "{stale_etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/11111111-1111-1111-1111-111111111111" with body:
-"""
-{ "value": 10 }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {stale_etag}     |
-Then the response content type should be "application/problem+json"
-And the response JSON at "$.code" should equal "PRE_IF_MATCH_ETAG_MISMATCH"
-
-@sad @patch @validation
-Scenario: Save number with non-finite value is rejected
-Given I have a current ETag for question "11111111-1111-1111-1111-111111111111" in response_set "{response_set_id}" as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/11111111-1111-1111-1111-111111111111" with body:
-"""
-{ "value": "Infinity" }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response content type should be "application/problem+json"
-And the response JSON at "$.code" should equal "PRE_ANSWER_PATCH_VALUE_NUMBER_NOT_FINITE"
-
-@sad @patch @validation
-Scenario: Save boolean with non-literal value is rejected
-Given I have a current ETag for question "22222222-2222-2222-2222-222222222222" in response_set "{response_set_id}" as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/22222222-2222-2222-2222-222222222222" with body:
-"""
-{ "value": "yes" }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response content type should be "application/problem+json"
-And the response JSON at "$.code" should equal "PRE_ANSWER_PATCH_VALUE_NOT_BOOLEAN_LITERAL"
-
-@sad @patch @validation
-Scenario: Save enum_single with unknown value token is rejected
-Given I have a current ETag for question "33333333-3333-3333-3333-333333333333" in response_set "{response_set_id}" as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/33333333-3333-3333-3333-333333333333" with body:
-"""
-{ "value": "XX" }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response content type should be "application/problem+json"
-And the response JSON at "$.code" should equal "PRE_ANSWER_PATCH_VALUE_TOKEN_UNKNOWN"
-
-@sad @patch @validation
-Scenario: Save enum_single with invalid option_id format is rejected
-Given I have a current ETag for question "33333333-3333-3333-3333-333333333333" in response_set "{response_set_id}" as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/33333333-3333-3333-3333-333333333333" with body:
-"""
-{ "option_id": "not-a-uuid" }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response content type should be "application/problem+json"
-And the response JSON at "$.code" should equal "PRE_ANSWER_PATCH_OPTION_ID_INVALID_UUID"
-
-@sad @patch @notfound
-Scenario: Unknown question_id returns not found contract error
-Given I have a response set "{response_set_id}" and a random question_id "99999999-9999-9999-9999-999999999999"
-And I have a current ETag for that random question_id as "{etag}"
-When I PATCH "/response-sets/{response_set_id}/answers/99999999-9999-9999-9999-999999999999" with body:
-"""
-{ "value": 1 }
-"""
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response content type should be "application/problem+json"
-And the response JSON at "$.code" should equal "PRE_QUESTION_ID_UNKNOWN"
-
-@sad @get @notfound
-Scenario: Unknown response_set_id returns not found contract error
-When I GET "/response-sets/88888888-8888-8888-8888-888888888888/screens/profile"
-Then the response content type should be "application/problem+json"
-And the response JSON at "$.code" should equal "PRE_RESPONSE_SET_ID_UNKNOWN"
-
-@sad @batch @validation
-Scenario: Batch item missing question_id yields per-item error outcome
-Given I have a response set "{response_set_id}"
-When I POST "/response-sets/{response_set_id}/answers:batch" with body:
+@happy @bind-first-short_string
+Scenario: Bind first short_string placeholder sets the question model
+Given I have a valid TransformSuggestion for "[CONTACT NAME]" with answer_kind "short_string" and probe for doc-001/1.2
+When I POST "/api/v1/placeholders/bind" with JSON:
 """
 {
-"update_strategy": "merge",
-"items": [
-{ "etag": "W/"ignored-etag"", "body": { "value": 1 } }
-]
+"question_id": "q-short",
+"transform_id": "short_string_v1",
+"placeholder": {
+"raw_text": "[CONTACT NAME]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 40, "end": 54 } }
+},
+"apply_mode": "apply"
 }
 """
-And headers:
-| Content-Type | application/json |
+And header "If-Match" is "etag-s-1"
+And header "Idempotency-Key" is "key-001"
 Then the response status should be 200
-And the response JSON at "$.batch_result.items[0].outcome" should equal "error"
-And the response JSON at "$.batch_result.items[0].error.code" should equal "PRE_BATCH_ITEM_QUESTION_ID_MISSING"
+And the response JSON at "bound" should be true
+And the response JSON at "question_id" should be "q-short"
+And the response JSON at "answer_kind" should be "short_string"
+And the response JSON should have "placeholder_id"
+And the response JSON should not have "options"
 
-@sad @batch @concurrency
-Scenario: Batch item with stale etag yields per-item error outcome
-Given I have a response set "{response_set_id}"
-When I POST "/response-sets/{response_set_id}/answers:batch" with body:
+@happy @idempotent-bind
+Scenario: Idempotent bind replays safely with the same Idempotency-Key
+When I repeat the previous POST with the exact same body and headers
+Then the response status should be 200
+And the response JSON at "placeholder_id" should equal the previously returned "placeholder_id"
+
+@happy @suggest-boolean
+Scenario: Suggest transform for boolean inclusion
+When I POST "/api/v1/transforms/suggest" with JSON:
 """
 {
-"update_strategy": "merge",
-"items": [
-{ "question_id": "11111111-1111-1111-1111-111111111111", "etag": "W/"stale"", "body": { "value": 3 } }
-]
+"raw_text": "[INCLUDE THIS CLAUSE]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 60, "end": 81 } }
 }
 """
-And headers:
-| Content-Type | application/json |
 Then the response status should be 200
-And the response JSON at "$.batch_result.items[0].outcome" should equal "error"
-And the response JSON at "$.batch_result.items[0].error.code" should equal "PRE_BATCH_ITEM_ETAG_MISMATCH"
+And the response JSON at "answer_kind" should be "boolean"
+And the response JSON should not have "options"
 
-@sad @runtime @patch
-Scenario: Runtime failure during save upsert returns runtime contract error
-Given I have a current ETag for question "44444444-4444-4444-4444-444444444444" in response_set "{response_set_id}" as "{etag}"
-And the repository upsert will fail at runtime for this request
-When I PATCH "/response-sets/{response_set_id}/answers/44444444-4444-4444-4444-444444444444" with body:
+@happy @bind-boolean
+Scenario: Bind boolean placeholder leaves no options and sets model
+When I POST "/api/v1/placeholders/bind" with JSON:
 """
-{ "value": "delta" }
+{
+"question_id": "q-boolean",
+"transform_id": "boolean_v1",
+"placeholder": {
+"raw_text": "[INCLUDE THIS CLAUSE]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 60, "end": 81 } }
+},
+"apply_mode": "apply"
+}
 """
-And headers:
-| Content-Type | application/json |
-| If-Match     | {etag}           |
-Then the response content type should be "application/problem+json"
-And the response JSON at "$.code" should equal "RUN_SAVE_ANSWER_UPSERT_FAILED"
+And header "If-Match" is "etag-b-1"
+And header "Idempotency-Key" is "key-002"
+Then the response status should be 200
+And the response JSON at "answer_kind" should be "boolean"
+And the response JSON should not have "options"
 
-@sad @runtime @get
-Scenario: Runtime failure during visibility computation on GET returns runtime contract error
-Given a response set "{response_set_id}"
-And the visibility helper "compute_visible_set" will fail at runtime for this request
-When I GET "/response-sets/{response_set_id}/screens/profile"
-Then the response content type should be "application/problem+json"
-And the response JSON at "$.code" should equal "RUN_COMPUTE_VISIBLE_SET_FAILED"
+@happy @suggest-enum-literal-plus-placeholder
+Scenario: Suggest transform for literal OR nested placeholder (enum_single)
+When I POST "/api/v1/transforms/suggest" with JSON:
+"""
+{
+"raw_text": "on the intranet OR [DETAILS]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 90, "end": 118 } }
+}
+"""
+Then the response status should be 200
+And the response JSON at "answer_kind" should be "enum_single"
+And the response JSON at "options[0].value" should be "INTRANET"
+And the response JSON at "options[0].label" should be "on the intranet"
+And the response JSON at "options[1].value" should be "DETAILS"
+And the response JSON at "options[1].placeholder_key" should be "DETAILS"
+And the response JSON at "options[1].placeholder_id" should be absent
+
+@happy @bind-enum-parent
+Scenario: Bind enum_single parent with nested placeholder option defers linkage
+When I POST "/api/v1/placeholders/bind" with JSON:
+"""
+{
+"question_id": "q-enum",
+"transform_id": "enum_single_v1",
+"placeholder": {
+"raw_text": "on the intranet OR [DETAILS]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 90, "end": 118 } }
+},
+"apply_mode": "apply"
+}
+"""
+And header "If-Match" is "etag-e-1"
+And header "Idempotency-Key" is "key-003"
+Then the response status should be 200
+And the response JSON at "answer_kind" should be "enum_single"
+And the response JSON at "options[0].value" should be "INTRANET"
+And the response JSON at "options[1].value" should be "DETAILS"
+And the response JSON at "options[1].placeholder_key" should be "DETAILS"
+And the response JSON at "options[1].placeholder_id" should be null
+
+@happy @bind-nested-child
+Scenario: Bind the child short_string placeholder and auto-link the parent option
+Given I have a TransformSuggestion for child placeholder "[DETAILS]" with answer_kind "short_string"
+When I POST "/api/v1/placeholders/bind" with JSON:
+"""
+{
+"question_id": "q-nested",
+"transform_id": "short_string_v1",
+"placeholder": {
+"raw_text": "[DETAILS]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 106, "end": 114 } }
+},
+"apply_mode": "apply"
+}
+"""
+And header "If-Match" is "etag-n-1"
+And header "Idempotency-Key" is "key-004"
+Then the response status should be 200
+And the response JSON should have "placeholder_id"
+And I GET "/api/v1/questions/q-enum/placeholders?document_id=doc-001"
+Then the response status should be 200
+And the response JSON at "items[0].transform_id" should be "enum_single_v1"
+And the response JSON at "items[0].payload_json.options[1].placeholder_id" should equal the newly bound child "placeholder_id"
+
+@happy @list-placeholders
+Scenario: List placeholders for a question filtered by document
+When I GET "/api/v1/questions/q-enum/placeholders?document_id=doc-001"
+Then the response status should be 200
+And the response JSON at "items" should contain at least 1 element
+
+@happy @unbind-child
+Scenario: Unbind a child placeholder does not alter parent model
+Given I have the child "placeholder_id" from the bind-nested-child scenario
+When I POST "/api/v1/placeholders/unbind" with JSON:
+"""
+{ "placeholder_id": "<child-placeholder-id>" }
+"""
+And header "If-Match" is "<latest-etag-for-q-nested>"
+Then the response status should be 200
+And I GET "/api/v1/questions/q-enum/placeholders?document_id=doc-001"
+Then the response JSON at "items[0].payload_json.options[1].placeholder_id" should be null
+And the response JSON at "items[0].payload_json.options[0].value" should be "INTRANET"
+
+@happy @unbind-last-clears-model
+Scenario: Unbind the last placeholder clears the question’s model
+Given "q-short" currently has exactly one bound placeholder
+When I POST "/api/v1/placeholders/unbind" with JSON:
+"""
+{ "placeholder_id": "<only-placeholder-of-q-short>" }
+"""
+And header "If-Match" is "<latest-etag-for-q-short>"
+Then the response status should be 200
+And I GET "/api/v1/questions/q-short/placeholders?document_id=doc-001"
+Then the response JSON at "items" should be an empty array
+And the question "q-short" has no "answer_kind" and no "AnswerOption" rows
+
+@happy @purge-on-document-delete
+Scenario: Cleanup bindings when a document is deleted (purge)
+When I POST "/api/v1/documents/doc-001/bindings:purge" with JSON:
+"""
+{ "reason": "deleted" }
+"""
+Then the response status should be 200
+And the response JSON at "deleted_placeholders" should be greater than 0
+And the response JSON at "updated_questions" should be greater than or equal to 0
+And subsequent GET "/api/v1/questions/q-enum/placeholders?document_id=doc-001" returns 200 with "items" empty
+
+@happy @catalog
+Scenario: Read the transforms catalog
+When I GET "/api/v1/transforms/catalog"
+Then the response status should be 200
+And the response JSON at "items[?(@.transform_id=='enum_single_v1')].answer_kind" should contain "enum_single"
+
+@happy @preview
+Scenario: Preview canonicalisation for a literal list (no persistence)
+When I POST "/api/v1/transforms/preview" with JSON:
+"""
+{ "literals": ["The HR Manager", "The Finance Director"] }
+"""
+Then the response status should be 200
+And the response JSON at "answer_kind" should be "enum_single"
+And the response JSON at "options[0].value" should be "HR_MANAGER"
+And the response JSON at "options[1].value" should be "FINANCE_DIRECTOR"
+
+# --- Key sad path scenarios (integration level, externally observable) ---
+
+@sad @suggest-422
+Scenario: Suggest returns 422 for unrecognised pattern
+When I POST "/api/v1/transforms/suggest" with JSON:
+"""
+{
+"raw_text": "[[MALFORMED",
+"context": { "document_id": "doc-001", "clause_path": "1.2" }
+}
+"""
+Then the response status should be 422
+And the response body is problem+json with "title" containing "unrecognised pattern"
+
+@sad @bind-409-model-conflict
+Scenario: Bind rejected with 409 when model would change
+Given question "q-enum" already has answer_kind "enum_single" with options ["INTRANET","DETAILS"]
+When I POST "/api/v1/placeholders/bind" with JSON:
+"""
+{
+"question_id": "q-enum",
+"transform_id": "number_v1",
+"placeholder": {
+"raw_text": "[HEADCOUNT]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 130, "end": 140 } }
+},
+"apply_mode": "apply"
+}
+"""
+And header "If-Match" is "<latest-etag-for-q-enum>"
+And header "Idempotency-Key" is "key-009"
+Then the response status should be 409
+And the response body is problem+json with "title" containing "model conflict"
+
+@sad @bind-412-precondition
+Scenario: Bind rejected with 412 when If-Match precondition fails
+When I POST "/api/v1/placeholders/bind" with JSON:
+"""
+{
+"question_id": "q-short",
+"transform_id": "short_string_v1",
+"placeholder": {
+"raw_text": "[CONTACT NAME]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 40, "end": 54 } }
+},
+"apply_mode": "apply"
+}
+"""
+And header "If-Match" is "stale-etag"
+And header "Idempotency-Key" is "key-010"
+Then the response status should be 412
+And the response body is problem+json with "title" containing "precondition failed"
+
+@sad @bind-404-question
+Scenario: Bind rejected with 404 when question does not exist
+When I POST "/api/v1/placeholders/bind" with JSON:
+"""
+{
+"question_id": "q-missing",
+"transform_id": "short_string_v1",
+"placeholder": {
+"raw_text": "[CONTACT NAME]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 40, "end": 54 } }
+},
+"apply_mode": "apply"
+}
+"""
+And header "If-Match" is "etag-x"
+And header "Idempotency-Key" is "key-011"
+Then the response status should be 404
+And the response body is problem+json with "title" containing "question not found"
+
+@sad @unbind-404-placeholder
+Scenario: Unbind rejected with 404 when placeholder does not exist
+When I POST "/api/v1/placeholders/unbind" with JSON:
+"""
+{ "placeholder_id": "ph-unknown" }
+"""
+And header "If-Match" is "etag-any"
+Then the response status should be 404
+And the response body is problem+json with "title" containing "not found"
+
+@sad @bind-422-bad-transform
+Scenario: Bind rejected with 422 when transform not applicable to text
+When I POST "/api/v1/placeholders/bind" with JSON:
+"""
+{
+"question_id": "q-short",
+"transform_id": "number_v1",
+"placeholder": {
+"raw_text": "[CONTACT NAME]",
+"context": { "document_id": "doc-001", "clause_path": "1.2", "span": { "start": 40, "end": 54 } }
+},
+"apply_mode": "apply"
+}
+"""
+And header "If-Match" is "<latest-etag-for-q-short>"
+And header "Idempotency-Key" is "key-012"
+Then the response status should be 422
+And the response body is problem+json with "title" containing "transform not applicable"
+
+@sad @purge-404-or-noop
+Scenario Outline: Purge handles unknown document per contract
+When I POST "/api/v1/documents/<doc_id>/bindings:purge" with JSON:
+"""
+{ "reason": "deleted" }
+"""
+Then the response status should be <status>
+And the response body should <body_check>
+
+Examples:
+  | doc_id   | status | body_check                                        |
+  | doc-zzz  | 404    | be problem+json with "title" containing "not found" |
+  | doc-noop | 200    | contain "deleted_placeholders" equal to 0         |
