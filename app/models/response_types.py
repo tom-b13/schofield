@@ -33,12 +33,14 @@ class SavedMeta(BaseModel):
 
 
 class SavedResult(BaseModel):
-    saved: SavedMeta | bool
+    saved: bool
     etag: str
     # Keep screen_view for downstream consumers; optional for PATCH response schema
     screen_view: ScreenView | None = None
     visibility_delta: VisibilityDelta | None = None
     suppressed_answers: list[str] | None = None
+    # Ensure FastAPI includes domain events on 200 responses
+    events: list | None = None
 
 
 class BatchResult(BaseModel):

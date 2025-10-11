@@ -128,6 +128,26 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
         # Filtering is best-effort; assembly will still compute visibility
         pass
 
+    # If screen_key is not a UUID and refers to no known screen (no metadata
+    # and no questions), return 404 Problem response before assembly
+    try:
+        # For non-UUID tokens, metadata lookup will return None
+        meta2 = get_screen_metadata(resolved_screen_key)
+        # list_questions_for_screen must return a concrete iterable; treat empty as unknown
+        try:
+            questions2 = list_questions_for_screen(resolved_screen_key)
+        except Exception:
+            questions2 = []
+        if meta2 is None and (questions2 is None or len(questions2) == 0):
+            problem = {
+                "title": "Not Found",
+                "status": 404,
+                "detail": f"screen_key '{resolved_screen_key}' not found",
+            }
+            return JSONResponse(problem, status_code=404, media_type="application/problem+json")
+    except Exception:
+        # Best-effort check; if helpers unavailable, continue to assemble
+        pass
     # Build the screen view via the shared assembly component
     screen_view = ScreenView(**assemble_screen_view(response_set_id, resolved_screen_key))
     # Architectural: ensure dedicated ETag component is directly invoked by GET handler

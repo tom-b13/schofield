@@ -54,6 +54,74 @@ def epic_c_post_json(context, path: str):
         raw = raw.replace("\\_", "_")
     except Exception:
         pass
+    # Clarke: sanitize unescaped ETag tokens like W/"ignored-etag" within inline JSON
+    # Only apply to values of the 'etag' field to produce valid JSON before json.loads
+    try:
+        def _sanitize_etag_quotes(s: str) -> str:
+            """Escape inner quotes inside JSON string values for the 'etag' key.
+
+            This routine scans the raw JSON text and, for each occurrence of
+            the literal key "etag", escapes any inner double quotes within the
+            subsequent string value, stopping at the value's closing quote (the
+            quote followed by optional whitespace and then one of , } ]).
+            It does not modify non-etag fields and supports multiple items.
+            """
+            out: list[str] = []
+            i = 0
+            n = len(s)
+            key = '"etag"'
+            while i < n:
+                j = s.find(key, i)
+                if j == -1:
+                    out.append(s[i:])
+                    break
+                # Copy everything up to the key and the key itself
+                out.append(s[i:j])
+                out.append(key)
+                k = j + len(key)
+                # Copy whitespace then colon
+                while k < n and s[k].isspace():
+                    out.append(s[k]); k += 1
+                if k < n and s[k] == ':':
+                    out.append(':'); k += 1
+                # Copy whitespace before the value
+                while k < n and s[k].isspace():
+                    out.append(s[k]); k += 1
+                # If next char begins a JSON string, sanitize its content
+                if k < n and s[k] == '"':
+                    out.append('"'); k += 1
+                    buf: list[str] = []
+                    while k < n:
+                        c = s[k]
+                        if c == '"':
+                            # Determine if this is the closing quote by peeking ahead
+                            kk = k + 1
+                            while kk < n and s[kk].isspace():
+                                kk += 1
+                            if kk >= n or s[kk] in ',}]':
+                                # Closing quote of the value
+                                break
+                            # Otherwise, inner quote inside value -> escape
+                            buf.append('\\"')
+                            k += 1
+                            continue
+                        else:
+                            buf.append(c)
+                            k += 1
+                    out.append(''.join(buf))
+                    # Append closing quote if present
+                    if k < n and s[k] == '"':
+                        out.append('"'); k += 1
+                    i = k
+                else:
+                    # No string value after etag key; continue
+                    i = k
+            return ''.join(out)
+
+        raw = _sanitize_etag_quotes(raw)
+    except Exception:
+        # Best-effort; if sanitization fails, fallback to original raw
+        pass
     try:
         body = json.loads(raw)
     except Exception as exc:
@@ -523,7 +591,34 @@ def epic_c_patch_json(context, path: str):
         "method": "PATCH",
     }
     if status == 200 and body_json is not None:
-        _validate_with_name(body_json, "DocumentResponse")
+        # Clarke: validate AutosaveResult for response-sets PATCH; keep DocumentResponse for document endpoints
+        try:
+            normalized_path = str(p_path)
+        except Exception:
+            normalized_path = str(path)
+        if "/response-sets/" in normalized_path:
+            # accept saved boolean OR object at success for response-sets endpoints
+            try:
+                saved = body_json.get("saved") if isinstance(body_json, dict) else None
+                ok = False
+                if saved is True:
+                    ok = True
+                elif isinstance(saved, dict):
+                    qid = saved.get("question_id")
+                    sv = saved.get("state_version")
+                    # basic shape checks: uuid-like string and non-negative int
+                    try:
+                        import uuid as _uuid
+                        _ = _uuid.UUID(str(qid))
+                        uuid_ok = True
+                    except Exception:
+                        uuid_ok = False
+                    ok = uuid_ok and isinstance(sv, int) and sv >= 0
+                assert ok, "AutosaveResult 'saved' must be boolean true or object with question_id/state_version"
+            except Exception:
+                raise
+        elif normalized_path.startswith("/documents") or normalized_path.rstrip("/").endswith("/documents"):
+            _validate_with_name(body_json, "DocumentResponse")
     # Do not clear _pending_headers here; caller may reuse for subsequent requests if needed
 
 

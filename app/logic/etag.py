@@ -36,7 +36,15 @@ def compute_screen_etag(response_set_id: str, screen_key: str) -> str:
             ).mappings().one_or_none()
         max_ts = str((max_row or {}).get("max_ts") or "0")
         cnt = int((max_row or {}).get("cnt") or 0)
-        token = f"{response_set_id}:{screen_key}:{max_ts}:{cnt}".encode("utf-8")
+        # Include in-memory screen version to stabilize GET/PATCH parity and ensure
+        # ETag changes on writes even when DB writes fall back to in-memory.
+        try:
+            from app.logic.repository_answers import get_screen_version
+
+            version = int(get_screen_version(response_set_id, screen_key))
+        except Exception:
+            version = 0
+        token = f"{response_set_id}:{screen_key}:{max_ts}:{cnt}:v{version}".encode("utf-8")
         digest = hashlib.sha1(token).hexdigest()
         return f'W/"{digest}"'
     except Exception:
@@ -75,3 +83,38 @@ def compute_document_list_etag(docs: list[dict]) -> str:
         token = f"{doc['document_id']}|{doc['title']}|{int(doc['order_number'])}|{int(doc['version'])}"
         parts.append(token.encode("utf-8"))
     return hashlib.sha1(b"\n".join(parts)).hexdigest()
+
+
+def _normalize_etag_token(value: str | None) -> str:
+    """Normalize an ETag/If-Match token for comparison.
+
+    - Preserve wildcard '*'
+    - Strip weak validator prefix 'W/'
+    - Remove surrounding quotes
+    - Return empty string for None/blank
+    """
+    v = (value or "").strip()
+    if not v:
+        return ""
+    if v == "*":
+        return v
+    if v.startswith("W/"):
+        v = v[2:].strip()
+    if len(v) >= 2 and v[0] == '"' and v[-1] == '"':
+        v = v[1:-1]
+    return v
+
+
+def compare_etag(current: str | None, if_match: str | None) -> bool:
+    """Return True when the provided If-Match matches the current entity tag.
+
+    Comparison applies normalisation rules and supports the '*' wildcard which
+    unconditionally matches. Empty/absent If-Match never matches.
+    """
+    incoming = _normalize_etag_token(if_match)
+    if not incoming:
+        return False
+    if incoming == "*":
+        return True
+    current_norm = _normalize_etag_token(current)
+    return incoming == current_norm

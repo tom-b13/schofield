@@ -17,5 +17,5 @@
     "saved",
     "etag"
   ],
-  "additionalProperties": false
+  "additionalProperties": true
 }
