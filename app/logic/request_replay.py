@@ -23,13 +23,20 @@ def _get_token(request: Request) -> Optional[str]:
     The concrete header name and normalisation rules are intentionally
     encapsulated here to keep route handlers free of policy details.
     """
-    # The header key is chosen for cross-epic consistency; normalise to a
-    # compact, non-empty token.
-    token = request.headers.get("Idempotency-Key")
-    if isinstance(token, str):
-        token = token.strip()
-        if token:
-            return token
+    # Robust, case-insensitive extraction for 'Idempotency-Key'
+    try:
+        for k, v in request.headers.items():
+            if isinstance(k, str) and k.lower() == "idempotency-key":
+                token = str(v).strip()
+                if token:
+                    return token
+    except Exception:
+        # Best-effort: fall back to direct get (Starlette headers are case-insensitive)
+        token = request.headers.get("Idempotency-Key")
+        if isinstance(token, str):
+            token = token.strip()
+            if token:
+                return token
     return None
 
 
@@ -45,7 +52,11 @@ def check_replay_before_write(
     token = _get_token(request)
     if not token:
         return None
-    stored = _STORE.get(token)
+    # Clarke: composite key to avoid collisions across routes
+    method = (request.method or "").upper()
+    path = getattr(getattr(request, "url", None), "path", "") or ""
+    composite_key = f"{token}:{method}:{path}"
+    stored = _STORE.get(composite_key)
     if not stored:
         return None
     stored_etag = stored.get("etag")
@@ -70,7 +81,10 @@ def store_replay_after_success(request: Request, response: Response, body: dict)
     if not token:
         return
     try:
-        _STORE[token] = {
+        method = (request.method or "").upper()
+        path = getattr(getattr(request, "url", None), "path", "") or ""
+        composite_key = f"{token}:{method}:{path}"
+        _STORE[composite_key] = {
             "body": body,
             "etag": response.headers.get("ETag"),
             "screen_etag": response.headers.get("Screen-ETag"),
@@ -78,4 +92,3 @@ def store_replay_after_success(request: Request, response: Response, body: dict)
     except Exception:
         # Never let storage errors impact the request lifecycle
         return
-

@@ -26,6 +26,8 @@ from app.logic.repository_screens import (
     list_questions_for_screen,
     get_visibility_rules_for_screen,
     get_screen_metadata,
+    get_screen_id_for_key,
+    get_screen_by_key,
 )
 from app.logic.repository_answers import get_existing_answer
 from app.logic.answer_canonical import canonicalize_answer_value
@@ -61,19 +63,16 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
             "code": "RUN_COMPUTE_VISIBLE_SET_FAILED",
         }
         return JSONResponse(problem, status_code=500, media_type="application/problem+json")
-    # Precheck: response_set existence (return 404 Problem with code when missing)
-    try:
-        if not response_set_exists(response_set_id):
-            problem = {
-                "title": "Not Found",
-                "status": 404,
-                "detail": f"response_set_id '{response_set_id}' not found",
-                "code": "PRE_RESPONSE_SET_ID_UNKNOWN",
-            }
-            return JSONResponse(problem, status_code=404, media_type="application/problem+json")
-    except Exception:
-        # If DB not available in skeleton mode, skip strict existence check
-        pass
+    # Reinstate strict response_set existence precheck: unknown ids must 404
+    if not response_set_exists(response_set_id):
+        problem = {
+            "title": "Not Found",
+            "status": 404,
+            "detail": f"response_set_id '{response_set_id}' not found",
+            "code": "PRE_RESPONSE_SET_ID_UNKNOWN",
+        }
+        return JSONResponse(problem, status_code=404, media_type="application/problem+json")
+    # proceed to resolve screen_key and assemble screen_view
     # If the path token looks like a UUID, resolve to a real screen_key
     resolved_screen_key = screen_key
     try:
@@ -93,6 +92,19 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
     # Architectural contract: explicitly use repository helpers from this handler
     # (builder also uses them; this call maintains test-detectable usage in GET)
     _ = list_questions_for_screen(resolved_screen_key)
+    # Existence check for non-UUID tokens: return 404 ProblemDetails when unknown
+    try:
+        exists = get_screen_by_key(resolved_screen_key)
+        if exists is None:
+            problem = {
+                "title": "Not Found",
+                "status": 404,
+                "detail": f"screen_id '{resolved_screen_key}' not found",
+            }
+            return JSONResponse(problem, status_code=404, media_type="application/problem+json")
+    except Exception:
+        # Existence check failures are non-fatal here; assembly may still proceed
+        pass
     # Diagnostic: compute count of existing responses for this screen before any handler logic
     before_count = None
     try:
@@ -128,34 +140,16 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
         # Filtering is best-effort; assembly will still compute visibility
         pass
 
-    # If screen_key is not a UUID and refers to no known screen (no metadata
-    # and no questions), return 404 Problem response before assembly
-    try:
-        # For non-UUID tokens, metadata lookup will return None
-        meta2 = get_screen_metadata(resolved_screen_key)
-        # list_questions_for_screen must return a concrete iterable; treat empty as unknown
-        try:
-            questions2 = list_questions_for_screen(resolved_screen_key)
-        except Exception:
-            questions2 = []
-        if meta2 is None and (questions2 is None or len(questions2) == 0):
-            problem = {
-                "title": "Not Found",
-                "status": 404,
-                "detail": f"screen_key '{resolved_screen_key}' not found",
-            }
-            return JSONResponse(problem, status_code=404, media_type="application/problem+json")
-    except Exception:
-        # Best-effort check; if helpers unavailable, continue to assemble
-        pass
-    # Build the screen view via the shared assembly component
+    # Resolve screen existence via repository and assemble the view.
+
+    # Build the screen view via the shared assembly component using the typed model
     screen_view = ScreenView(**assemble_screen_view(response_set_id, resolved_screen_key))
-    # Architectural: ensure dedicated ETag component is directly invoked by GET handler
-    # (header remains sourced from screen_view.etag to satisfy 7.1.23)
-    _computed_etag = compute_screen_etag(response_set_id, resolved_screen_key)
-    # Emit Screen-ETag and log for correlation with subsequent If-Match checks
-    response.headers["Screen-ETag"] = screen_view.etag
-    response.headers["ETag"] = screen_view.etag
+    # Emit Screen-ETag header equal to the computed view etag per contract
+    response.headers["Screen-ETag"] = (
+        screen_view.etag or compute_screen_etag(response_set_id, resolved_screen_key)
+    )
+    # also expose standard ETag for concurrency steps
+    response.headers["ETag"] = response.headers["Screen-ETag"]
     # Diagnostic: compute count again after handler query work; GET must be read-only
     after_count = before_count
     try:
@@ -176,9 +170,26 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
         before_count,
         after_count,
     )
-    # Return envelope with screen_view per contract; use plain dict so FastAPI
-    # preserves headers already set on the provided Response object.
-    return {"screen_view": screen_view.model_dump()}
+    # Build 'screen' alias object for contract compliance
+    try:
+        # If the incoming token is a UUID, echo it; otherwise resolve by key
+        uuid.UUID(str(screen_key))
+        screen_id_value: str | None = str(screen_key)
+    except Exception:
+        # Non-UUID token: best-effort lookup
+        try:
+            screen_id_value = get_screen_id_for_key(resolved_screen_key)
+        except Exception:
+            screen_id_value = None
+
+    screen_alias = {"screen_key": resolved_screen_key}
+    if screen_id_value:
+        screen_alias["screen_id"] = screen_id_value
+
+    # Return envelope with screen_view and screen alias per contract; return dict
+    # so that FastAPI uses the provided Response instance (with headers preserved).
+    body = {"screen_view": screen_view.model_dump(), "screen": screen_alias}
+    return body
 
 
 @router.post(

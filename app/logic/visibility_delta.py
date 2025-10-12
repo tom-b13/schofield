@@ -6,7 +6,7 @@ of suppressed answers using a caller-provided probe for answer existence.
 
 from __future__ import annotations
 
-from typing import Callable, Iterable, List, Tuple
+from typing import Callable, Iterable, List, Tuple, Any
 
 from app.models.visibility import NowVisible
 
@@ -26,15 +26,34 @@ def compute_visibility_delta(
     has a stored answer for the active response set. Exceptions raised by the
     callable are allowed to propagate to preserve caller logging semantics.
     """
-    pre_set = set(pre_visible)
-    post_set = set(post_visible)
+    def _coerce_id(item: Any) -> str | None:
+        # Defensive normalization: accept dicts with 'question' or 'question_id'
+        try:
+            if isinstance(item, dict):
+                return (
+                    item.get("question")
+                    or item.get("question_id")
+                    or (str(item.get("id")) if item.get("id") else None)
+                )
+            # tuples/lists: treat first element as id if it's a string-like
+            if isinstance(item, (list, tuple)) and item:
+                head = item[0]
+                return str(head)
+            # primitives
+            return str(item)
+        except Exception:
+            return None
 
-    # Return now_visible as a list of objects with at least the 'question' field
-    # to satisfy Epic E contract expectations. Answer is optional and omitted
-    # when not readily available without extra I/O.
+    pre_set = {qid for qid in (_coerce_id(x) for x in pre_visible) if qid}
+    post_set = {qid for qid in (_coerce_id(x) for x in post_visible) if qid}
+
+    # Return now_visible as a list[str] of question_id UUIDs for consistency
+    # with Epic D/I contracts and downstream JSONPath assertions.
     _new_visible_ids = sorted(list(post_set - pre_set))
-    now_visible = [{"question": qid} for qid in _new_visible_ids]
-    now_hidden = sorted(list(pre_set - post_set))
+    # Guarantee both arrays are lists of UUID strings for downstream JSONPath
+    now_visible = [str(qid) for qid in _new_visible_ids]
+    # Guarantee now_hidden reflects pre - post on question_id strings
+    now_hidden = [str(qid) for qid in sorted(list(pre_set - post_set))]
 
     suppressed_answers: List[str] = []
     for qid in now_hidden:

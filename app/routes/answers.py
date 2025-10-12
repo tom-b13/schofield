@@ -14,6 +14,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 import logging
+import hashlib
+import json
 
 from app.logic.validation import (
     HamiltonValidationError,
@@ -26,23 +28,23 @@ from app.logic.etag import compute_screen_etag, compare_etag
 from app.logic.repository_answers import (
     get_answer_kind_for_question,
     get_existing_answer,
-    get_screen_key_for_question,
     response_id_exists,
     upsert_answer,
 )
 from app.logic.repository_answers import delete_answer as delete_answer_row
 from app.logic.repository_screens import count_responses_for_screen, list_questions_for_screen
 from app.logic.repository_screens import get_visibility_rules_for_screen
+from app.logic.repository_screens import (
+    get_screen_key_for_question as _screen_key_from_screens,
+)
+from app.logic.repository_screens import question_exists_on_screen
 from app.logic.answer_canonical import canonicalize_answer_value
 from app.logic.visibility_rules import compute_visible_set
 from app.logic.visibility_delta import compute_visibility_delta
-from app.logic.request_replay import (
-    check_replay_before_write,
-    store_replay_after_success,
-)
 from app.logic.enum_resolution import resolve_enum_option
 from app.logic.screen_builder import assemble_screen_view
 from app.logic.events import publish, RESPONSE_SAVED
+from app.logic.replay import maybe_replay, store_after_success
 from app.models.response_types import SavedResult, BatchResult, VisibilityDelta, ScreenView
 from app.models.visibility import NowVisible
 
@@ -58,6 +60,10 @@ _VISIBILITY_DELTA_TYPE_REF: type = VisibilityDelta
 
 class AnswerUpsertModel(BaseModel):
     value: str | int | float | bool | None = None
+    # Typed aliases to preserve client-provided types when present
+    value_bool: bool | None = None
+    value_number: float | int | None = None
+    value_text: str | None = None
     option_id: str | None = None
     clear: bool | None = None
 
@@ -82,7 +88,8 @@ def _normalize_etag(value: str) -> str:
 
 
 def _screen_key_for_question(question_id: str) -> str | None:  # Backwards-compat shim
-    return get_screen_key_for_question(question_id)
+    # Resolve via repository_screens to ensure GET/PATCH ETag parity on the same screen
+    return _screen_key_from_screens(question_id)
 
 
 def _answer_kind_for_question(question_id: str) -> str | None:  # Backwards-compat shim
@@ -102,14 +109,12 @@ def autosave_answer(
     response: Response,
     if_match: str | None = Header(None, alias="If-Match"),
 ):
-    # Idempotent replay short-circuit must run at the very start,
-    # before any ETag computation or If-Match enforcement.
-    replay_body = check_replay_before_write(request, response, None)
-    if replay_body is not None:
-        return replay_body
     # Resolve screen_key and current ETag for optimistic concurrency and If-Match precheck
-    screen_key = _screen_key_for_question(question_id)
-    if not screen_key:
+    # Resolve screen_key and current ETag for optimistic concurrency and If-Match precheck
+    try:
+        screen_key = _screen_key_for_question(question_id)
+    except Exception:
+        # Repository error should be surfaced as Not Found contract per Clarke
         problem = {
             "title": "Not Found",
             "status": 404,
@@ -117,11 +122,24 @@ def autosave_answer(
             "code": "PRE_QUESTION_ID_UNKNOWN",
         }
         return JSONResponse(problem, status_code=404, media_type="application/problem+json")
-    # Build screen_view early to align If-Match comparison with GET's Screen-ETag
-    screen_view = ScreenView(**assemble_screen_view(response_set_id, screen_key))
-    current_etag = screen_view.etag or compute_screen_etag(response_set_id, screen_key)
+    if not screen_key:
+        # Only return 404 when the question truly does not exist in DB seed
+        if not question_exists_on_screen(question_id):
+            problem = {
+                "title": "Not Found",
+                "status": 404,
+                "detail": f"question_id '{question_id}' not found",
+                "code": "PRE_QUESTION_ID_UNKNOWN",
+            }
+            return JSONResponse(problem, status_code=404, media_type="application/problem+json")
 
-    # Idempotent replay is handled at the very beginning of the handler.
+    # Precondition: derive current_etag strictly via compute_screen_etag for GET↔PATCH parity
+    screen_view = ScreenView(**assemble_screen_view(response_set_id, screen_key))
+    # Clarke: derive strictly via compute_screen_etag for GET↔PATCH parity
+    current_etag = compute_screen_etag(response_set_id, screen_key)
+
+    # Idempotent replay must NOT bypass If-Match. Precondition enforcement
+    # occurs first; replay may short-circuit only after the check passes.
 
     # Incoming If-Match is enforced after resolving the current ETag
     # If-Match header is optional at the framework layer; emit a ProblemDetails
@@ -148,6 +166,48 @@ def autosave_answer(
         current_etag,
     )
 
+    
+
+    # Enforce If-Match BEFORE any state precompute; allow '*' wildcard via compare_etag
+    # Compare using the normalized If-Match token to prevent false 409s on fresh preconditions
+    if not compare_etag(current_etag, normalized_if_match):
+        logger.info(
+            "autosave_conflict rs_id=%s q_id=%s screen_key=%s if_match_raw=%s write_performed=false",
+            response_set_id,
+            question_id,
+            screen_key,
+            raw_if_match,
+        )
+        problem = {
+            "title": "Conflict",
+            "status": 409,
+            "detail": "If-Match does not match current ETag",
+            "code": "PRE_IF_MATCH_ETAG_MISMATCH",
+        }
+        resp = JSONResponse(problem, status_code=409, media_type="application/problem+json")
+        # Clarke: expose both headers on 409 so clients can recover
+        resp.headers["ETag"] = current_etag
+        resp.headers["Screen-ETag"] = current_etag
+        return resp
+
+    # Idempotent replay is allowed only after If-Match precondition passes
+    try:
+        replayed = maybe_replay(
+            request,
+            response,
+            (response_set_id, question_id),
+            payload.model_dump() if hasattr(payload, "model_dump") else None,
+        )
+        if isinstance(replayed, dict):
+            return replayed
+    except Exception:
+        # Never let replay lookup affect normal flow
+        pass
+
+    # Precondition passed; ensure screen_view exists (may already be assembled above)
+    if not screen_view:
+        screen_view = ScreenView(**assemble_screen_view(response_set_id, screen_key))
+
     # Determine whether the screen currently has any responses (pre-write state)
     existing_count = 0
     try:
@@ -161,7 +221,7 @@ def autosave_answer(
             exc_info=True,
         )
         existing_count = -1  # treat as unknown but non-zero to keep prior behavior
-    # NOTE: Idempotent replay checks now run BEFORE enforcing If-Match.
+    # NOTE: Idempotent replay checks now run AFTER enforcing If-Match preconditions.
     logger.info(
         "autosave_precheck_counts rs_id=%s screen_key=%s existing_screen_count=%s",
         response_set_id,
@@ -189,36 +249,7 @@ def autosave_answer(
 
     visible_pre = compute_visible_set(rules, parent_value_pre)
 
-    # If-Match check; allow wildcard
-    if if_match is not None:
-        logger.info(
-            "autosave_if_match_check rs_id=%s q_id=%s if_match_raw=%s existing_screen_count=%s",
-            response_set_id,
-            question_id,
-            raw_if_match,
-            existing_count,
-        )
-        # Enforce only when header provided and non-empty; compare normalized tokens.
-        # Wildcard '*' unconditionally passes. Any mismatch must return 409.
-        if not compare_etag(current_etag, if_match):
-            logger.info(
-                "autosave_conflict rs_id=%s q_id=%s screen_key=%s if_match_raw=%s write_performed=false",
-                response_set_id,
-                question_id,
-                screen_key,
-                raw_if_match,
-            )
-            problem = {
-                "title": "Conflict",
-                "status": 409,
-                "detail": "If-Match does not match current ETag",
-                "code": "PRE_IF_MATCH_ETAG_MISMATCH",
-            }
-            resp = JSONResponse(problem, status_code=409, media_type="application/problem+json")
-            # Clarke: expose both headers on 409 so clients can recover
-            resp.headers["ETag"] = current_etag
-            resp.headers["Screen-ETag"] = current_etag
-            return resp
+    # If-Match enforcement already performed above
 
     # Handle clear=true before value validation and upsert branches
     if bool(getattr(payload, "clear", False)):
@@ -255,6 +286,41 @@ def autosave_answer(
             suppressed_answers = []
         response.headers["Screen-ETag"] = screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag
         response.headers["ETag"] = (screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag)
+        # Clarke instrumentation: emit visibility delta context just before 200 return
+        try:
+            logger.info(
+                "autosave_visibility_delta rs_id=%s screen_key=%s x_request_id=%s parent_value_pre=%s parent_value_post=%s visible_pre=%s visible_post=%s now_hidden=%s suppressed=%s",
+                response_set_id,
+                screen_key,
+                request.headers.get("x-request-id"),
+                parent_value_pre,
+                parent_value_post,
+                sorted(list(visible_pre)),
+                sorted(list(visible_post)),
+                list(now_hidden),
+                list(suppressed_answers),
+            )
+            # Clarke instrumentation: additional line to correlate and expose inputs clearly
+            logger.info(
+                "autosave_visibility_inputs rs_id=%s screen_key=%s x_request_id=%s visible_pre=%s visible_post=%s parent_pre=%s parent_post=%s suppressed=%s",
+                response_set_id,
+                screen_key,
+                request.headers.get("x-request-id"),
+                sorted(list(visible_pre)) if isinstance(visible_pre, (set, list)) else visible_pre,
+                sorted(list(visible_post)) if isinstance(visible_post, (set, list)) else visible_post,
+                parent_value_pre,
+                parent_value_post,
+                [str(x) for x in (suppressed_answers or [])],
+            )
+        except Exception:
+            # Do not fail the request if logging fails
+            pass
+        # Normalize now_hidden/suppressed per contract; extract 'question' when dicts are returned
+        if now_hidden and isinstance(now_hidden[0], dict):
+            now_hidden_ids = [nh.get("question") for nh in now_hidden if isinstance(nh, dict)]
+        else:
+            now_hidden_ids = [str(x) for x in (now_hidden or [])]
+        suppressed_ids = [str(x) for x in (suppressed_answers or [])]
         body = {
             "saved": {"question_id": str(question_id), "state_version": 0},
             "etag": new_etag,
@@ -264,11 +330,14 @@ def autosave_answer(
                 "etag": new_etag,
             },
             "visibility_delta": {
-                "now_visible": list(now_visible),
-                "now_hidden": list(now_hidden),
+                # Normalize to strings to satisfy contract
+                "now_visible": [str(x) for x in (now_visible or [])],
+                "now_hidden": now_hidden_ids,
+                "suppressed_answers": suppressed_ids,
             },
-            "suppressed_answers": suppressed_answers,
         }
+        # Clarke: also expose suppressed_answers at the top-level per contract
+        body["suppressed_answers"] = suppressed_ids
         # Clarke: ensure 'events' array is present on 200 responses (clear branch)
         try:
             from app.logic.events import get_buffered_events
@@ -276,7 +345,16 @@ def autosave_answer(
             body["events"] = get_buffered_events(clear=True)
         except Exception:
             body["events"] = []
-        store_replay_after_success(request, response, body)
+        try:
+            store_after_success(
+                request,
+                response,
+                body,
+                (response_set_id, question_id),
+                payload.model_dump() if hasattr(payload, "model_dump") else None,
+            )
+        except Exception:
+            pass
         return body
 
     # Proceed with normal validation and write flow
@@ -288,6 +366,15 @@ def autosave_answer(
     # Type-aware value validation for number/boolean kinds
     kind = _answer_kind_for_question(question_id) or ""
     value: Any = payload.value
+    # Prefer typed aliases when generic value is None
+    if value is None:
+        k = (kind or "").lower()
+        if k == "boolean" and getattr(payload, "value_bool", None) is not None:
+            value = payload.value_bool
+        elif k == "number" and getattr(payload, "value_number", None) is not None:
+            value = payload.value_number
+        elif k in {"text", "short_string"} and getattr(payload, "value_text", None) is not None:
+            value = payload.value_text
     # Additional finite-number guard per contract: check first
     if (kind or "").lower() == "number":
         # Accept common non-finite tokens and float non-finite values
@@ -312,7 +399,7 @@ def autosave_answer(
             }
             return JSONResponse(problem, status_code=422, media_type="application/problem+json")
 
-    validate_answer_upsert(payload.model_dump())
+    validate_answer_upsert({"value": value, "option_id": payload.option_id, "clear": getattr(payload, "clear", False)})
     try:
         validate_kind_value(kind, value)
     except HamiltonValidationError:
@@ -421,8 +508,7 @@ def autosave_answer(
         upsert_answer(
             response_set_id=response_set_id,
             question_id=question_id,
-            option_id=payload.option_id,
-            value=value,
+            payload={"value": value, "option_id": payload.option_id},
         )
         write_performed = True
 
@@ -434,18 +520,26 @@ def autosave_answer(
 
     # Compute visibility after write (or same as before for replay)
     parent_value_post = dict(parent_value_pre)
-    # If the changed question is a parent, update the canonical value from payload
+    # If the changed question is a parent, update the canonical value using
+    # the same canonicalization helper used during pre-image computation.
     if question_id in parents:
-        pv: str | None
-        if payload.value is None:
-            pv = None
-        elif isinstance(payload.value, bool):
-            pv = "true" if payload.value else "false"
-        else:
-            pv = str(payload.value)
+        vtext = value if isinstance(value, str) else None
+        vnum = value if isinstance(value, (int, float)) else None
+        vbool = value if isinstance(value, bool) else None
+        pv = canonicalize_answer_value(vtext, vnum, vbool)
         parent_value_post[question_id] = pv
 
     visible_post = compute_visible_set(rules, parent_value_post)
+    # Instrumentation (normal upsert path): log vis sets and parent maps
+    logger.info(
+        "visibility_delta_inputs rs_id=%s screen_key=%s visible_pre=%s visible_post=%s parent_value_pre=%s parent_value_post=%s",
+        response_set_id,
+        screen_key,
+        sorted(list(visible_pre)) if isinstance(visible_pre, (set, list)) else visible_pre,
+        sorted(list(visible_post)) if isinstance(visible_post, (set, list)) else visible_post,
+        parent_value_pre,
+        parent_value_post,
+    )
 
     def _has_answer(qid: str) -> bool:
         row = get_existing_answer(response_set_id, qid)
@@ -488,7 +582,14 @@ def autosave_answer(
     if now_visible and isinstance(now_visible[0], dict):
         now_visible_ids = [nv.get("question") for nv in now_visible if isinstance(nv, dict)]
     else:
-        now_visible_ids = list(now_visible)
+        # Normalize to strings to satisfy contract
+        now_visible_ids = [str(x) for x in (now_visible or [])]
+    # Normalize now_hidden similarly: extract 'question' when dicts are returned, else cast to strings
+    if now_hidden and isinstance(now_hidden[0], dict):
+        now_hidden_ids = [nh.get("question") for nh in now_hidden if isinstance(nh, dict)]
+    else:
+        now_hidden_ids = [str(x) for x in (now_hidden or [])]
+    suppressed_ids = [str(x) for x in (suppressed_answers or [])]
     body = {
         "saved": {"question_id": str(question_id), "state_version": 0},
         "etag": new_etag,
@@ -499,10 +600,12 @@ def autosave_answer(
         },
         "visibility_delta": {
             "now_visible": now_visible_ids,
-            "now_hidden": now_hidden,
+            "now_hidden": now_hidden_ids,
+            "suppressed_answers": suppressed_ids,
         },
-        "suppressed_answers": suppressed_answers,
     }
+    # Clarke: also expose suppressed_answers at the top-level per contract
+    body["suppressed_answers"] = suppressed_ids
     # Include buffered domain events in response body per contract
     try:
         from app.logic.events import get_buffered_events
@@ -511,9 +614,16 @@ def autosave_answer(
     except Exception:
         body["events"] = []
 
-    # Store replay payload after success, when applicable
-    store_replay_after_success(request, response, body)
-
+    try:
+        store_after_success(
+            request,
+            response,
+            body,
+            (response_set_id, question_id),
+            payload.model_dump() if hasattr(payload, "model_dump") else None,
+        )
+    except Exception:
+        pass
     return body
 
 
@@ -681,8 +791,7 @@ def batch_upsert_answers(response_set_id: str, payload: dict, request: Request):
                 upsert_answer(
                     response_set_id=response_set_id,
                     question_id=qid,
-                    option_id=opt,
-                    value=value,
+                    payload={"value": value, "option_id": opt},
                 )
         except HamiltonValidationError:
             results.append(

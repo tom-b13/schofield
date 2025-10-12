@@ -18,13 +18,19 @@ class ScreenView(BaseModel):
     etag: str | None = None
 
 
+class ScreenAlias(BaseModel):
+    screen_key: str
+    screen_id: str | None = None
+
+
 class ScreenViewEnvelope(BaseModel):
     """Envelope for GET screen responses.
 
-    Matches the contract expected by integration: a single field
-    `screen_view` containing the ScreenView payload.
+    Matches the contract expected by integration: include both
+    `screen_view` and a `screen` alias object.
     """
     screen_view: ScreenView
+    screen: ScreenAlias | None = None
 
 
 class SavedMeta(BaseModel):
@@ -56,6 +62,7 @@ __all__ = [
     "VisibilityDelta",
     "ScreenView",
     "ScreenViewEnvelope",
+    "ScreenAlias",
     "SavedMeta",
     "SavedResult",
     "BatchResult",

@@ -4,7 +4,20 @@
   "title": "AutosaveResult",
   "type": "object",
   "properties": {
-    "saved": { "type": "boolean" },
+    "saved": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "type": "object",
+          "properties": {
+            "question_id": { "type": "string", "format": "uuid" },
+            "state_version": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["question_id", "state_version"],
+          "additionalProperties": false
+        }
+      ]
+    },
     "etag": { "type": "string" },
     "suppressed_answers": {
       "type": "array",
@@ -25,4 +38,3 @@
     }
   }
 }
-

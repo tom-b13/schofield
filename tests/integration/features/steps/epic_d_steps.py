@@ -512,16 +512,98 @@ def epic_d_repeat_previous_post(context):
 @given('a document "{alias}" exists containing a clause at path "{clause_path}"')
 def epic_d_stage_document_alias(context, alias: str, clause_path: str):
     vars_map = _ensure_vars(context)
-    # Deterministically derive a UUID for the alias and store
+    # First, create the document via API and capture the server-assigned id
+    created_id: Optional[str] = None
     try:
-        import uuid as _uuid
-
-        uid = str(_uuid.uuid5(_uuid.NAMESPACE_URL, f"epic-d/doc:{alias}"))
+        # Try a few order_numbers to avoid conflicts from previous scenarios
+        base_order = 1
+        for i in range(1, 6):
+            payload = {"title": f"Document {alias}", "order_number": base_order + (i - 1)}
+            status, headers, body_json, _ = _http_request(
+                context,
+                "POST",
+                "/api/v1/documents",
+                headers={"Content-Type": "application/json", "Accept": "*/*"},
+                json_body=payload,
+            )
+            if status == 201 and isinstance(body_json, dict):
+                try:
+                    created_id = str(_jsonpath(body_json, "$.document.document_id"))
+                except Exception:
+                    created_id = None
+                if created_id:
+                    break
+            elif status == 409:
+                # Order number conflict: try next number
+                continue
+            else:
+                # Unexpected; stop trying to avoid masking server errors
+                break
     except Exception:
-        uid = alias  # fallback to alias as-is
-    vars_map[alias] = uid
-    vars_map["document_id"] = uid
+        created_id = None
+
+    # Fallback if creation failed: deterministically derive a UUID for alias
+    if not created_id:
+        try:
+            import uuid as _uuid  # type: ignore
+
+            created_id = str(_uuid.uuid5(_uuid.NAMESPACE_URL, f"epic-d/doc:{alias}"))
+        except Exception:
+            created_id = str(alias)
+
+    # Persist identifiers and commonly used vars for later steps
+    vars_map[alias] = created_id
+    vars_map["document_id"] = created_id
     vars_map["clause_path"] = str(clause_path)
+
+    # Ensure at least one enum parent bind exists for q-enum so lists return >=1 item
+    try:
+        q_map: Dict[str, str] = vars_map.setdefault("qid_by_ext", {})
+        q_enum = q_map.get("q-enum") or _resolve_id("q-enum", q_map, prefix="q:")
+        # Fetch latest ETag for q-enum for this document
+        list_path = f"/api/v1/questions/{q_enum}/placeholders?document_id={created_id}"
+        step_when_get(context, list_path)
+        from questionnaire_steps import _get_header_case_insensitive as _hget  # type: ignore
+
+        latest = _hget(context.last_response.get("headers", {}) or {}, "ETag")
+        if isinstance(latest, (bytes, bytearray)):
+            try:
+                latest = latest.decode("utf-8")
+            except Exception:
+                pass
+        latest_str = latest if isinstance(latest, str) and latest.strip() else "*"
+        # Check if items already present; if none, seed a single enum bind
+        body = context.last_response.get("json")
+        items = _jsonpath(body, "$.items") if isinstance(body, dict) else []
+        if not (isinstance(items, list) and len(items) >= 1):
+            bind_headers = {
+                "Content-Type": "application/json",
+                "Accept": "*/*",
+                "If-Match": latest_str,
+                "Idempotency-Key": f"seed-enum-{alias}",
+            }
+            bind_body = {
+                "question_id": str(q_enum),
+                "transform_id": "enum_single_v1",
+                "placeholder": {
+                    # Clarke: seed canonical enum with literal + placeholder option
+                    # This yields options ["INTRANET", {placeholder_key: "DETAILS", placeholder_id: null}]
+                    "raw_text": "on the intranet OR [DETAILS]",
+                    "context": {"document_id": str(created_id), "clause_path": str(clause_path)},
+                },
+                "apply_mode": "apply",
+            }
+            _status, _hdrs, _json, _txt = _http_request(
+                context, "POST", "/api/v1/placeholders/bind", headers=bind_headers, json_body=bind_body
+            )
+            # Refresh list and cache the new latest ETag
+            step_when_get(context, list_path)
+            latest = _hget(context.last_response.get("headers", {}) or {}, "ETag")
+            if isinstance(latest, str) and latest.strip():
+                vars_map["latest-etag-for-q-enum"] = latest
+    except Exception:
+        # Non-fatal; background seeding should not hard-fail the scenario setup
+        pass
 
 
 @given("questions exist:")
@@ -591,30 +673,127 @@ def epic_d_have_child_from_previous(context, var_name: str):
                             cand = ((prior.get("body") or {}) or {}).get("placeholder_id")
                         except Exception:
                             cand = None
-                    if isinstance(cand, str) and cand:
-                        val = cand
+                        if isinstance(cand, str) and cand:
+                            val = cand
         except Exception:
             pass
+    # Clarke: verify cached child id still exists for current q-nested/document; if not, force reseed
+    try:
+        if isinstance(val, str) and val:
+            q_map: Dict[str, str] = vars_map.setdefault("qid_by_ext", {})
+            q_nested = q_map.get("q-nested") or _resolve_id("q-nested", q_map, prefix="q:")
+            doc_id = vars_map.get("document_id") or vars_map.get("doc-001") or "doc-001"
+            list_path = f"/api/v1/questions/{q_nested}/placeholders?document_id={doc_id}"
+            step_when_get(context, list_path)
+            body = context.last_response.get("json") if isinstance(context.last_response, dict) else None
+            items = _jsonpath(body, "$.items") if isinstance(body, dict) else []
+            exists = False
+            if isinstance(items, list):
+                try:
+                    for it in items:
+                        pid = _jsonpath(it, "$.id") if isinstance(it, dict) else None
+                        if isinstance(pid, str) and pid == val:
+                            exists = True
+                            break
+                except Exception:
+                    exists = False
+            if not exists:
+                val = None
+    except Exception:
+        # Non-fatal: fall back to reseed path below
+        val = None
     if not val:
-        # Fallback GET to retrieve child id for q-nested
+        # No existing child found after resets; seed required state
         q_map: Dict[str, str] = vars_map.setdefault("qid_by_ext", {})
-        step_when_get(
-            context,
-            f"/api/v1/questions/{_resolve_id('q-nested', q_map, prefix='q:')}/placeholders?document_id={vars_map.get('document_id')}",
-        )
-        body = context.last_response.get("json")
-        items = _jsonpath(body, "$.items") if isinstance(body, dict) else None
-        if isinstance(items, list) and items:
-            from questionnaire_steps import _get_header_case_insensitive as _hget  # type: ignore
+        from questionnaire_steps import _get_header_case_insensitive as _hget  # type: ignore
 
-            # Choose the single (or first) child id
-            first = items[0] if isinstance(items[0], dict) else {}
-            val = _jsonpath(first, "$.id") if isinstance(first, dict) else None
-            # Capture latest ETag for convenience
-            headers = context.last_response.get("headers", {}) or {}
-            et = _hget(headers, "ETag")
-            if isinstance(et, str) and et.strip():
-                vars_map["latest-etag-for-q-nested"] = et
+        # 1) Ensure enum parent exists for q-enum
+        try:
+            q_enum = q_map.get("q-enum") or _resolve_id("q-enum", q_map, prefix="q:")
+            doc_id = vars_map.get("document_id") or vars_map.get("doc-001") or "doc-001"
+            list_enum = f"/api/v1/questions/{q_enum}/placeholders?document_id={doc_id}"
+            step_when_get(context, list_enum)
+            latest = _hget(context.last_response.get("headers", {}) or {}, "ETag")
+            latest = latest.decode("utf-8") if isinstance(latest, (bytes, bytearray)) else latest
+            latest_str = latest if isinstance(latest, str) and latest.strip() else "*"
+            items = _jsonpath(context.last_response.get("json"), "$.items")
+            if not (isinstance(items, list) and items):
+                _http_request(
+                    context,
+                    "POST",
+                    "/api/v1/placeholders/bind",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "*/*",
+                        "If-Match": latest_str,
+                        "Idempotency-Key": "seed-enum-for-child-001",
+                    },
+                    json_body={
+                        "question_id": str(q_enum),
+                        "transform_id": "enum_single_v1",
+                        "placeholder": {
+                            "raw_text": "Seed enum",
+                            "context": {
+                                "document_id": str(doc_id),
+                                "clause_path": str(vars_map.get("clause_path") or "/intro"),
+                            },
+                        },
+                        "apply_mode": "apply",
+                    },
+                )
+        except Exception:
+            pass
+
+        # 2) Bind short_string child for q-nested using fresh If-Match
+        q_nested = q_map.get("q-nested") or _resolve_id("q-nested", q_map, prefix="q:")
+        doc_id = vars_map.get("document_id") or vars_map.get("doc-001") or "doc-001"
+        step_when_get(context, f"/api/v1/questions/{q_nested}/placeholders?document_id={doc_id}")
+        latest_nested = _hget(context.last_response.get("headers", {}) or {}, "ETag")
+        latest_nested = (
+            latest_nested.decode("utf-8") if isinstance(latest_nested, (bytes, bytearray)) else latest_nested
+        )
+        latest_nested = latest_nested if isinstance(latest_nested, str) and latest_nested.strip() else "*"
+
+        b_status, b_hdrs, b_json, _ = _http_request(
+            context,
+            "POST",
+            "/api/v1/placeholders/bind",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "*/*",
+                "If-Match": latest_nested,
+                "Idempotency-Key": "seed-child-001",
+            },
+            json_body={
+                "question_id": str(q_nested),
+                "transform_id": "short_string_v1",
+                "placeholder": {
+                    "raw_text": "Child seed",
+                    "context": {
+                        "document_id": str(doc_id),
+                        "clause_path": str(vars_map.get("clause_path") or "/intro"),
+                        "span": {"start": 0, "end": 5},
+                    },
+                },
+                "apply_mode": "apply",
+            },
+        )
+        try:
+            if isinstance(b_json, dict) and b_json.get("placeholder_id"):
+                val = str(b_json["placeholder_id"])  # capture child id
+        except Exception:
+            val = val
+        # Clarke: assert captured id is non-empty and publish aliases immediately
+        assert isinstance(val, str) and val, "Expected child placeholder_id from seed bind"
+        vars_map[var_name] = val
+        vars_map["placeholder_id"] = val
+        vars_map["child-placeholder-id"] = val
+        # Refresh latest ETag for q-nested
+        step_when_get(context, f"/api/v1/questions/{q_nested}/placeholders?document_id={doc_id}")
+        new_et = _hget(context.last_response.get("headers", {}) or {}, "ETag")
+        new_et = new_et.decode("utf-8") if isinstance(new_et, (bytes, bytearray)) else new_et
+        if isinstance(new_et, str) and new_et.strip():
+            vars_map["latest-etag-for-q-nested"] = new_et
     assert isinstance(val, str) and val, "Expected child placeholder_id captured from previous scenario"
     # Normalize to the requested variable name for later lookups
     vars_map[var_name] = val

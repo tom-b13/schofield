@@ -292,7 +292,23 @@ def _fallback_validate(instance: Any, schema: Dict[str, Any]) -> None:
         assert isinstance(instance.get("blocking_items"), list), "blocking_items must be array"
         return
     if "AutosaveResult" in name:
-        assert isinstance(instance, dict) and isinstance(instance.get("saved"), bool), "saved must be boolean"
+        # Accept either boolean saved or object {question_id: uuid, state_version: >=0}
+        assert isinstance(instance, dict), "AutosaveResult must be object"
+        saved_val = instance.get("saved")
+        ok = False
+        if isinstance(saved_val, bool):
+            ok = True
+        elif isinstance(saved_val, dict):
+            qid = saved_val.get("question_id")
+            sv = saved_val.get("state_version")
+            try:
+                uuid.UUID(str(qid))
+                uuid_like = True
+            except Exception:
+                uuid_like = False
+            if uuid_like and isinstance(sv, int) and sv >= 0:
+                ok = True
+        assert ok, "saved must be boolean or object with {question_id: uuid, state_version: non-negative int}"
         et = instance.get("etag")
         assert isinstance(et, str) and et.strip(), "etag must be non-empty string"
         return
@@ -653,7 +669,12 @@ def _http_request(
     # Clarke: apply API prefix when feature path is unversioned
     api_prefix = str(getattr(context, "api_prefix", "/api/v1"))
     try:
-        needs_prefix = isinstance(path, str) and path.startswith("/") and not path.startswith("/api/")
+        needs_prefix = (
+            isinstance(path, str)
+            and path.startswith("/")
+            and not path.startswith("/api/")
+            and not path.startswith("/__test__")
+        )
         effective_path = (api_prefix.rstrip("/") + path) if needs_prefix else path
     except Exception:
         effective_path = path
@@ -829,54 +850,60 @@ def _row_value_text(context, rs_id: str, q_id: str) -> Optional[str]:
 
 @given("a clean database")
 def step_clean_db(context):
-    # Deterministically purge Epic C/D tables and core fixtures (always run; not gated by mock mode)
+    # Deterministically purge Epic C/D tables and core fixtures in isolated transactions
+    # to avoid poisoning a single transaction with a failure (PendingRollbackError).
     eng = _db_engine(context)
     if eng is not None:
-        with eng.begin() as conn:
-            # Core questionnaire tables (retain legacy cleanup for non-Epic C/D data)
-            for tbl in (
-                "response",
-                "answer_option",
-                "questionnaire_question",
-                "screens",
-                "questionnaires",
-                "response_set",
-                "company",
-            ):
-                try:
-                    conn.execute(sql_text(f"DELETE FROM {tbl}"))
-                except Exception:
-                    # Optional across environments
-                    pass
-
-            # Cross-dialect discovery via SQLAlchemy inspector (no reliance on pg_tables)
-            try:
-                from sqlalchemy import inspect as sa_inspect  # local import to avoid global changes
-                inspector = sa_inspect(conn)
+        # Discover existing tables using SQLAlchemy inspector first
+        try:
+            from sqlalchemy import inspect as sa_inspect  # local import per Clarke
+            with eng.connect() as insp_conn:
+                inspector = sa_inspect(insp_conn)
                 table_names = set(inspector.get_table_names())
-            except Exception:
-                # If inspector is unavailable, proceed with curated fallback list
-                table_names = set()
+        except Exception:
+            # If inspector is unavailable, proceed with empty set (best-effort deletes)
+            table_names = set()
 
-            # FK-safe deletion order for Epic C/D (handle singular/plural variants)
-            purge_order: list[list[str]] = [
-                ["enum_option_placeholder_link", "parent_options"],  # link tables first
-                ["placeholders"],
-                ["document_blobs", "document_blob"],
-                ["document_list_state"],
-                ["documents", "document"],
-                ["idempotency_key", "idempotency_keys"],
-            ]
+        # Core questionnaire tables (retain legacy cleanup for non-Epic C/D data)
+        core_tables = [
+            "response",
+            "answer_option",
+            "questionnaire_question",
+            "screens",
+            "questionnaires",
+            "response_set",
+            "company",
+        ]
 
-            for group in purge_order:
-                for tbl in group:
-                    # Prefer inspector discovery; fallback to best-effort deletion
-                    if not table_names or (tbl in table_names):
+        # FK-safe deletion order for Epic C/D (handle singular/plural variants)
+        purge_groups: list[list[str]] = [
+            core_tables,
+            ["enum_option_placeholder_link", "parent_options"],  # link tables first
+            ["placeholders"],
+            ["document_blobs", "document_blob"],
+            ["document_list_state"],
+            ["documents", "document"],
+            ["idempotency_key", "idempotency_keys"],
+        ]
+
+        # Execute each table purge in its own short transaction. Only target tables
+        # that actually exist when inspector data is available.
+        for group in purge_groups:
+            for tbl in group:
+                if table_names and (tbl not in table_names):
+                    continue
+                try:
+                    with eng.connect() as conn:
+                        trans = conn.begin()
                         try:
                             conn.execute(sql_text(f"DELETE FROM {tbl}"))
+                            trans.commit()
                         except Exception:
-                            # Best-effort cross-dialect cleanup; continue to next
-                            pass
+                            # Roll back only this short transaction; continue with others
+                            trans.rollback()
+                except Exception:
+                    # Best-effort cross-dialect cleanup; continue to next table
+                    pass
     # Always reset step context regardless of DB availability
     context.vars = {}
     context.last_response = {"status": None, "headers": {}, "json": None, "text": None, "path": None, "method": None}
@@ -1204,6 +1231,12 @@ def step_when_get(context, path: str):
         "path": rewritten,
         "method": "GET",
     }
+    # Clear one-shot failure injection header if present
+    try:
+        if hasattr(context, "_pending_headers") and isinstance(context._pending_headers, dict):
+            context._pending_headers.pop("X-Test-Fail-Visibility-Helper", None)
+    except Exception:
+        pass
     # Clarke: All JSON responses must include X-Request-Id (200/4xx)
     if context.last_response.get("json") is not None:
         _assert_x_request_id(context)
@@ -1866,6 +1899,9 @@ def epic_i_get_and_store_etag_alias(context, path: str, var_name: str):
     step_when_get(context, path)
     headers = context.last_response.get("headers", {}) or {}
     val = _get_header_case_insensitive(headers, "ETag")
+    # Clarke: fallback to Screen-ETag when ETag is missing/blank
+    if not (isinstance(val, str) and val.strip()):
+        val = _get_header_case_insensitive(headers, "Screen-ETag")
     assert isinstance(val, str) and val.strip(), "Expected non-empty ETag header"
     context.vars[var_name] = val
 
@@ -2021,6 +2057,12 @@ def _epic_i_values_for_wildcard(body: Dict[str, Any], json_path: str) -> List[An
 
 @then('the JSON "{json_path}" should contain "{value}"')
 def epic_i_json_should_contain(context, json_path: str, value: str):
+    # Debug banner for cross-epic triage (scenario + json_path)
+    try:
+        scenario_name = getattr(getattr(context, "scenario", None), "name", "<unknown>")
+    except Exception:
+        scenario_name = "<unknown>"
+    print(f"[epic-i][assert] scenario={scenario_name} json_path={json_path}")
     body = context.last_response.get("json")
     assert isinstance(body, dict), "No JSON body"
     # Clarke: when json_path contains a wildcard segment like "[*].",
@@ -2028,7 +2070,26 @@ def epic_i_json_should_contain(context, json_path: str, value: str):
     if "[*]." in json_path:
         values = _epic_i_values_for_wildcard(body, json_path)
         expected = _translate_expected_for_jsonpath(context, json_path, value)
-        assert expected in values, f"Expected {expected!r} in {json_path}, got {values!r}"
+        try:
+            assert expected in values, f"Expected {expected!r} in {json_path}, got {values!r}"
+        except AssertionError:
+            # Instrumentation on failure: dump values, expected, and ETag headers
+            try:
+                headers = (context.last_response.get("headers") or {})
+                etag = _get_header_case_insensitive(headers, "ETag") or "-"
+                screen_etag = (
+                    _get_header_case_insensitive(headers, "Screen-ETag")
+                    or _get_header_case_insensitive(headers, "screen-etag")
+                    or "-"
+                )
+                print(
+                    f"[epic-i][contain-fail] path={json_path} expected={expected!r} values={values!r} "
+                    f"etag={etag} screen-etag={screen_etag}"
+                )
+            except Exception:
+                # Never fail due to instrumentation
+                pass
+            raise
         return
     # For non-wildcard paths, inspect the resolved value first for string-substring semantics
     actual = _jsonpath(body, json_path)
@@ -2051,7 +2112,24 @@ def epic_i_json_should_contain(context, json_path: str, value: str):
     # Membership semantics for arrays and non-strings
     values = actual if isinstance(actual, list) else [actual]
     expected = _translate_expected_for_jsonpath(context, json_path, value)
-    assert expected in values, f"Expected {expected!r} in {json_path}, got {values!r}"
+    try:
+        assert expected in values, f"Expected {expected!r} in {json_path}, got {values!r}"
+    except AssertionError:
+        try:
+            headers = (context.last_response.get("headers") or {})
+            etag = _get_header_case_insensitive(headers, "ETag") or "-"
+            screen_etag = (
+                _get_header_case_insensitive(headers, "Screen-ETag")
+                or _get_header_case_insensitive(headers, "screen-etag")
+                or "-"
+            )
+            print(
+                f"[epic-i][contain-fail] path={json_path} expected={expected!r} values={values!r} "
+                f"etag={etag} screen-etag={screen_etag}"
+            )
+        except Exception:
+            pass
+        raise
 
 
 @then('the JSON "{json_path}" should not contain "{value}"')

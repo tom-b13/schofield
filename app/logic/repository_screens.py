@@ -7,23 +7,115 @@ and response counts to keep route handlers free of persistence details.
 from __future__ import annotations
 
 from typing import Any, Dict, List
+from uuid import UUID
 
 from sqlalchemy import text as sql_text
+from sqlalchemy.exc import ProgrammingError
 
 from app.db.base import get_engine
 
 
 def get_screen_metadata(screen_id: str) -> tuple[str, str] | None:
-    """Return (screen_key, title) for a given screen_id, or None if missing."""
+    """Return (screen_key, title) for a given screen identifier.
+
+    Accepts either a UUID `screen_id` or a non-UUID `screen_key` token.
+    When a UUID-like token is provided, lookup by `screen_id`; otherwise
+    lookup by `screen_key`. Returns (screen_key, title) or None if missing.
+    """
+    # Detect UUID tokens; fall back to treating the value as a screen_key
+    is_uuid = False
+    try:
+        UUID(str(screen_id))
+        is_uuid = True
+    except Exception:
+        is_uuid = False
+
     eng = get_engine()
     with eng.connect() as conn:
-        row = conn.execute(
-            sql_text("SELECT screen_key, title FROM screens WHERE screen_id = :sid"),
-            {"sid": screen_id},
-        ).fetchone()
+        if is_uuid:
+            row = conn.execute(
+                sql_text("SELECT screen_key, title FROM screens WHERE screen_id = :sid"),
+                {"sid": screen_id},
+            ).fetchone()
+        else:
+            row = conn.execute(
+                sql_text("SELECT screen_key, title FROM screens WHERE screen_key = :skey"),
+                {"skey": screen_id},
+            ).fetchone()
     if not row:
         return None
     return str(row[0]), str(row[1])
+
+
+def get_screen_id_for_key(screen_key: str) -> str | None:
+    """Return the UUID screen_id for a given screen_key, or None if missing.
+
+    This helper is used by GET screen route to populate the 'screen' alias
+    object when the path token is a non-UUID key.
+    """
+    eng = get_engine()
+    with eng.connect() as conn:
+        row = conn.execute(
+            sql_text("SELECT screen_id FROM screens WHERE screen_key = :skey"),
+            {"skey": screen_key},
+        ).fetchone()
+    if not row:
+        return None
+    return str(row[0])
+
+
+def get_screen_by_key(screen_key: str) -> dict | None:
+    """Return a mapping for a screen identified by `screen_key`.
+
+    The returned dict includes at minimum `screen_id` and `screen_key`. When
+    available, it also includes a `questions` key listing question rows for
+    this screen, using the same shape as `list_questions_for_screen`.
+    """
+    eng = get_engine()
+    with eng.connect() as conn:
+        row = conn.execute(
+            sql_text("SELECT screen_id, screen_key FROM screens WHERE screen_key = :skey"),
+            {"skey": screen_key},
+        ).fetchone()
+    if not row:
+        return None
+    # Best-effort questions list; failures should not break the basic mapping
+    try:
+        questions = list_questions_for_screen(screen_key)
+    except Exception:
+        questions = []
+    return {"screen_id": str(row[0]), "screen_key": str(row[1]), "questions": questions}
+
+
+def get_screen_key_for_question(question_id: str) -> str | None:
+    """Return the screen_key for a given question_id, or None if missing.
+
+    Deterministically resolves the parent screen for a question to align
+    PATCH ETag computation with the GET screen view.
+    """
+    eng = get_engine()
+    try:
+        with eng.connect() as conn:
+            row = conn.execute(
+                sql_text(
+                    "SELECT screen_key FROM questionnaire_question WHERE question_id = :qid"
+                ),
+                {"qid": question_id},
+            ).fetchone()
+            # Fallback join on screens when screen_key is not directly available
+            if not row or row[0] is None:
+                row = conn.execute(
+                    sql_text(
+                        "SELECT s.screen_key FROM questionnaire_question q JOIN screens s ON q.screen_id = s.screen_id WHERE q.question_id = :qid"
+                    ),
+                    {"qid": question_id},
+                ).fetchone()
+    except ProgrammingError:
+        # Undefined column or similar programming error -> treat as unknown question
+        return None
+    if not row:
+        return None
+    return str(row[0])
 
 
 def list_questions_for_screen(screen_key: str) -> list[dict]:
@@ -34,17 +126,33 @@ def list_questions_for_screen(screen_key: str) -> list[dict]:
     """
     eng = get_engine()
     with eng.connect() as conn:
-        rows = conn.execute(
-            sql_text(
-                """
-                SELECT question_id, external_qid, question_text, answer_type, mandatory, question_order
-                FROM questionnaire_question
-                WHERE screen_key = :skey
-                ORDER BY question_order ASC, question_id ASC
-                """
-            ),
-            {"skey": screen_key},
-        ).fetchall()
+        # Support both schemas: direct screen_key column or FK via screens table
+        try:
+            rows = conn.execute(
+                sql_text(
+                    """
+                    SELECT question_id, external_qid, question_text, answer_type, mandatory, question_order
+                    FROM questionnaire_question
+                    WHERE screen_key = :skey
+                    ORDER BY question_order ASC, question_id ASC
+                    """
+                ),
+                {"skey": screen_key},
+            ).fetchall()
+        except Exception:
+            # Fallback: resolve via join on screens when questionnaire_question has screen_id only
+            rows = conn.execute(
+                sql_text(
+                    """
+                    SELECT q.question_id, q.external_qid, q.question_text, q.answer_type, q.mandatory, q.question_order
+                    FROM questionnaire_question q
+                    JOIN screens s ON q.screen_id = s.screen_id
+                    WHERE s.screen_key = :skey
+                    ORDER BY q.question_order ASC, q.question_id ASC
+                    """
+                ),
+                {"skey": screen_key},
+            ).fetchall()
 
     seen: set[str] = set()
     out: List[Dict[str, Any]] = []
@@ -64,6 +172,21 @@ def list_questions_for_screen(screen_key: str) -> list[dict]:
             }
         )
     return out
+
+
+def question_exists_on_screen(question_id: str) -> bool:
+    """Return True if the given question_id exists in questionnaire_question.
+
+    Used by routes to distinguish truly unknown questions from metadata lookup
+    issues when deciding between 404 and proceeding with an upsert.
+    """
+    eng = get_engine()
+    with eng.connect() as conn:
+        row = conn.execute(
+            sql_text("SELECT 1 FROM questionnaire_question WHERE question_id = :qid LIMIT 1"),
+            {"qid": question_id},
+        ).fetchone()
+    return row is not None
 
 
 def get_visibility_rules_for_screen(screen_key: str) -> dict[str, tuple[str | None, list | None]]:
@@ -90,9 +213,50 @@ def get_visibility_rules_for_screen(screen_key: str) -> dict[str, tuple[str | No
             {"skey": screen_key},
         ).fetchall()
 
+    # Build a mapping of external_qid -> question_id for this screen to allow
+    # resolving non-UUID parent_question_id tokens (e.g., external_qid like 'q_parent_bool').
+    ext_to_qid: dict[str, str] = {}
+    try:
+        with eng.connect() as conn:
+            ext_rows = conn.execute(
+                sql_text(
+                    """
+                    SELECT external_qid, question_id
+                    FROM questionnaire_question
+                    WHERE screen_key = :skey
+                    """
+                ),
+                {"skey": screen_key},
+            ).fetchall()
+        for er in ext_rows:
+            ek = er[0]
+            ev = er[1]
+            if ek:
+                try:
+                    # Normalize external_qid keys to case-insensitive map with trimmed tokens
+                    ext_to_qid[str(ek).strip().lower()] = str(ev)
+                except Exception:
+                    continue
+    except Exception:
+        # If mapping cannot be built, proceed without it; unresolved parents remain None
+        ext_to_qid = {}
+
     def _to_list(val: Any) -> list | None:
         if val is None:
             return None
+        # If the DB already returns a native list/array, normalize directly
+        if isinstance(val, (list, tuple)):
+            out_list: list[str] = []
+            for x in val:
+                if isinstance(x, bool):
+                    out_list.append("true" if x else "false")
+                else:
+                    xs = str(x)
+                    if xs.lower() in {"true", "false"}:
+                        out_list.append(xs.lower())
+                    else:
+                        out_list.append(xs)
+            return out_list
         s = str(val).strip()
         if not s:
             return None
@@ -102,15 +266,62 @@ def get_visibility_rules_for_screen(screen_key: str) -> dict[str, tuple[str | No
 
             parsed = json.loads(s)
             if isinstance(parsed, list):
-                return [str(x) for x in parsed]
+                out: list[str] = []
+                for x in parsed:
+                    # Canonicalize booleans to 'true'/'false' strings
+                    if isinstance(x, bool):
+                        out.append("true" if x else "false")
+                    else:
+                        xs = str(x)
+                        if xs.lower() in {"true", "false"}:
+                            out.append(xs.lower())
+                        else:
+                            out.append(xs)
+                return out
         except Exception:
             pass
+        # Single value path: canonicalize boolean-like tokens
+        if s.lower() in {"true", "false"}:
+            return [s.lower()]
+        # Also handle literal Python boolean strings
+        if s in {"True", "False"}:
+            return [s.lower()]
         return [s]
 
     out: dict[str, tuple[str | None, list | None]] = {}
     for row in rows:
         qid = str(row[0])
-        parent_qid = str(row[1]) if row[1] is not None else None
+        raw_parent = row[1]
+        parent_qid: str | None
+        if raw_parent is None:
+            parent_qid = None
+        else:
+            candidate = str(raw_parent)
+            # Coerce to UUID when possible; otherwise resolve via external_qid mapping
+            try:
+                UUID(candidate)
+                parent_qid = candidate
+            except Exception:
+                # Not a UUID -> attempt resolution from external_qid on same screen
+                candidate_norm = candidate.strip().lower()
+                parent_qid = ext_to_qid.get(candidate_norm)
+                # If still unresolved, perform a fallback lookup across all questionnaire_question
+                # to avoid treating children as base-visible when the parent token is a non-UUID
+                # external_qid defined on another screen.
+                if not parent_qid:
+                    try:
+                        with eng.connect() as conn:
+                            prow = conn.execute(
+                                sql_text(
+                                    "SELECT question_id FROM questionnaire_question WHERE external_qid = :ext LIMIT 1"
+                                ),
+                                {"ext": candidate},
+                            ).fetchone()
+                        if prow:
+                            parent_qid = str(prow[0])
+                    except Exception:
+                        # Leave as None when not resolvable; caller will treat as base question
+                        parent_qid = None
         vis_list = _to_list(row[2])
         out[qid] = (parent_qid, vis_list)
     return out

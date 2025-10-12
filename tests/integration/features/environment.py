@@ -9,6 +9,7 @@ See docs/Epic B - Questionnaire Service.md for runtime expectations
 """
 
 import os
+import socket
 import json
 import traceback
 from typing import Any
@@ -118,37 +119,65 @@ def before_all(context: Any) -> None:
         except Exception:
             return False
 
-    if host_is_local and not _is_api_listening():
-        # Start uvicorn in a background subprocess serving `app.main:app` on the
-        # host/port derived from TEST_BASE_URL. Inherit current environment so
-        # the app can see TEST_DATABASE_URL.
-        import sys
-        uvicorn_cmd = [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "app.main:create_app",
-            "--factory",
-            "--host",
-            parsed.hostname or "127.0.0.1",
-            "--port",
-            str(port),
-            "--log-level",
-            "warning",
-        ]
-        context._api_proc = subprocess.Popen(
-            uvicorn_cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=os.environ.copy(),
-        )
+    def _port_in_use(host: str, p: int) -> bool:
+        try:
+            with socket.create_connection((host, p), timeout=1.0):
+                return True
+        except Exception:
+            return False
 
-        # Wait briefly for the server to come up.
-        deadline = time.time() + 10.0
-        while time.time() < deadline:
-            if _is_api_listening():
-                break
-            time.sleep(0.2)
+    def _choose_free_port(host: str) -> int:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((host, 0))
+            return int(s.getsockname()[1])
+
+    if host_is_local:
+        if _is_api_listening():
+            # An API is already responding at configured TEST_BASE_URL; do nothing.
+            context._port_rebind_info = None
+        else:
+            # Either the port is occupied by a non-HTTP service or nothing is listening.
+            # Per Clarke, always select a free ephemeral port and start uvicorn there.
+            new_port = _choose_free_port(parsed.hostname or "127.0.0.1")
+            old_port = port
+            # Rebuild base URL with the new port (preserve scheme and host).
+            new_base = f"{parsed.scheme}://{parsed.hostname}:{new_port}"
+            context.test_base_url = new_base
+            os.environ["TEST_BASE_URL"] = new_base
+            # Publish rebind info for later diagnostics
+            context._port_rebind_info = {"old_port": old_port, "new_port": new_port}
+
+            # Start uvicorn on the new port.
+            import sys
+            uvicorn_cmd = [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "app.main:create_app",
+                "--factory",
+                "--host",
+                parsed.hostname or "127.0.0.1",
+                "--port",
+                str(new_port),
+                "--log-level",
+                "warning",
+            ]
+            context._api_proc = subprocess.Popen(
+                uvicorn_cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=os.environ.copy(),
+            )
+
+            # Wait briefly for the server to come up on the new port.
+            deadline = time.time() + 10.0
+            while time.time() < deadline:
+                if _is_api_listening():
+                    break
+                time.sleep(0.2)
+    else:
+        # Non-localhost target: do not attempt to manage server lifecycle.
+        context._port_rebind_info = None
 
     # 2) Database connectivity using TEST_DATABASE_URL
     def _mask_dsn(dsn: str) -> str:
@@ -362,6 +391,17 @@ def before_all(context: Any) -> None:
     # Minimal breadcrumb for troubleshooting without noisy logs.
     # Behave captures stdout/stderr; this is intentionally concise.
     print(f"[env] TEST_BASE_URL={context.test_base_url}")
+    # Clarke instrumentation: emit an explicit message when we rebind to a new port
+    if getattr(context, "_port_rebind_info", None):
+        try:
+            info = context._port_rebind_info or {}
+            print(
+                f"[env] port-in-use or unreachable at :{info.get('old_port')}; "
+                f"selected ephemeral :{info.get('new_port')} -> TEST_BASE_URL={context.test_base_url}"
+            )
+        except Exception:
+            # Never raise from instrumentation
+            pass
     # Quick reachability checks to fail fast with actionable errors.
     # 1) API reachability at TEST_BASE_URL (any HTTP status is acceptable; only connection errors fail)
     try:

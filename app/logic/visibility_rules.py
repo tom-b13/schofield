@@ -20,8 +20,20 @@ def is_child_visible(parent_value: str | None, visible_if_values: Iterable | Non
         return False
     if not visible_if_values:
         return False
-    targets = {str(x) for x in visible_if_values}
-    return parent_value in targets
+    # Normalize boolean-like tokens to canonical 'true'/'false' strings for both
+    # the parent value and the target list to ensure robust equality checks.
+    def _canon(tok: object) -> str:
+        try:
+            if isinstance(tok, bool):
+                return "true" if tok else "false"
+            s = str(tok)
+            return s.lower() if s.lower() in {"true", "false"} else s
+        except Exception:
+            return str(tok)
+
+    pv_norm = _canon(parent_value)
+    targets = {_canon(x) for x in visible_if_values}
+    return pv_norm in targets
 
 
 def compute_visible_set(

@@ -27,18 +27,6 @@ logger = logging.getLogger(__name__)
 _EVENTS_TYPE_REF: type = Events
 
 
-@router.get("/__test__/events", summary="Test-only events feed")
-def get_test_events():
-    """Expose buffered domain events for integration assertions.
-
-    Does not clear the buffer; returns a JSON array of event objects.
-    """
-    from app.logic.events import get_buffered_events
-
-    events = get_buffered_events(clear=False)
-    return JSONResponse(events, status_code=200, media_type="application/json")
-
-
 @router.post("/response-sets", summary="Create a response set (skeleton)")
 def create_response_set(payload: dict):
     """Create a response set and return its identifier and metadata.
@@ -50,6 +38,7 @@ def create_response_set(payload: dict):
     - etag: non-empty opaque string
     """
     name = (payload or {}).get("name")
+    company_id = (payload or {}).get("company_id")
     rs_id = str(uuid.uuid4())
     created_at = (
         datetime.now(timezone.utc)
@@ -65,11 +54,11 @@ def create_response_set(payload: dict):
             conn.execute(
                 sql_text(
                     """
-                    INSERT INTO response_set (response_set_id, created_at)
-                    VALUES (:rsid, :created_at)
+                    INSERT INTO response_set (response_set_id, company_id, created_at)
+                    VALUES (:rsid, :company_id, :created_at)
                     """
                 ),
-                {"rsid": rs_id, "created_at": created_at},
+                {"rsid": rs_id, "company_id": company_id, "created_at": created_at},
             )
     except Exception:
         # Non-fatal in unit path: log and continue to return 201
