@@ -126,8 +126,17 @@ def get_screen_key_for_question(question_id: str) -> str | None:
                     {"qid": question_id},
                 ).fetchone()
     except ProgrammingError:
-        # Undefined column or similar programming error -> treat as unknown question
-        return None
+        # Schema variance: retry using JOIN against screens to resolve screen_key
+        try:
+            with eng.connect() as conn:
+                row = conn.execute(
+                    sql_text(
+                        "SELECT s.screen_key FROM questionnaire_question q JOIN screens s ON q.screen_id = s.screen_id WHERE q.question_id = :qid"
+                    ),
+                    {"qid": question_id},
+                ).fetchone()
+        except Exception:
+            row = None
     if not row:
         return None
     return str(row[0])

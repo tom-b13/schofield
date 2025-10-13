@@ -8,33 +8,47 @@ from __future__ import annotations
 
 import hashlib
 
-from sqlalchemy import text as sql_text
-
-from app.db.base import get_engine
+from app.logic.repository_screens import get_visibility_rules_for_screen
+from app.logic.repository_answers import get_existing_answer, get_screen_version
+from app.logic.answer_canonical import canonicalize_answer_value
+from app.logic.visibility_rules import compute_visible_set
 
 
 def compute_screen_etag(response_set_id: str, screen_key: str) -> str:
     """Compute a weak ETag for a screen within a response set.
 
     Deterministic across identical state and stable between GET→PATCH precheck.
-    The token is derived strictly from (response_set_id, screen_key, version),
-    where `version` is the per-(response_set, screen) monotonic counter bumped
-    on every write affecting the screen. This avoids spurious mismatches due to
-    clock granularity or row-count races.
+    Incorporates both a per-(response_set, screen) monotonic version AND a
+    stable fingerprint of the currently visible question_id set so that ETag
+    changes when visibility changes.
     """
+    # Version component (in-memory first for read-your-writes)
     try:
-        # Use the in-memory/versioned source of truth first to guarantee parity
-        # across GET and subsequent PATCH precondition checks.
-        from app.logic.repository_answers import get_screen_version
-
         version = int(get_screen_version(response_set_id, screen_key))
     except Exception:
         version = 0
 
-    # Only include (response_set_id, screen_key, version) in the hash to keep
-    # the ETag deterministic across identical state. Extra DB-derived fields
-    # like timestamps or counts are intentionally excluded to prevent drift.
-    token = f"{response_set_id}:{screen_key}:v{version}".encode("utf-8")
+    # Visibility fingerprint component (rules + parent values -> visible set)
+    try:
+        rules = get_visibility_rules_for_screen(screen_key)
+        # Collect parent ids as strings
+        parents = {str(p) for (p, _vis) in rules.values() if p is not None}
+        parent_values: dict[str, str | None] = {}
+        for pid in parents:
+            row = get_existing_answer(response_set_id, pid)
+            if row is None:
+                parent_values[pid] = None
+            else:
+                _opt, vtext, vnum, vbool = row
+                cv = canonicalize_answer_value(vtext, vnum, vbool)
+                parent_values[pid] = (str(cv) if cv is not None else None)
+        visible_ids = sorted(str(x) for x in compute_visible_set(rules, parent_values))
+        vis_fp = hashlib.sha1("\n".join(visible_ids).encode("utf-8")).hexdigest()
+    except Exception:
+        # Conservative fallback when rules/answers unavailable
+        vis_fp = "none"
+
+    token = f"{response_set_id}:{screen_key}:v{version}|vis:{vis_fp}".encode("utf-8")
     digest = hashlib.sha1(token).hexdigest()
     etag = f'W/"{digest}"'
     return etag  # deterministic across identical state

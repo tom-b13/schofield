@@ -82,20 +82,7 @@ def maybe_replay(
             body = stored.get("body")
             if isinstance(body, dict):
                 return body
-
-        # 2) Token-based miss: fall back to tokenless last-success for identical payload
-        tokenless_key = f"{rs_id}:{q_id}:{body_hash}"
-        stored = _ANSWERS_LAST_SUCCESS.get(tokenless_key)
-        if stored:
-            et = stored.get("etag")
-            se = stored.get("screen_etag") or et
-            if et:
-                response.headers["ETag"] = et
-            if se:
-                response.headers["Screen-ETag"] = se
-            body = stored.get("body")
-            if isinstance(body, dict):
-                return body
+        # 2) Token-based miss: do not fall back to tokenless replay; require a real write
     else:
         # No token provided: attempt tokenless last-success replay only
         tokenless_key = f"{rs_id}:{q_id}:{body_hash}"

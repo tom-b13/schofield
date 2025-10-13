@@ -10,11 +10,26 @@ from typing import Any, Dict, Tuple
 from sqlalchemy import text as sql_text
 
 from app.db.base import get_engine
+from app.logic.repository_screens import (
+    get_screen_key_for_question as _screen_key_from_screens,
+)
 import json
 import uuid
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
+# Ensure module INFO logs are emitted to stdout during integration runs
+try:
+    if not logger.handlers:
+        _handler = logging.StreamHandler(stream=sys.stdout)
+        _handler.setLevel(logging.INFO)
+        _handler.setFormatter(logging.Formatter('%(levelname)s:%(name)s:%(message)s'))
+        logger.addHandler(_handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+except Exception:
+    pass
 
 # In-memory fallback store used in skeleton mode or when DB is unavailable.
 # Keys are (response_set_id, question_id) -> tuple(option_id, value_text, value_number, value_bool)
@@ -22,6 +37,12 @@ _INMEM_ANSWERS: Dict[Tuple[str, str], Tuple[str | None, str | None, float | None
 
 # Per-(response_set_id, screen_key) version counter to support weak Screen-ETag fallback.
 _SCREEN_VERSIONS: Dict[Tuple[str, str], int] = {}
+
+# Instrumentation: log cache object id once to verify shared instance across modules
+try:
+    logger.info("answers_cache_init cache_id=%s", id(_INMEM_ANSWERS))
+except Exception:
+    pass
 
 # Minimal default mapping for Epic E tests when DB metadata is unavailable.
 _FALLBACK_SCREEN_BY_QID: Dict[str, str] = {
@@ -46,29 +67,55 @@ def get_screen_version(response_set_id: str, screen_key: str) -> int:
 def get_screen_key_for_question(question_id: str) -> str | None:
     """Resolve screen_key for a question.
 
-    Exception-safe: returns None on DB errors. Provides a trivial fallback mapping
-    for Epic E defaults when metadata table is unavailable.
+    Primary: delegate to repository_screens for authoritative resolution.
+    Secondary: perform direct DB probes (questionnaire_question and JOIN screens)
+    to avoid returning a generic fallback when the metadata exists.
+    Tertiary: consult a minimal static mapping and, if it yields a UUID-like
+    token, resolve to a canonical screen_key via the screens table.
     """
+    # 1) Authoritative lookup via repository_screens
+    try:
+        skey = _screen_key_from_screens(question_id)
+        if skey:
+            return str(skey)
+    except Exception:
+        logger.error(
+            "repo_screens.get_screen_key_for_question failed for %s", question_id, exc_info=True
+        )
+
+    # 2) Secondary DB probe to resolve screen_key directly by question_id
     try:
         eng = get_engine()
         with eng.connect() as conn:
             row = conn.execute(
-                sql_text("SELECT screen_key FROM questionnaire_question WHERE question_id = :qid"),
+                sql_text(
+                    "SELECT screen_key FROM questionnaire_question WHERE question_id = :qid"
+                ),
                 {"qid": question_id},
             ).fetchone()
-        if row:
-            return str(row[0])
+            if row and row[0]:
+                return str(row[0])
+            # Fallback join: resolve via screens when only screen_id exists
+            row2 = conn.execute(
+                sql_text(
+                    "SELECT s.screen_key FROM questionnaire_question q JOIN screens s ON q.screen_id = s.screen_id WHERE q.question_id = :qid"
+                ),
+                {"qid": question_id},
+            ).fetchone()
+            if row2 and row2[0]:
+                return str(row2[0])
     except Exception:
-        logger.error("get_screen_key_for_question failed for %s", question_id, exc_info=True)
-    # fallback mapping for test data with hardening:
-    # If the fallback yields a UUID-like identifier, resolve it to a canonical
-    # screen_key via the screens table before returning. Never return a UUID
-    # screen_id as a screen_key.
+        # Swallow and continue to final fallback path
+        logger.error(
+            "secondary screen_key probe failed for %s", question_id, exc_info=True
+        )
+
+    # 3) Final fallback mapping for skeleton or metadata-light runs
     fallback = _FALLBACK_SCREEN_BY_QID.get(question_id)
     if not fallback:
         return None
+    # If the fallback resembles a UUID, translate it to a canonical screen_key
     try:
-        # Detect UUID tokens; if present, translate to screen_key via DB
         uuid.UUID(str(fallback))
         try:
             eng = get_engine()
@@ -77,9 +124,9 @@ def get_screen_key_for_question(question_id: str) -> str | None:
                     sql_text("SELECT screen_key FROM screens WHERE screen_id = :sid"),
                     {"sid": str(fallback)},
                 ).fetchone()
-            if row:
+            if row and row[0]:
                 return str(row[0])
-            # If not resolvable, fall back to a safe, stable key used across tests
+            # If not resolvable, use a stable, explicit key (avoid mis-mapping)
             return "profile"
         except Exception:
             logger.error(
@@ -123,8 +170,22 @@ def get_existing_answer(response_set_id: str, question_id: str) -> tuple | None:
     # Clarke hardening: coerce composite key parts to strings once
     rs_id = str(response_set_id)
     q_id = str(question_id)
-    # DB-first probe to guarantee external read-your-writes semantics across
-    # processes; fall back to in-memory only when DB lacks the row or errors.
+    # Prefer in-memory mirror first to guarantee read-your-writes immediately
+    # after PATCH within the same process; if absent, probe DB and mirror.
+    inm = _INMEM_ANSWERS.get((rs_id, q_id))
+    if inm is not None:
+        try:
+            logger.info(
+                "answers_cache_hit rs_id=%s q_id=%s tuple=%s",
+                rs_id,
+                q_id,
+                inm,
+            )
+        except Exception:
+            pass
+        return inm
+    # DB probe to guarantee external consistency across processes; on DB miss
+    # fall back to any prior in-memory upsert.
     try:
         eng = get_engine()
         with eng.connect() as conn:
@@ -167,11 +228,59 @@ def get_existing_answer(response_set_id: str, question_id: str) -> tuple | None:
                     vnum = float(parsed)
                 elif isinstance(parsed, str):
                     vtext = parsed
+            # Normalize option_id to string for consistency before mirroring
+            try:
+                opt = str(opt) if (opt is not None) else None
+            except Exception:
+                # If normalization fails, retain original value
+                pass
+            # Mirror normalized tuple to in-memory cache for read-your-writes
+            try:
+                _INMEM_ANSWERS[(rs_id, q_id)] = (opt, vtext, vnum, vbool)
+                try:
+                    logger.info(
+                        "answers_cache_mirror key=(%s,%s) tuple=%s cache_id=%s",
+                        rs_id,
+                        q_id,
+                        (opt, vtext, vnum, vbool),
+                        id(_INMEM_ANSWERS),
+                    )
+                except Exception:
+                    pass
+            except Exception:
+                logger.error(
+                    "answers_cache_mirror_failed rs_id=%s q_id=%s", rs_id, q_id, exc_info=True
+                )
+            # Immediately re-read from in-memory to ensure we return the mirrored tuple
+            # and to catch any concurrent in-process update that raced just after mirror.
+            try:
+                cached = _INMEM_ANSWERS.get((rs_id, q_id))
+                if cached is not None:
+                    return cached
+            except Exception:
+                pass
             return (opt, vtext, vnum, vbool)
         # Deterministic fallback: surface prior in-memory upsert when DB has no row
-        inm = _INMEM_ANSWERS.get((rs_id, q_id))
-        if inm is not None:
-            return inm
+        inm2 = _INMEM_ANSWERS.get((rs_id, q_id))
+        if inm2 is not None:
+            try:
+                logger.info(
+                    "answers_cache_fallback_hit rs_id=%s q_id=%s tuple=%s",
+                    rs_id,
+                    q_id,
+                    inm2,
+                )
+            except Exception:
+                pass
+            # Clarke directive: immediately return the just-mirrored tuple on DB miss
+            return inm2
+        # Deterministic final fallback: recheck mirror one more time before giving up
+        try:
+            inm3 = _INMEM_ANSWERS.get((rs_id, q_id))
+            if inm3 is not None:
+                return inm3
+        except Exception:
+            pass
         return None
     except Exception:
         logger.error(
@@ -180,7 +289,17 @@ def get_existing_answer(response_set_id: str, question_id: str) -> tuple | None:
             q_id,
             exc_info=True,
         )
-        return _INMEM_ANSWERS.get((rs_id, q_id))
+        fallback = _INMEM_ANSWERS.get((rs_id, q_id))
+        try:
+            logger.info(
+                "answers_cache_exception_fallback rs_id=%s q_id=%s tuple=%s",
+                rs_id,
+                q_id,
+                fallback,
+            )
+        except Exception:
+            pass
+        return fallback
 
 
 def upsert_answer(
@@ -281,8 +400,10 @@ def upsert_answer(
                 else None
             )
             vbool: bool | None = (bool(value) if isinstance(value, bool) else None)
+            # Clarke: normalize option_id to string to ensure equality checks are stable
+            opt_str: str | None = (str(option_id) if option_id is not None else None)
             _INMEM_ANSWERS[(str(response_set_id), str(question_id))] = (
-                option_id,
+                opt_str,
                 vtext,
                 vnum,
                 vbool,
@@ -320,8 +441,10 @@ def upsert_answer(
             else None
         )
         vbool: bool | None = (bool(value) if isinstance(value, bool) else None)
+        # Clarke: normalize option_id to string when mirroring in fallback path as well
+        opt_str2: str | None = (str(option_id) if option_id is not None else None)
         _INMEM_ANSWERS[(str(response_set_id), str(question_id))] = (
-            option_id,
+            opt_str2,
             vtext,
             vnum,
             vbool,
