@@ -24,12 +24,12 @@ try:
     if not logger.handlers:
         _handler = logging.StreamHandler(stream=sys.stdout)
         _handler.setLevel(logging.INFO)
-        _handler.setFormatter(logging.Formatter('%(levelname)s:%(name)s:%(message)s'))
+        _handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s:%(name)s:%(message)s'))
         logger.addHandler(_handler)
     logger.setLevel(logging.INFO)
     logger.propagate = False
 except Exception:
-    pass
+    logger.error("answers_logging_setup_failed", exc_info=True)
 
 # In-memory fallback store used in skeleton mode or when DB is unavailable.
 # Keys are (response_set_id, question_id) -> tuple(option_id, value_text, value_number, value_bool)

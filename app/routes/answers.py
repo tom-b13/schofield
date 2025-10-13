@@ -46,6 +46,10 @@ from app.logic.events import publish, RESPONSE_SAVED
 from app.logic.replay import maybe_replay, store_after_success
 from app.models.response_types import SavedResult, BatchResult, VisibilityDelta, ScreenView
 from app.models.visibility import NowVisible
+from app.logic.visibility_state import (
+    hydrate_parent_values,
+    visible_ids_from_screen_view,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -64,7 +68,7 @@ try:
     logger.propagate = False
 except Exception:
     # Never fail module import due to logging setup; log with context
-    logging.getLogger(__name__).warning("answers_logging_setup_failed", exc_info=True)
+    logging.getLogger(__name__).error("answers_logging_setup_failed", exc_info=True)
 
 # Architectural: explicit reference to nested output type to satisfy schema presence
 _VISIBILITY_DELTA_TYPE_REF: type = VisibilityDelta
@@ -215,7 +219,7 @@ def autosave_answer(
             return replayed
     except Exception:
         # Never let replay lookup affect normal flow; log for diagnostics
-        logger.warning("replay_lookup_failed", exc_info=True)
+        logger.error("replay_lookup_failed", exc_info=True)
 
     # Precondition passed; ensure screen_view exists (may already be assembled above)
     if not screen_view:
@@ -248,36 +252,21 @@ def autosave_answer(
     # Cache of parent question canonical values
     # Clarke: ensure parent ids in this set are strings for membership checks
     parents: set[str] = {str(p) for (p, _) in rules.values() if p is not None}
-    parent_value_pre: dict[str, str | None] = {}
     # Clarke: Populate parent_value_pre from repository with str-cast keys before write;
-    # use screen_view only for logging.
-    try:
-        for pid in parents:
-            pid_str = str(pid)
-            row = get_existing_answer(response_set_id, pid_str)
-            if row is None:
-                parent_value_pre[pid_str] = None
-            else:
-                _opt_id, vtext, vnum, vbool = row
-                parent_value_pre[pid_str] = canonicalize_answer_value(vtext, vnum, vbool)
-    except SQLAlchemyError:
-        logger.error(
-            "visibility_precompute_failed rs_id=%s screen_key=%s", 
-            response_set_id, 
-            screen_key, 
-            exc_info=True,
-        )
-        parent_value_pre = {str(pid): None for pid in parents}
+    # use screen_view only for logging. Extracted into logic helper.
+    parent_value_pre: dict[str, str | None] = hydrate_parent_values(
+        response_set_id, screen_key, rules
+    )
 
     # Log raw parent storage triples and canonicalized map (for comparison only)
     try:
         parent_raw_pre: dict[str, tuple | None] = {}
-        for pid in parents:
+        for parent_id in parents:
             try:
-                row = get_existing_answer(response_set_id, str(pid))
+                row = get_existing_answer(response_set_id, str(parent_id))
             except Exception:
                 row = None
-            parent_raw_pre[str(pid)] = row
+            parent_raw_pre[str(parent_id)] = row
         logger.info(
             "vis_pre_parent_values_raw rs_id=%s screen_key=%s parent_raw=%s",
             response_set_id,
@@ -299,36 +288,36 @@ def autosave_answer(
             parent_pre_str,
         )
     except Exception:
-        logger.warning("vis_pre_logging_failed", exc_info=True)
+        logger.error("vis_pre_logging_failed", exc_info=True)
 
     # Clarke override: before computing visible_pre, ensure the toggled parent
     # question's pre-image value is force-populated from repository if missing.
     try:
-        qid_str = str(question_id)
-        if qid_str in parents and (parent_value_pre.get(qid_str) is None):
-            _row = get_existing_answer(response_set_id, qid_str)
+        question_id_str = str(question_id)
+        if question_id_str in parents and (parent_value_pre.get(question_id_str) is None):
+            _row = get_existing_answer(response_set_id, question_id_str)
             if _row is not None:
                 _opt_id, _vtext, _vnum, _vbool = _row
                 _canon = canonicalize_answer_value(_vtext, _vnum, _vbool)
-                parent_value_pre[qid_str] = _canon
+                parent_value_pre[question_id_str] = _canon
     except Exception:
         # Do not fail precompute if repository probe has issues
-        logger.warning("parent_prepopulate_probe_failed", exc_info=True)
+        logger.error("parent_prepopulate_probe_failed", exc_info=True)
 
     # Additional hydration (repository-first): for ANY parent whose value is still
     # None, re-probe the repository and canonicalize so visible_pre reflects the
     # true pre-state (Clarke directive for all parents, not only the toggled one).
     try:
-        for pid in list(parents):
-            pid_s = str(pid)
-            if parent_value_pre.get(pid_s) is None:
-                _row2 = get_existing_answer(response_set_id, pid_s)
+        for parent_id in list(parents):
+            parent_id_s = str(parent_id)
+            if parent_value_pre.get(parent_id_s) is None:
+                _row2 = get_existing_answer(response_set_id, parent_id_s)
                 if _row2 is not None:
                     _opt2, _vtext2, _vnum2, _vbool2 = _row2
                     _canon2 = canonicalize_answer_value(_vtext2, _vnum2, _vbool2)
-                    parent_value_pre[pid_s] = _canon2
+                    parent_value_pre[parent_id_s] = _canon2
     except Exception:
-        logger.warning("parent_repo_hydration_failed", exc_info=True)
+        logger.error("parent_repo_hydration_failed", exc_info=True)
 
     # Additional hydration (screen_view fallback): for ANY parent whose value is still None,
     # attempt to hydrate from the pre-assembled screen_view answers (pre-image).
@@ -337,26 +326,24 @@ def autosave_answer(
         for _q in (getattr(screen_view, "questions", []) or []):
             if isinstance(_q, dict) and _q.get("question_id"):
                 q_by_id[str(_q.get("question_id"))] = _q
-        for pid in parents:
-            pid_s = str(pid)
-            if parent_value_pre.get(pid_s) is None:
-                qd = q_by_id.get(pid_s)
+        for parent_id in parents:
+            parent_id_s = str(parent_id)
+            if parent_value_pre.get(parent_id_s) is None:
+                qd = q_by_id.get(parent_id_s)
                 if qd and isinstance(qd.get("answer"), dict):
                     ans = qd.get("answer")
                     vtext = ans.get("text") if isinstance(ans.get("text"), str) else None
                     vnum = ans.get("number") if isinstance(ans.get("number"), (int, float)) else None
                     vbool = ans.get("bool") if isinstance(ans.get("bool"), bool) else None
                     canon = canonicalize_answer_value(vtext, vnum, vbool)
-                    parent_value_pre[pid_s] = canon
+                    parent_value_pre[parent_id_s] = canon
     except Exception:
-        logger.warning("parent_screenview_hydration_failed", exc_info=True)
+        logger.error("parent_screenview_hydration_failed", exc_info=True)
 
     # Clarke REVISION: derive visible_pre from the pre-assembled ScreenView
     # to guarantee GET↔PATCH parity and accurate now_hidden when parents flip.
     try:
-        visible_pre = {
-            q.get("question_id") for q in (getattr(screen_view, "questions", []) or [])
-        }
+        visible_pre = visible_ids_from_screen_view(screen_view)
     except Exception:
         # Fallback only if ScreenView shape is unavailable
         visible_pre = compute_visible_set(rules, parent_value_pre)
@@ -383,7 +370,7 @@ def autosave_answer(
             visible_pre = expected_pre
     except Exception:
         # Never fail pre-image computation due to recompute checks
-        logger.warning("vis_pre_recompute_failed", exc_info=True)
+        logger.error("vis_pre_recompute_failed", exc_info=True)
     try:
         logger.info(
             "vis_pre_state rs_id=%s screen_key=%s parents=%s parent_pre=%s visible_pre=%s",
@@ -394,7 +381,7 @@ def autosave_answer(
             sorted([str(x) for x in list(visible_pre)]) if isinstance(visible_pre, (set, list)) else visible_pre,
         )
     except Exception:
-        logger.warning("vis_pre_state_log_failed", exc_info=True)
+        logger.error("vis_pre_state_log_failed", exc_info=True)
     # Also derive a pre-write set of questions that currently have an answer by
     # probing the repository for ALL screen questions (Clarke directive). This
     # avoids relying solely on the pre-assembled screen_view answers, ensuring
@@ -403,17 +390,19 @@ def autosave_answer(
         answered_pre: set[str] = set()
         for q in (list_questions_for_screen(screen_key) or []):
             try:
-                qid = str(q.get("question_id")) if isinstance(q, dict) else str(q)
+                question_id_local = str(q.get("question_id")) if isinstance(q, dict) else str(q)
             except Exception:
+                logger.error("answered_pre_iter_question_id_extract_failed", exc_info=True)
                 continue
             try:
-                row = get_existing_answer(response_set_id, qid)
+                row = get_existing_answer(response_set_id, question_id_local)
                 if row is not None:
-                    answered_pre.add(qid)
-            except Exception:
-                # Ignore repository probe failures for answered_pre computation
+                    answered_pre.add(question_id_local)
+            except SQLAlchemyError:
+                logger.error("answered_pre_repo_probe_failed", exc_info=True)
                 continue
-    except Exception:
+    except SQLAlchemyError:
+        logger.error("answered_pre_compute_failed", exc_info=True)
         answered_pre = set()
     # Log pre-image visible sets in both native and string forms
     try:
@@ -425,7 +414,7 @@ def autosave_answer(
             sorted([str(x) for x in list(visible_pre)]) if isinstance(visible_pre, (set, list)) else visible_pre,
         )
     except Exception:
-        logger.warning("vis_pre_sets_log_failed", exc_info=True)
+        logger.error("vis_pre_sets_log_failed", exc_info=True)
 
     # If-Match enforcement already performed above
 
@@ -434,7 +423,7 @@ def autosave_answer(
         try:
             delete_answer_row(response_set_id, question_id)
         except Exception:
-            logger.warning("delete_answer_failed", exc_info=True)
+            logger.error("delete_answer_failed", exc_info=True)
         write_performed = True
         # Compute and expose fresh ETag for the screen
         _ = list_questions_for_screen(screen_key)
@@ -447,9 +436,7 @@ def autosave_answer(
         # Derive visible_post from the post-write ScreenView to maintain
         # parity with GET visibility (do not recompute via rules alone)
         try:
-            visible_post = {
-                q.get("question_id") for q in (getattr(screen_view, "questions", []) or [])
-            }
+            visible_post = visible_ids_from_screen_view(screen_view)
         except Exception:
             # Deterministic fallback if screen_view missing
             visible_post = compute_visible_set(rules, parent_value_post)
@@ -470,22 +457,22 @@ def autosave_answer(
                 sorted([str(x) for x in list(visible_post)]) if isinstance(visible_post, (set, list)) else visible_post,
             )
         except Exception:
-            logger.warning("vis_post_logging_failed_clear", exc_info=True)
-        def _has_answer(qid: str) -> bool:
+            logger.error("vis_post_logging_failed_clear", exc_info=True)
+        def _has_answer(question_id: str) -> bool:
             # Primary: repository-backed probe first (Clarke directive)
             try:
-                row = get_existing_answer(response_set_id, qid)
+                row = get_existing_answer(response_set_id, question_id)
                 if row is not None:
                     return True
             except Exception:
                 # Ignore repository errors and fall back to pre-image
-                logger.warning("has_answer_repo_probe_failed", exc_info=True)
+                logger.error("has_answer_repo_probe_failed", exc_info=True)
             # Fallback: consult pre-assembled screen_view pre-image
             try:
-                if str(qid) in answered_pre:
+                if str(question_id) in answered_pre:
                     return True
             except Exception:
-                logger.warning("has_answer_preimage_probe_failed", exc_info=True)
+                logger.error("has_answer_preimage_probe_failed", exc_info=True)
             return False
         try:
             now_visible, now_hidden, suppressed_answers = compute_visibility_delta(
@@ -520,7 +507,7 @@ def autosave_answer(
                         base_hidden = set(x if isinstance(x, str) else str(x) for x in (now_hidden or []))
                         now_hidden = sorted(list(base_hidden | extra_hidden))
         except Exception:
-            logger.warning("extra_hidden_compute_failed", exc_info=True)
+            logger.error("extra_hidden_compute_failed", exc_info=True)
         # Per-hidden suppression probe and summary (clear branch)
         try:
             nh_ids = []
@@ -529,27 +516,27 @@ def autosave_answer(
             except Exception:
                 nh_ids = []
             supp_ids = [str(x) for x in (suppressed_answers or [])]
-            for qid in nh_ids:
+            for question_id in nh_ids:
                 repo_row = None
                 repo_has = False
                 pre_has = False
                 try:
-                    repo_row = get_existing_answer(response_set_id, qid)
+                    repo_row = get_existing_answer(response_set_id, question_id)
                     repo_has = repo_row is not None
                 except Exception:
                     repo_row = None
                 try:
-                    pre_has = str(qid) in (answered_pre or set())
+                    pre_has = str(question_id) in (answered_pre or set())
                 except Exception:
                     pre_has = False
                 logger.info(
                     "vis_suppress_probe rs_id=%s screen_key=%s qid=%s repo_has=%s pre_image_has=%s suppressed=%s parent_pre=%s parent_post=%s",
                     response_set_id,
                     screen_key,
-                    qid,
+                    question_id,
                     repo_has,
                     pre_has,
-                    (qid in supp_ids),
+                    (question_id in supp_ids),
                     parent_value_pre,
                     parent_value_post,
                 )
@@ -557,7 +544,7 @@ def autosave_answer(
                     logger.info(
                         "vis_suppress_repo_miss rs_id=%s qid=%s repo_row=%s",
                         response_set_id,
-                        qid,
+                        question_id,
                         repo_row,
                     )
             logger.info(
@@ -569,7 +556,7 @@ def autosave_answer(
                 list(set(nh_ids) - set(supp_ids)),
             )
         except Exception:
-            logger.warning("suppression_summary_log_failed", exc_info=True)
+            logger.error("suppression_summary_log_failed", exc_info=True)
 
         response.headers["Screen-ETag"] = screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag
         response.headers["ETag"] = (screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag)
@@ -601,7 +588,7 @@ def autosave_answer(
             )
         except Exception:
             # Do not fail the request if logging fails
-            logger.warning("autosave_visibility_log_failed", exc_info=True)
+            logger.error("autosave_visibility_log_failed", exc_info=True)
         # Normalize now_hidden/suppressed per contract; extract 'question' when dicts are returned
         if now_hidden and isinstance(now_hidden[0], dict):
             now_hidden_ids = [nh.get("question") for nh in now_hidden if isinstance(nh, dict)]
@@ -625,7 +612,7 @@ def autosave_answer(
                 if row is not None:
                     repo_suppressed.add(str(qid))
             except Exception:
-                # Ignore repository errors for suppressed classification
+                logger.error("repo_suppressed_probe_failed", exc_info=True)
                 continue
         suppressed_ids = sorted(pre_suppressed | repo_suppressed)
         # Clarke directive: if no suppressed were detected by either pre-image
@@ -637,12 +624,12 @@ def autosave_answer(
                 old_val = parent_value_pre.get(str(question_id))
                 new_val = parent_value_post.get(str(question_id))
                 if old_val != new_val:
-                    child_ids = [str(cid) for cid, (pid, _vis) in rules.items() if str(pid) == str(question_id)]
+                    child_ids = [str(cid) for cid, (parent_id, _vis) in rules.items() if str(parent_id) == str(question_id)]
                     nh_ids_set = set(now_hidden_ids or [])
                     suppressed_ids = sorted([cid for cid in child_ids if cid in nh_ids_set])
         except Exception:
             # Fallback must not affect success path
-            logger.warning("conservative_suppress_children_failed", exc_info=True)
+            logger.error("conservative_suppress_children_failed", exc_info=True)
         # Clarke: expose structured saved result (question_id, state_version)
         from app.logic.repository_answers import get_screen_version
         try:
@@ -682,7 +669,7 @@ def autosave_answer(
                 payload.model_dump() if hasattr(payload, "model_dump") else None,
             )
         except Exception:
-            logger.warning("store_after_success_failed", exc_info=True)
+            logger.error("store_after_success_failed", exc_info=True)
         return body
 
     # Proceed with normal validation and write flow
@@ -846,7 +833,7 @@ def autosave_answer(
         try:
             _ = get_existing_answer(response_set_id, str(question_id))
         except Exception:
-            logger.warning("warm_mirror_probe_failed", exc_info=True)
+            logger.error("warm_mirror_probe_failed", exc_info=True)
         # Mirror warmed: subsequent ScreenView build should reflect any newly-visible children
 
     # Compute and expose fresh ETag for the screen
@@ -900,9 +887,9 @@ def autosave_answer(
         try:
             screen_view.etag = new_etag  # type: ignore[attr-defined]
         except Exception:
-            logger.warning("assign_screen_view_etag_failed", exc_info=True)
-        # Ensure delta computation uses the refreshed set
-        visible_post = expected_post
+            logger.error("assign_screen_view_etag_failed", exc_info=True)
+            # Ensure delta computation uses the refreshed set
+            visible_post = expected_post
     # Log post-image (upsert) raw/normalized parent maps and visible sets
     try:
         parent_post_str = {k: (str(v) if v is not None else None) for k, v in parent_value_post.items()}
@@ -920,7 +907,7 @@ def autosave_answer(
             sorted([str(x) for x in list(visible_post)]) if isinstance(visible_post, (set, list)) else visible_post,
         )
     except Exception:
-        logger.warning("vis_post_logging_failed_upsert", exc_info=True)
+        logger.error("vis_post_logging_failed_upsert", exc_info=True)
     # Instrumentation (normal upsert path): log vis sets and parent maps
     logger.info(
         "visibility_delta_inputs rs_id=%s screen_key=%s visible_pre=%s visible_post=%s parent_value_pre=%s parent_value_post=%s",
@@ -932,21 +919,21 @@ def autosave_answer(
         parent_value_post,
     )
 
-    def _has_answer(qid: str) -> bool:
+    def _has_answer(question_id: str) -> bool:
         # Primary: repository-backed probe first (Clarke directive)
         try:
-            row = get_existing_answer(response_set_id, qid)
+            row = get_existing_answer(response_set_id, question_id)
             if row is not None:
                 return True
         except Exception:
             # Ignore repository errors and fall back to pre-image
-            logger.warning("has_answer_repo_probe_failed", exc_info=True)
+            logger.error("has_answer_repo_probe_failed", exc_info=True)
         # Fallback: consult pre-assembled screen_view pre-image
         try:
-            if str(qid) in answered_pre:
+            if str(question_id) in answered_pre:
                 return True
         except Exception:
-            logger.warning("has_answer_preimage_probe_failed", exc_info=True)
+            logger.error("has_answer_preimage_probe_failed", exc_info=True)
         return False
 
     try:
@@ -1026,27 +1013,27 @@ def autosave_answer(
         except Exception:
             nh_ids = []
         supp_ids = [str(x) for x in (suppressed_answers or [])]
-        for qid in nh_ids:
+        for question_id in nh_ids:
             repo_row = None
             repo_has = False
             pre_has = False
             try:
-                repo_row = get_existing_answer(response_set_id, qid)
+                repo_row = get_existing_answer(response_set_id, question_id)
                 repo_has = repo_row is not None
             except Exception:
                 repo_row = None
             try:
-                pre_has = str(qid) in (answered_pre or set())
+                pre_has = str(question_id) in (answered_pre or set())
             except Exception:
                 pre_has = False
             logger.info(
                 "vis_suppress_probe rs_id=%s screen_key=%s qid=%s repo_has=%s pre_image_has=%s suppressed=%s parent_pre=%s parent_post=%s",
                 response_set_id,
                 screen_key,
-                qid,
+                question_id,
                 repo_has,
                 pre_has,
-                (qid in supp_ids),
+                (question_id in supp_ids),
                 parent_value_pre,
                 parent_value_post,
             )
@@ -1054,7 +1041,7 @@ def autosave_answer(
                 logger.info(
                     "vis_suppress_repo_miss rs_id=%s qid=%s repo_row=%s",
                     response_set_id,
-                    qid,
+                    question_id,
                     repo_row,
                 )
         logger.info(
@@ -1066,7 +1053,7 @@ def autosave_answer(
             list(set(nh_ids) - set(supp_ids)),
         )
     except Exception:
-        logger.warning("suppression_summary_log_failed", exc_info=True)
+        logger.error("suppression_summary_log_failed", exc_info=True)
 
     # Robustly inject children into now_hidden when parent visibility flips to non-matching
     try:
@@ -1086,7 +1073,7 @@ def autosave_answer(
                     base_hidden = set(x if isinstance(x, str) else str(x) for x in (now_hidden or []))
                     now_hidden = sorted(list(base_hidden | extra_hidden))
     except Exception:
-        logger.warning("extra_hidden_compute_failed", exc_info=True)
+        logger.error("extra_hidden_compute_failed", exc_info=True)
 
     # Finalize response
     response.headers["Screen-ETag"] = screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag
@@ -1132,6 +1119,7 @@ def autosave_answer(
             if row is not None:
                 repo_suppressed.add(str(qid))
         except Exception:
+            logger.error("repo_suppressed_probe_failed", exc_info=True)
             continue
     suppressed_ids = sorted(pre_suppressed | repo_suppressed)
     # Clarke directive: if still empty but parent flipped to a non-matching
@@ -1141,11 +1129,11 @@ def autosave_answer(
             old_val = parent_value_pre.get(str(question_id))
             new_val = parent_value_post.get(str(question_id))
             if old_val != new_val:
-                child_ids = [str(cid) for cid, (pid, _vis) in rules.items() if str(pid) == str(question_id)]
+                child_ids = [str(cid) for cid, (parent_id, _vis) in rules.items() if str(parent_id) == str(question_id)]
                 nh_ids_set = set(now_hidden_ids or [])
                 suppressed_ids = sorted([cid for cid in child_ids if cid in nh_ids_set])
     except Exception:
-        logger.warning("conservative_suppress_children_failed", exc_info=True)
+        logger.error("conservative_suppress_children_failed", exc_info=True)
     body = {
         # Clarke: expose structured saved result returned by upsert
         "saved": (saved_result if 'saved_result' in locals() and isinstance(saved_result, dict) else {"question_id": str(question_id), "state_version": 0}),
@@ -1180,7 +1168,7 @@ def autosave_answer(
             payload.model_dump() if hasattr(payload, "model_dump") else None,
         )
     except Exception:
-        logger.warning("store_after_success_failed", exc_info=True)
+        logger.error("store_after_success_failed", exc_info=True)
     return body
 
 
@@ -1201,7 +1189,7 @@ def delete_answer(
         delete_answer_row(response_set_id, question_id)
     except Exception:
         # In skeleton/no-DB mode, continue to respond with headers
-        logger.warning("delete_answer_failed", exc_info=True)
+        logger.error("delete_answer_failed", exc_info=True)
 
     # Recompute fresh ETag for the screen using assembled view when available
     try:

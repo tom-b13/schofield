@@ -61,10 +61,10 @@ try:
         logger.info("screens_module_loaded")
     except Exception:
         # Log but do not fail module import due to logging emit issues
-        logging.getLogger(__name__).warning("screens_module_loaded_log_failed", exc_info=True)
+        logging.getLogger(__name__).error("screens_module_loaded_log_failed", exc_info=True)
 except Exception:
     # Log but do not fail module import due to logging setup issues
-    logging.getLogger(__name__).warning("screens_logging_setup_failed", exc_info=True)
+    logging.getLogger(__name__).error("screens_logging_setup_failed", exc_info=True)
 
 
 
@@ -103,7 +103,7 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
             screen_key,
         )
     except Exception:
-        logger.warning("screen_get_request_log_failed", exc_info=True)
+        logger.error("screen_get_request_log_failed", exc_info=True)
     # If the path token looks like a UUID, resolve to a real screen_key
     resolved_screen_key = screen_key
     try:
@@ -157,7 +157,12 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
     try:
         _ = get_existing_answer(response_set_id, "00000000-0000-0000-0000-000000000000")
     except SQLAlchemyError:
-        pass
+        logger.warning(
+            "answer_probe_failed rs_id=%s screen_key=%s",
+            response_set_id,
+            resolved_screen_key,
+            exc_info=True,
+        )
     # Clarke: Bypass any pre-filter influence; rely solely on assemble_screen_view for
     # visibility and ETag to maintain strict GET↔PATCH parity.
 
@@ -171,77 +176,15 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
 
     # Build the screen view via the shared assembly component using the typed model
     screen_view = ScreenView(**assemble_screen_view(response_set_id, resolved_screen_key))
-    # Clarke: bounded re-assemble loop to ensure read-your-writes immediately.
-    # Strengthen by comparing included ids against a freshly computed visible_set
-    # using current parent canonical values.
-    try:
-        def _parent_canon_snapshot() -> dict[str, str | None]:
-            rules = get_visibility_rules_for_screen(resolved_screen_key)
-            parents = {str(p) for (p, _v) in rules.values() if p is not None}
-            snap: dict[str, str | None] = {}
-            for pid in parents:
-                try:
-                    row = get_existing_answer(response_set_id, pid)
-                except Exception:
-                    row = None
-                if row is None:
-                    snap[pid] = None
-                else:
-                    opt, vtext, vnum, vbool = row
-                    from app.logic.answer_canonical import canonicalize_answer_value as _canon
-                    cv = _canon(vtext, vnum, vbool)
-                    snap[pid] = (str(cv) if cv is not None else None)
-            return snap
-
-        first_ids = {q.get("question_id") for q in (screen_view.questions or [])}
-        attempt = 0
-        before_parent = _parent_canon_snapshot()
-        while attempt < 2:
-            attempt += 1
-            refreshed = ScreenView(**assemble_screen_view(response_set_id, resolved_screen_key))
-            after_parent = _parent_canon_snapshot()
-            ref_ids = {q.get("question_id") for q in (refreshed.questions or [])}
-            etag_changed = (refreshed.etag != screen_view.etag)
-            parent_changed = (after_parent != before_parent)
-            any_parent_none = any(v is None for v in before_parent.values())
-            # Additionally compute the expected visible set from current parents and rules
-            try:
-                rules = get_visibility_rules_for_screen(resolved_screen_key)
-                expected_visible = {str(x) for x in compute_visible_set(rules, after_parent)}
-            except Exception:
-                logger.warning(
-                    "expected_visible_compute_failed rs_id=%s screen_key=%s",
-                    response_set_id,
-                    resolved_screen_key,
-                    exc_info=True,
-                )
-                expected_visible = set()
-            # Adopt if ids changed, etag changed, initial snapshot had None,
-            # parent set changed, or included set mismatches expected visible set
-            if (
-                (ref_ids != first_ids)
-                or etag_changed
-                or any_parent_none
-                or (not etag_changed and parent_changed)
-                or (ref_ids != expected_visible and expected_visible)
-            ):
-                screen_view = refreshed
-                first_ids = ref_ids
-            # If parents still contain None after adopting, run one more iteration
-            if not any(v is None for v in after_parent.values()):
-                break
-            # Update snapshot for next attempt
-            before_parent = after_parent
-        # end while
-    except Exception:
-        # Guard is best-effort; proceed with initial assembly on any error
-        logger.warning("screen_reassemble_guard_failed", exc_info=True)
+    # Extracted parity guard to logic helper to narrow failure scopes
+    from app.logic.screen_parity import ensure_screen_parity
+    screen_view = ensure_screen_parity(response_set_id, resolved_screen_key, screen_view)
     # Architectural: ensure dedicated ETag component is referenced by GET (7.1.13)
     # Compute ETag for parity diagnostics without altering header semantics
     try:
         computed_etag = compute_screen_etag(response_set_id, resolved_screen_key)
     except Exception:
-        logger.warning(
+        logger.error(
             "compute_screen_etag_failed_for_diagnostics rs_id=%s screen_key=%s",
             response_set_id,
             resolved_screen_key,
@@ -253,7 +196,7 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
     try:
         new_etag = compute_screen_etag(response_set_id, resolved_screen_key)
     except Exception:
-        logger.warning(
+        logger.error(
             "compute_screen_etag_failed_for_headers rs_id=%s screen_key=%s",
             response_set_id,
             resolved_screen_key,
@@ -273,7 +216,7 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
             new_etag,
         )
     except Exception:
-        logger.warning("screen_etag_parity_log_failed", exc_info=True)
+        logger.error("screen_etag_parity_log_failed", exc_info=True)
     # Diagnostic: compute count again after handler query work; GET must be read-only
     after_count = before_count
     try:

@@ -24,12 +24,12 @@ try:
     if not logger.handlers:
         _handler = logging.StreamHandler(stream=sys.stdout)
         _handler.setLevel(logging.INFO)
-        _handler.setFormatter(logging.Formatter('%(levelname)s:%(name)s:%(message)s'))
+        _handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s:%(name)s:%(message)s'))
         logger.addHandler(_handler)
     logger.setLevel(logging.INFO)
     logger.propagate = False
 except Exception:
-    pass
+    logger.error("screen_builder_logging_setup_failed", exc_info=True)
 
 
 def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any]:
@@ -56,7 +56,7 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
             rules_dump,
         )
     except Exception:
-        pass
+        logger.error("screen_rules_logging_failed", exc_info=True)
 
     # Precompute parent values once, then use compute_visible_set for consistency
     try:
@@ -89,7 +89,7 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
                     parent_values[pid_str] = (str(cv2) if cv2 is not None else None)
     except Exception:
         # Never fail GET path due to a late re-probe
-        pass
+        logger.error("late_reprobe_failed", exc_info=True)
 
     # Instrumentation only: log raw tuples and canonicalized (string-cast) maps
     try:
@@ -113,7 +113,7 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
             parent_canon_str,
         )
     except Exception:
-        pass
+        logger.error("parent_values_log_failed", exc_info=True)
 
     # Ensure parent_values map uses string keys matching rules (Clarke directive)
     parent_values = {str(k): v for k, v in parent_values.items()}
@@ -134,7 +134,7 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
                     parent_values[pid_str] = (str(cv3) if cv3 is not None else None)
     except Exception:
         # Never fail visibility computation due to fallback hydration issues
-        pass
+        logger.error("fallback_hydration_failed", exc_info=True)
     # Deterministic two-pass hydration: re-probe unresolved parents up to two times
     try:
         for _ in range(2):
@@ -188,7 +188,7 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
             len(visible_ids),
         )
     except Exception:
-        pass
+        logger.error("screen_visible_calc_log_failed", exc_info=True)
     # Summarise hydration effect for diagnostics (no logic change)
     try:
         logger.info(
@@ -199,7 +199,7 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
             len(list(parents)),
         )
     except Exception:
-        pass
+        logger.error("screen_hydrate_summary_log_failed", exc_info=True)
     # Final hydration pass (Clarke directive): after initial visible_ids compute,
     # force a repository re-probe for ALL parents to catch immediate writes.
     # Monotonic guarantee: never downgrade a non-None parent value to None;
@@ -234,7 +234,7 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
                     len(visible_ids),
                 )
             except Exception:
-                pass
+                logger.error("screen_visible_calc_refresh_log_failed", exc_info=True)
     except Exception:
         # Never fail GET path due to final hydration step
         pass
@@ -255,7 +255,7 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
                     False,
                 )
             except Exception:
-                pass
+                logger.error("screen_visible_eval_log_failed", exc_info=True)
             continue
         # Hydrate current answer for visible question if present
         ans = get_existing_answer(response_set_id, qid)
@@ -283,7 +283,7 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
                 list(set(visible_ids) - included_set),
             )
     except Exception:
-        pass
+        logger.error("screen_visible_mismatch_log_failed", exc_info=True)
     # Clarke hardening: if any parent canonical value is still None at this point,
     # perform an immediate additional hydration pass (read-your-writes) across all
     # parents to promote None -> concrete values, then recompute visibility.
@@ -314,10 +314,10 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
                         len(visible_ids),
                     )
                 except Exception:
-                    pass
+                    logger.error("screen_visible_calc_extra_log_failed", exc_info=True)
     except Exception:
         # Best-effort extra hydration; continue regardless
-        pass
+        logger.error("extra_hydration_failed", exc_info=True)
 
     # Deterministic final recompute ensures child inclusion when parent became visible within same run
     try:
@@ -332,7 +332,7 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
                 len(visible_ids),
             )
         except Exception:
-            pass
+            logger.error("screen_visible_calc_final_log_failed", exc_info=True)
     except Exception:
         # Safety: if visibility computation fails here, retain prior set to avoid regressions
         visible_ids = set(q.get("question_id") for q in filtered)
@@ -396,10 +396,10 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
                     len(visible_ids),
                 )
             except Exception:
-                pass
+                logger.error("screen_visible_calc_rebuild_log_failed", exc_info=True)
     except Exception:
         # If diagnostics or recalculation fails, continue with current filtered set
-        pass
+        logger.error("screen_recalculation_failed", exc_info=True)
 
     # Compute ETag via centralized helper to guarantee parity with route headers
     try:
