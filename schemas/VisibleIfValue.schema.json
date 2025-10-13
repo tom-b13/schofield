@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/VisibleIfValue.schema.json",
+  "title": "VisibleIfValue",
+  "description": "Canonical value(s) required for visibility; equality-only per Epic I.",
+  "oneOf": [
+    {
+      "type": "string",
+      "minLength": 1
+    },
+    {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    }
+  ]
+}

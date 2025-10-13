@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/QuestionText.schema.json",
+  "title": "QuestionText",
+  "type": "string",
+  "minLength": 1,
+  "description": "Human-readable text of a question."
+}

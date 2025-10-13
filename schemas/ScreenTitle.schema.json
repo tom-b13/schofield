@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/ScreenTitle.schema.json",
+  "title": "ScreenTitle",
+  "type": "string",
+  "minLength": 1,
+  "description": "Title used when creating or renaming a screen."
+}

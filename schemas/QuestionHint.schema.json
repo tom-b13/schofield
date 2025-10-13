@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/QuestionHint.schema.json",
+  "title": "QuestionHint",
+  "type": "string",
+  "description": "Short input hint displayed with the question."
+}

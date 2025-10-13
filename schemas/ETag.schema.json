@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/ETag.schema.json",
+  "title": "ETag",
+  "type": "string",
+  "minLength": 1,
+  "description": "Opaque entity tag value for optimistic concurrency."
+}
