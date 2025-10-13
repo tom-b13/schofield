@@ -1,988 +1,1248 @@
 {
-"version": "1.0",
-"conventions": {
-"db_case": "snake_case",
-"entities_case": "CamelCase",
-"placeholder_format": "UPPERCASE_UNDERSCORE",
-"enums": {
-"answer_kind": [
-"boolean",
-"enum_single",
-"long_text",
-"number",
-"short_string"
-]
-}
-},
-"enums": [
-{
-"name": "answer_kind",
-"values": [
-"boolean",
-"enum_single",
-"long_text",
-"number",
-"short_string"
-]
-}
-],
-"entities": [
-{
-"name": "AnswerOption",
-"fields": [
-{
-"name": "label",
-"type": "text"
-},
-{
-"name": "option_id",
-"type": "uuid"
-},
-{
-"name": "question_id",
-"type": "uuid"
-},
-{
-"name": "sort_index",
-"type": "int"
-},
-{
-"name": "value",
-"type": "text"
-}
-],
-"primary_key": {
-"name": "pk_answer_option",
-"columns": [
-"option_id"
-]
-},
-"foreign_keys": [
-{
-"name": "fk_answer_option_question",
-"columns": [
-"question_id"
-],
-"references": {
-"entity": "QuestionnaireQuestion",
-"columns": [
-"question_id"
-]
-}
-}
-],
-"unique": [
-{
-"name": "uq_answer_option_question_value",
-"columns": [
-"question_id",
-"value"
-]
-}
-],
-"indexes": [
-{
-"name": "ix_answer_option_question",
-"columns": [
-"question_id"
-]
-}
-]
-},
-{
-"name": "Company",
-"fields": [
-{
-"name": "company_id",
-"type": "uuid"
-},
-{
-"name": "created_at",
-"type": "timestamptz"
-},
-{
-"name": "legal_name",
-"type": "text",
-"sensitive": true,
-"encrypted": true
-},
-{
-"name": "registered_office_address",
-"type": "text",
-"sensitive": true,
-"encrypted": true
-},
-{
-"name": "updated_at",
-"type": "timestamptz"
-}
-],
-"primary_key": {
-"name": "pk_company",
-"columns": [
-"company_id"
-]
-}
-},
-{
-"name": "Document",
-"fields": [
-{
-"name": "created_at",
-"type": "timestamptz"
-},
-{
-"name": "document_id",
-"type": "uuid"
-},
-{
-"name": "order_number",
-"type": "int"
-},
-{
-"name": "title",
-"type": "text"
-},
-{
-"name": "updated_at",
-"type": "timestamptz"
-},
-{
-"name": "version",
-"type": "int"
-}
-],
-"primary_key": {
-"name": "pk_document",
-"columns": [
-"document_id"
-]
-},
-"unique": [
-{
-"name": "uq_document_order_number",
-"columns": [
-"order_number"
-]
-}
-],
-"checks": [
-{
-"name": "chk_document_order_positive",
-"expression": "order_number > 0"
-},
-{
-"name": "chk_document_version_min",
-"expression": "version >= 1"
-}
-],
-"indexes": []
-},
-{
-"name": "DocumentBlob",
-"fields": [
-{
-"name": "byte_size",
-"type": "bigint"
-},
-{
-"name": "document_id",
-"type": "uuid"
-},
-{
-"name": "file_sha256",
-"type": "char(64)"
-},
-{
-"name": "filename",
-"type": "text"
-},
-{
-"name": "mime",
-"type": "text"
-},
-{
-"name": "storage_url",
-"type": "text"
-},
-{
-"name": "updated_at",
-"type": "timestamptz"
-}
-],
-"primary_key": {
-"name": "pk_document_blob",
-"columns": [
-"document_id"
-]
-},
-"foreign_keys": [
-{
-"name": "fk_document_blob_document",
-"columns": [
-"document_id"
-],
-"references": {
-"entity": "Document",
-"columns": [
-"document_id"
-]
-},
-"on_delete": "cascade"
-}
-],
-"indexes": [
-{
-"name": "ix_document_blob_sha256",
-"columns": [
-"file_sha256"
-]
-}
-],
-"checks": [
-{
-"name": "chk_blob_sha256_len",
-"expression": "char_length(file_sha256) = 64"
-},
-{
-"name": "chk_blob_mime_docx",
-"expression": "mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'"
-},
-{
-"name": "chk_blob_size_min",
-"expression": "byte_size >= 1"
-}
-]
-},
-{
-"name": "DocumentListState",
-"fields": [
-{
-"name": "list_etag",
-"type": "text"
-},
-{
-"name": "singleton_id",
-"type": "smallint"
-},
-{
-"name": "updated_at",
-"type": "timestamptz"
-}
-],
-"primary_key": {
-"name": "pk_document_list_state",
-"columns": [
-"singleton_id"
-]
-}
-},
-{
-  "name": "EnumOptionPlaceholderLink",
-  "fields": [
-    { "name": "link_id", "type": "uuid" },
-    { "name": "option_id", "type": "uuid" },
-    { "name": "placeholder_id", "type": "uuid" }
-  ],
-  "primary_key": { "name": "pk_enum_option_placeholder_link", "columns": ["link_id"] },
-  "foreign_keys": [
+  "version": "1.0",
+  "conventions": {
+    "db_case": "snake_case",
+    "entities_case": "CamelCase",
+    "placeholder_format": "UPPERCASE_UNDERSCORE",
+    "enums": {
+      "answer_kind": [
+        "boolean",
+        "enum_single",
+        "long_text",
+        "number",
+        "short_string"
+      ]
+    }
+  },
+  "enums": [
     {
-      "name": "fk_eopl_option",
-      "columns": ["option_id"],
-      "references": { "entity": "AnswerOption", "columns": ["option_id"] },
-      "on_delete": "cascade"
-    },
-    {
-      "name": "fk_eopl_placeholder",
-      "columns": ["placeholder_id"],
-      "references": { "entity": "Placeholder", "columns": ["placeholder_id"] },
-      "on_delete": "cascade"
+      "name": "answer_kind",
+      "values": [
+        "boolean",
+        "enum_single",
+        "long_text",
+        "number",
+        "short_string"
+      ]
     }
   ],
-  "unique": [
-    { "name": "uq_eopl_option_unique", "columns": ["option_id"] }
-  ],
-  "indexes": [
-    { "name": "ix_eopl_option", "columns": ["option_id"] },
-    { "name": "ix_eopl_placeholder", "columns": ["placeholder_id"] }
-  ]
-},
-{
-"name": "FieldGroup",
-"fields": [
-{
-"name": "description",
-"type": "text"
-},
-{
-"name": "field_group_id",
-"type": "uuid"
-},
-{
-"name": "group_key",
-"type": "text"
-},
-{
-"name": "is_active",
-"type": "boolean"
-},
-{
-"name": "label",
-"type": "text"
-}
-],
-"primary_key": {
-"name": "pk_field_group",
-"columns": [
-"field_group_id"
-]
-}
-},
-{
-"name": "GeneratedDocument",
-"fields": [
-{
-"name": "created_at",
-"type": "timestamptz"
-},
-{
-"name": "generated_document_id",
-"type": "uuid"
-},
-{
-"name": "output_uri",
-"type": "text",
-"sensitive": true,
-"encrypted": true
-},
-{
-"name": "response_set_id",
-"type": "uuid"
-}
-],
-"primary_key": {
-"name": "pk_generated_document",
-"columns": [
-"generated_document_id"
-]
-},
-"foreign_keys": [
-{
-"name": "fk_generated_document_set",
-"columns": [
-"response_set_id"
-],
-"references": {
-"entity": "ResponseSet",
-"columns": [
-"response_set_id"
-]
-}
-}
-],
-"indexes": [
-{
-"name": "ix_generated_document_created",
-"columns": [
-"created_at"
-]
-},
-{
-"name": "ix_generated_document_set",
-"columns": [
-"response_set_id"
-]
-}
-]
-},
-{
-"name": "GroupValue",
-"fields": [
-{
-"name": "field_group_id",
-"type": "uuid"
-},
-{
-"name": "group_value_id",
-"type": "uuid"
-},
-{
-"name": "option_id",
-"type": "uuid"
-},
-{
-"name": "response_set_id",
-"type": "uuid"
-},
-{
-"name": "source_question_id",
-"type": "uuid"
-},
-{
-"name": "updated_at",
-"type": "timestamptz"
-},
-{
-"name": "value_bool",
-"type": "boolean"
-},
-{
-"name": "value_json",
-"type": "jsonb"
-},
-{
-"name": "value_number",
-"type": "numeric"
-},
-{
-"name": "value_text",
-"type": "text"
-}
-],
-"primary_key": {
-"name": "pk_group_value",
-"columns": [
-"group_value_id"
-]
-},
-"foreign_keys": [
-{
-"name": "fk_group_value_group",
-"columns": [
-"field_group_id"
-],
-"references": {
-"entity": "FieldGroup",
-"columns": [
-"field_group_id"
-]
-}
-},
-{
-"name": "fk_group_value_option",
-"columns": [
-"option_id"
-],
-"references": {
-"entity": "AnswerOption",
-"columns": [
-"option_id"
-]
-}
-},
-{
-"name": "fk_group_value_set",
-"columns": [
-"response_set_id"
-],
-"references": {
-"entity": "ResponseSet",
-"columns": [
-"response_set_id"
-]
-}
-},
-{
-"name": "fk_group_value_source_q",
-"columns": [
-"source_question_id"
-],
-"references": {
-"entity": "QuestionnaireQuestion",
-"columns": [
-"question_id"
-]
-}
-}
-],
-"unique": [
-{
-"name": "uq_group_value_per_set",
-"columns": [
-"response_set_id",
-"field_group_id"
-]
-}
-],
-"indexes": [
-{
-"name": "ix_group_value_group",
-"columns": [
-"field_group_id"
-]
-},
-{
-"name": "ix_group_value_set",
-"columns": [
-"response_set_id"
-]
-},
-{
-"name": "ix_group_value_source_q",
-"columns": [
-"source_question_id"
-]
-}
-]
-},
-{
-  "name": "IdempotencyKey",
-  "fields": [
-    { "name": "created_at", "type": "timestamptz" },
-    { "name": "expires_at", "type": "timestamptz" },
-    { "name": "idempotency_key", "type": "text" },
-    { "name": "key_id", "type": "uuid" },
-    { "name": "request_fingerprint", "type": "char(64)" }
-  ],
-  "primary_key": { "name": "pk_idempotency_key", "columns": ["key_id"] },
-  "unique": [
-    { "name": "uq_idempotency_key_unique", "columns": ["idempotency_key"] }
-  ],
-  "checks": [
-    { "name": "chk_idempotency_fp_len", "expression": "char_length(request_fingerprint) = 64" }
-  ],
-  "indexes": [
-    { "name": "ix_idempotency_expires", "columns": ["expires_at"] }
-  ]
-},
-{
-  "name": "Placeholder",
-  "fields": [
-    { "name": "clause_path", "type": "text" },
-    { "name": "created_at", "type": "timestamptz" },
-    { "name": "document_id", "type": "uuid" },
-    { "name": "placeholder_id", "type": "uuid" },
-    { "name": "question_id", "type": "uuid" },
-    { "name": "raw_text", "type": "text" },
-    { "name": "span_end", "type": "int" },
-    { "name": "span_start", "type": "int" },
-    { "name": "transform_id", "type": "text" }
-  ],
-  "primary_key": { "name": "pk_placeholder", "columns": ["placeholder_id"] },
-  "foreign_keys": [
+  "entities": [
     {
-      "name": "fk_placeholder_document",
-      "columns": ["document_id"],
-      "references": { "entity": "Document", "columns": ["document_id"] },
-      "on_delete": "cascade"
+      "name": "AnswerOption",
+      "fields": [
+        {
+          "name": "label",
+          "type": "text"
+        },
+        {
+          "name": "option_id",
+          "type": "uuid"
+        },
+        {
+          "name": "question_id",
+          "type": "uuid"
+        },
+        {
+          "name": "sort_index",
+          "type": "int"
+        },
+        {
+          "name": "value",
+          "type": "text"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_answer_option",
+        "columns": [
+          "option_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_answer_option_question",
+          "columns": [
+            "question_id"
+          ],
+          "references": {
+            "entity": "QuestionnaireQuestion",
+            "columns": [
+              "question_id"
+            ]
+          }
+        }
+      ],
+      "unique": [
+        {
+          "name": "uq_answer_option_question_value",
+          "columns": [
+            "question_id",
+            "value"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_answer_option_question",
+          "columns": [
+            "question_id"
+          ]
+        }
+      ]
     },
     {
-      "name": "fk_placeholder_question",
-      "columns": ["question_id"],
-      "references": { "entity": "QuestionnaireQuestion", "columns": ["question_id"] }
+      "name": "Company",
+      "fields": [
+        {
+          "name": "company_id",
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "legal_name",
+          "type": "text",
+          "sensitive": true,
+          "encrypted": true
+        },
+        {
+          "name": "registered_office_address",
+          "type": "text",
+          "sensitive": true,
+          "encrypted": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_company",
+        "columns": [
+          "company_id"
+        ]
+      }
+    },
+    {
+      "name": "Document",
+      "fields": [
+        {
+          "name": "created_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "document_id",
+          "type": "uuid"
+        },
+        {
+          "name": "order_number",
+          "type": "int"
+        },
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "version",
+          "type": "int"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_document",
+        "columns": [
+          "document_id"
+        ]
+      },
+      "unique": [
+        {
+          "name": "uq_document_order_number",
+          "columns": [
+            "order_number"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "chk_document_order_positive",
+          "expression": "order_number > 0"
+        },
+        {
+          "name": "chk_document_version_min",
+          "expression": "version >= 1"
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "DocumentBlob",
+      "fields": [
+        {
+          "name": "byte_size",
+          "type": "bigint"
+        },
+        {
+          "name": "document_id",
+          "type": "uuid"
+        },
+        {
+          "name": "file_sha256",
+          "type": "char(64)"
+        },
+        {
+          "name": "filename",
+          "type": "text"
+        },
+        {
+          "name": "mime",
+          "type": "text"
+        },
+        {
+          "name": "storage_url",
+          "type": "text"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_document_blob",
+        "columns": [
+          "document_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_document_blob_document",
+          "columns": [
+            "document_id"
+          ],
+          "references": {
+            "entity": "Document",
+            "columns": [
+              "document_id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_document_blob_sha256",
+          "columns": [
+            "file_sha256"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "chk_blob_sha256_len",
+          "expression": "char_length(file_sha256) = 64"
+        },
+        {
+          "name": "chk_blob_mime_docx",
+          "expression": "mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'"
+        },
+        {
+          "name": "chk_blob_size_min",
+          "expression": "byte_size >= 1"
+        }
+      ]
+    },
+    {
+      "name": "DocumentListState",
+      "fields": [
+        {
+          "name": "list_etag",
+          "type": "text"
+        },
+        {
+          "name": "singleton_id",
+          "type": "smallint"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_document_list_state",
+        "columns": [
+          "singleton_id"
+        ]
+      }
+    },
+    {
+      "name": "EnumOptionPlaceholderLink",
+      "fields": [
+        {
+          "name": "link_id",
+          "type": "uuid"
+        },
+        {
+          "name": "option_id",
+          "type": "uuid"
+        },
+        {
+          "name": "placeholder_id",
+          "type": "uuid"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_enum_option_placeholder_link",
+        "columns": [
+          "link_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_eopl_option",
+          "columns": [
+            "option_id"
+          ],
+          "references": {
+            "entity": "AnswerOption",
+            "columns": [
+              "option_id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "name": "fk_eopl_placeholder",
+          "columns": [
+            "placeholder_id"
+          ],
+          "references": {
+            "entity": "Placeholder",
+            "columns": [
+              "placeholder_id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique": [
+        {
+          "name": "uq_eopl_option_unique",
+          "columns": [
+            "option_id"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_eopl_option",
+          "columns": [
+            "option_id"
+          ]
+        },
+        {
+          "name": "ix_eopl_placeholder",
+          "columns": [
+            "placeholder_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FieldGroup",
+      "fields": [
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "field_group_id",
+          "type": "uuid"
+        },
+        {
+          "name": "group_key",
+          "type": "text"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean"
+        },
+        {
+          "name": "label",
+          "type": "text"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_field_group",
+        "columns": [
+          "field_group_id"
+        ]
+      }
+    },
+    {
+      "name": "GeneratedDocument",
+      "fields": [
+        {
+          "name": "created_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "generated_document_id",
+          "type": "uuid"
+        },
+        {
+          "name": "output_uri",
+          "type": "text",
+          "sensitive": true,
+          "encrypted": true
+        },
+        {
+          "name": "response_set_id",
+          "type": "uuid"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_generated_document",
+        "columns": [
+          "generated_document_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_generated_document_set",
+          "columns": [
+            "response_set_id"
+          ],
+          "references": {
+            "entity": "ResponseSet",
+            "columns": [
+              "response_set_id"
+            ]
+          }
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_generated_document_created",
+          "columns": [
+            "created_at"
+          ]
+        },
+        {
+          "name": "ix_generated_document_set",
+          "columns": [
+            "response_set_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "GroupValue",
+      "fields": [
+        {
+          "name": "field_group_id",
+          "type": "uuid"
+        },
+        {
+          "name": "group_value_id",
+          "type": "uuid"
+        },
+        {
+          "name": "option_id",
+          "type": "uuid"
+        },
+        {
+          "name": "response_set_id",
+          "type": "uuid"
+        },
+        {
+          "name": "source_question_id",
+          "type": "uuid"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "value_bool",
+          "type": "boolean"
+        },
+        {
+          "name": "value_json",
+          "type": "jsonb"
+        },
+        {
+          "name": "value_number",
+          "type": "numeric"
+        },
+        {
+          "name": "value_text",
+          "type": "text"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_group_value",
+        "columns": [
+          "group_value_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_group_value_group",
+          "columns": [
+            "field_group_id"
+          ],
+          "references": {
+            "entity": "FieldGroup",
+            "columns": [
+              "field_group_id"
+            ]
+          }
+        },
+        {
+          "name": "fk_group_value_option",
+          "columns": [
+            "option_id"
+          ],
+          "references": {
+            "entity": "AnswerOption",
+            "columns": [
+              "option_id"
+            ]
+          }
+        },
+        {
+          "name": "fk_group_value_set",
+          "columns": [
+            "response_set_id"
+          ],
+          "references": {
+            "entity": "ResponseSet",
+            "columns": [
+              "response_set_id"
+            ]
+          }
+        },
+        {
+          "name": "fk_group_value_source_q",
+          "columns": [
+            "source_question_id"
+          ],
+          "references": {
+            "entity": "QuestionnaireQuestion",
+            "columns": [
+              "question_id"
+            ]
+          }
+        }
+      ],
+      "unique": [
+        {
+          "name": "uq_group_value_per_set",
+          "columns": [
+            "response_set_id",
+            "field_group_id"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_group_value_group",
+          "columns": [
+            "field_group_id"
+          ]
+        },
+        {
+          "name": "ix_group_value_set",
+          "columns": [
+            "response_set_id"
+          ]
+        },
+        {
+          "name": "ix_group_value_source_q",
+          "columns": [
+            "source_question_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "IdempotencyKey",
+      "fields": [
+        {
+          "name": "created_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text"
+        },
+        {
+          "name": "key_id",
+          "type": "uuid"
+        },
+        {
+          "name": "request_fingerprint",
+          "type": "char(64)"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_idempotency_key",
+        "columns": [
+          "key_id"
+        ]
+      },
+      "unique": [
+        {
+          "name": "uq_idempotency_key_unique",
+          "columns": [
+            "idempotency_key"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "chk_idempotency_fp_len",
+          "expression": "char_length(request_fingerprint) = 64"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_idempotency_expires",
+          "columns": [
+            "expires_at"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Placeholder",
+      "fields": [
+        {
+          "name": "clause_path",
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "document_id",
+          "type": "uuid"
+        },
+        {
+          "name": "placeholder_id",
+          "type": "uuid"
+        },
+        {
+          "name": "question_id",
+          "type": "uuid"
+        },
+        {
+          "name": "raw_text",
+          "type": "text"
+        },
+        {
+          "name": "span_end",
+          "type": "int"
+        },
+        {
+          "name": "span_start",
+          "type": "int"
+        },
+        {
+          "name": "transform_id",
+          "type": "text"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_placeholder",
+        "columns": [
+          "placeholder_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_placeholder_document",
+          "columns": [
+            "document_id"
+          ],
+          "references": {
+            "entity": "Document",
+            "columns": [
+              "document_id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "name": "fk_placeholder_question",
+          "columns": [
+            "question_id"
+          ],
+          "references": {
+            "entity": "QuestionnaireQuestion",
+            "columns": [
+              "question_id"
+            ]
+          }
+        }
+      ],
+      "unique": [
+        {
+          "name": "uq_placeholder_doc_clause_span",
+          "columns": [
+            "document_id",
+            "clause_path",
+            "span_start",
+            "span_end"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "chk_placeholder_span_bounds",
+          "expression": "span_start >= 0 AND span_end > span_start"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_placeholder_clause",
+          "columns": [
+            "clause_path"
+          ]
+        },
+        {
+          "name": "ix_placeholder_document",
+          "columns": [
+            "document_id"
+          ]
+        },
+        {
+          "name": "ix_placeholder_question",
+          "columns": [
+            "question_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "QuestionToFieldGroup",
+      "fields": [
+        {
+          "name": "field_group_id",
+          "type": "uuid"
+        },
+        {
+          "name": "notes",
+          "type": "text"
+        },
+        {
+          "name": "q2fg_id",
+          "type": "uuid"
+        },
+        {
+          "name": "question_id",
+          "type": "uuid"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_q2fg",
+        "columns": [
+          "q2fg_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_q2fg_field_group",
+          "columns": [
+            "field_group_id"
+          ],
+          "references": {
+            "entity": "FieldGroup",
+            "columns": [
+              "field_group_id"
+            ]
+          }
+        },
+        {
+          "name": "fk_q2fg_question",
+          "columns": [
+            "question_id"
+          ],
+          "references": {
+            "entity": "QuestionnaireQuestion",
+            "columns": [
+              "question_id"
+            ]
+          }
+        }
+      ],
+      "unique": [
+        {
+          "name": "uq_q2fg_question_group",
+          "columns": [
+            "question_id",
+            "field_group_id"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_q2fg_field_group",
+          "columns": [
+            "field_group_id"
+          ]
+        },
+        {
+          "name": "ix_q2fg_question",
+          "columns": [
+            "question_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "QuestionnaireQuestion",
+      "fields": [
+        {
+          "name": "answer_kind",
+          "type": "answer_kind"
+        },
+        {
+          "name": "external_qid",
+          "type": "text"
+        },
+        {
+          "name": "parent_question_id",
+          "type": "uuid"
+        },
+        {
+          "name": "placeholder_code",
+          "type": "text"
+        },
+        {
+          "name": "question_id",
+          "type": "uuid"
+        },
+        {
+          "name": "question_order",
+          "type": "int"
+        },
+        {
+          "name": "question_text",
+          "type": "text"
+        },
+        {
+          "name": "screen_id",
+          "type": "uuid"
+        },
+        {
+          "name": "visible_if_value",
+          "type": "jsonb"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_questionnaire_question",
+        "columns": [
+          "question_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_question_parent",
+          "columns": [
+            "parent_question_id"
+          ],
+          "references": {
+            "entity": "QuestionnaireQuestion",
+            "columns": [
+              "question_id"
+            ]
+          }
+        },
+        {
+          "name": "fk_question_screen",
+          "columns": [
+            "screen_id"
+          ],
+          "references": {
+            "entity": "Screen",
+            "columns": [
+              "screen_id"
+            ]
+          }
+        }
+      ],
+      "unique": [
+        {
+          "name": "uq_question_external_qid",
+          "columns": [
+            "external_qid"
+          ]
+        },
+        {
+          "name": "uq_question_placeholder_code",
+          "columns": [
+            "placeholder_code"
+          ],
+          "where": "placeholder_code IS NOT NULL"
+        },
+        {
+          "name": "uq_question_per_screen_order",
+          "columns": [
+            "screen_id",
+            "question_order"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_question_answer_type",
+          "columns": [
+            "answer_type"
+          ]
+        },
+        {
+          "name": "ix_question_parent",
+          "columns": [
+            "parent_question_id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "chk_question_order_positive",
+          "expression": "question_order > 0"
+        }
+      ]
+    },
+    {
+      "name": "Response",
+      "fields": [
+        {
+          "name": "option_id",
+          "type": "uuid"
+        },
+        {
+          "name": "question_id",
+          "type": "uuid"
+        },
+        {
+          "name": "response_id",
+          "type": "uuid"
+        },
+        {
+          "name": "response_set_id",
+          "type": "uuid"
+        },
+        {
+          "name": "state_version",
+          "type": "int"
+        },
+        {
+          "name": "value_bool",
+          "type": "boolean"
+        },
+        {
+          "name": "value_json",
+          "type": "jsonb",
+          "sensitive": true,
+          "encrypted": true
+        },
+        {
+          "name": "value_number",
+          "type": "numeric"
+        },
+        {
+          "name": "value_text",
+          "type": "text"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_response",
+        "columns": [
+          "response_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_response_option",
+          "columns": [
+            "option_id"
+          ],
+          "references": {
+            "entity": "AnswerOption",
+            "columns": [
+              "option_id"
+            ]
+          }
+        },
+        {
+          "name": "fk_response_question",
+          "columns": [
+            "question_id"
+          ],
+          "references": {
+            "entity": "QuestionnaireQuestion",
+            "columns": [
+              "question_id"
+            ]
+          }
+        },
+        {
+          "name": "fk_response_set",
+          "columns": [
+            "response_set_id"
+          ],
+          "references": {
+            "entity": "ResponseSet",
+            "columns": [
+              "response_set_id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique": [
+        {
+          "name": "uq_response_set_question",
+          "columns": [
+            "response_set_id",
+            "question_id"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_response_option",
+          "columns": [
+            "option_id"
+          ]
+        },
+        {
+          "name": "ix_response_question",
+          "columns": [
+            "question_id"
+          ]
+        },
+        {
+          "name": "ix_response_set",
+          "columns": [
+            "response_set_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ResponseSet",
+      "fields": [
+        {
+          "name": "company_id",
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "created_by",
+          "type": "text"
+        },
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "response_set_id",
+          "type": "uuid"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_response_set",
+        "columns": [
+          "response_set_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_response_set_company",
+          "columns": [
+            "company_id"
+          ],
+          "references": {
+            "entity": "Company",
+            "columns": [
+              "company_id"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Questionnaire",
+      "fields": [
+        {
+          "name": "questionnaire_id",
+          "type": "uuid"
+        },
+        {
+          "name": "name",
+          "type": "text"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_questionnaire",
+        "columns": [
+          "questionnaire_id"
+        ]
+      }
+    },
+    {
+      "name": "Screen",
+      "fields": [
+        {
+          "name": "screen_id",
+          "type": "uuid"
+        },
+        {
+          "name": "questionnaire_id",
+          "type": "uuid"
+        },
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "screen_order",
+          "type": "int"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_screen",
+        "columns": [
+          "screen_id"
+        ]
+      },
+      "foreign_keys": [
+        {
+          "name": "fk_screen_questionnaire",
+          "columns": [
+            "questionnaire_id"
+          ],
+          "references": {
+            "entity": "Questionnaire",
+            "columns": [
+              "questionnaire_id"
+            ]
+          }
+        }
+      ],
+      "unique": [
+        {
+          "name": "uq_screen_questionnaire_order",
+          "columns": [
+            "questionnaire_id",
+            "screen_order"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "chk_screen_order_positive",
+          "expression": "screen_order > 0"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_screen_questionnaire",
+          "columns": [
+            "questionnaire_id"
+          ]
+        }
+      ]
     }
   ],
-  "unique": [
-    { "name": "uq_placeholder_doc_clause_span", "columns": ["document_id", "clause_path", "span_start", "span_end"] }
+  "encrypted_fields": [
+    "Company.legal_name",
+    "Company.registered_office_address",
+    "Response.value_json",
+    "GeneratedDocument.output_uri"
   ],
-  "checks": [
-    { "name": "chk_placeholder_span_bounds", "expression": "span_start >= 0 AND span_end > span_start" }
+  "constraints_applied": [
+    "chk_blob_sha256_len",
+    "fk_placeholder_question",
+    "fk_generated_document_set",
+    "pk_answer_option",
+    "chk_idempotency_fp_len",
+    "fk_response_set",
+    "uq_document_order_number",
+    "fk_response_option",
+    "pk_response_set",
+    "fk_group_value_set",
+    "fk_response_set_company",
+    "fk_group_value_source_q",
+    "uq_group_value_per_set",
+    "uq_question_placeholder_code",
+    "uq_response_set_question",
+    "chk_screen_order_positive",
+    "chk_question_order_positive",
+    "fk_eopl_placeholder",
+    "fk_document_blob_document",
+    "pk_q2fg",
+    "uq_question_external_qid",
+    "pk_field_group",
+    "pk_document_blob",
+    "fk_question_screen",
+    "chk_blob_size_min",
+    "fk_answer_option_question",
+    "pk_document",
+    "chk_document_version_min",
+    "pk_company",
+    "fk_response_question",
+    "uq_q2fg_question_group",
+    "fk_q2fg_field_group",
+    "pk_generated_document",
+    "pk_questionnaire_question",
+    "pk_response",
+    "fk_q2fg_question",
+    "fk_group_value_option",
+    "chk_document_order_positive",
+    "chk_placeholder_span_bounds",
+    "pk_enum_option_placeholder_link",
+    "uq_eopl_option_unique",
+    "fk_question_parent_question",
+    "uq_idempotency_key_unique",
+    "pk_questionnaire",
+    "pk_document_list_state",
+    "fk_screen_questionnaire",
+    "uq_screen_questionnaire_order",
+    "pk_group_value",
+    "fk_placeholder_document",
+    "pk_placeholder",
+    "uq_placeholder_doc_clause_span",
+    "pk_idempotency_key",
+    "ix_screen_questionnaire",
+    "fk_group_value_group",
+    "fk_eopl_option",
+    "pk_screen",
+    "fk_question_parent",
+    "uq_question_per_screen_order",
+    "chk_blob_mime_docx",
+    "uq_answer_option_question_value"
   ],
-  "indexes": [
-    { "name": "ix_placeholder_clause", "columns": ["clause_path"] },
-    { "name": "ix_placeholder_document", "columns": ["document_id"] },
-    { "name": "ix_placeholder_question", "columns": ["question_id"] }
+  "notes": [
+    "Single handbook template parsed at merge; no template/mapping tables are persisted.",
+    "Mapping is on QuestionnaireQuestion.placeholder_code with partial unique index.",
+    "answer_kind includes enum_single for single-choice questions.",
+    "QuestionnaireQuestion now includes optional parent_question_id (self-referential) and visible_if_value (jsonb) to support server-side conditional visibility.",
+    "Epic C adds a minimal document store: Document (ordered, versioned), DocumentBlob (current DOCX metadata), and DocumentListState (list ETag).",
+    "Epic D adds Placeholder (document-scoped, span-indexed) with binding to QuestionnaireQuestion; EnumOptionPlaceholderLink models nested placeholder linkage from AnswerOption to Placeholder without changing AnswerOption; IdempotencyKey supports write idempotency for bind/unbind operations."
   ]
-},
-{
-"name": "QuestionToFieldGroup",
-"fields": [
-{
-"name": "field_group_id",
-"type": "uuid"
-},
-{
-"name": "notes",
-"type": "text"
-},
-{
-"name": "q2fg_id",
-"type": "uuid"
-},
-{
-"name": "question_id",
-"type": "uuid"
-}
-],
-"primary_key": {
-"name": "pk_q2fg",
-"columns": [
-"q2fg_id"
-]
-},
-"foreign_keys": [
-{
-"name": "fk_q2fg_field_group",
-"columns": [
-"field_group_id"
-],
-"references": {
-"entity": "FieldGroup",
-"columns": [
-"field_group_id"
-]
-}
-},
-{
-"name": "fk_q2fg_question",
-"columns": [
-"question_id"
-],
-"references": {
-"entity": "QuestionnaireQuestion",
-"columns": [
-"question_id"
-]
-}
-}
-],
-"unique": [
-{
-"name": "uq_q2fg_question_group",
-"columns": [
-"question_id",
-"field_group_id"
-]
-}
-],
-"indexes": [
-{
-"name": "ix_q2fg_field_group",
-"columns": [
-"field_group_id"
-]
-},
-{
-"name": "ix_q2fg_question",
-"columns": [
-"question_id"
-]
-}
-]
-},
-{
-"name": "QuestionnaireQuestion",
-"fields": [
-{
-"name": "answer_type",
-"type": "answer_kind"
-},
-{
-"name": "external_qid",
-"type": "text"
-},
-{
-"name": "mandatory",
-"type": "boolean"
-},
-{
-"name": "parent_question_id",
-"type": "uuid"
-},
-{
-"name": "placeholder_code",
-"type": "text"
-},
-{
-"name": "question_id",
-"type": "uuid"
-},
-{
-"name": "question_order",
-"type": "int"
-},
-{
-"name": "question_text",
-"type": "text"
-},
-{
-"name": "screen_key",
-"type": "text"
-},
-{
-"name": "visible_if_value",
-"type": "jsonb"
-}
-],
-"primary_key": {
-"name": "pk_questionnaire_question",
-"columns": [
-"question_id"
-]
-},
-"foreign_keys": [
-{
-"name": "fk_question_parent",
-"columns": [
-"parent_question_id"
-],
-"references": {
-"entity": "QuestionnaireQuestion",
-"columns": [
-"question_id"
-]
-}
-}
-],
-"unique": [
-{
-"name": "uq_question_external_qid",
-"columns": [
-"external_qid"
-]
-},
-{
-"name": "uq_question_placeholder_code",
-"columns": [
-"placeholder_code"
-],
-"where": "placeholder_code IS NOT NULL"
-}
-],
-"indexes": [
-{
-"name": "ix_question_answer_type",
-"columns": [
-"answer_type"
-]
-},
-{
-"name": "ix_question_parent",
-"columns": [
-"parent_question_id"
-]
-}
-]
-},
-{
-"name": "Response",
-"fields": [
-{
-"name": "option_id",
-"type": "uuid"
-},
-{
-"name": "question_id",
-"type": "uuid"
-},
-{
-"name": "response_id",
-"type": "uuid"
-},
-{
-"name": "response_set_id",
-"type": "uuid"
-},
-{
-"name": "state_version",
-"type": "int"
-},
-{
-"name": "value_bool",
-"type": "boolean"
-},
-{
-"name": "value_json",
-"type": "jsonb",
-"sensitive": true,
-"encrypted": true
-},
-{
-"name": "value_number",
-"type": "numeric"
-},
-{
-"name": "value_text",
-"type": "text"
-}
-
-],
-"primary_key": {
-"name": "pk_response",
-"columns": [
-"response_id"
-]
-},
-"foreign_keys": [
-{
-"name": "fk_response_option",
-"columns": [
-"option_id"
-],
-"references": {
-"entity": "AnswerOption",
-"columns": [
-"option_id"
-]
-}
-},
-{
-"name": "fk_response_question",
-"columns": [
-"question_id"
-],
-"references": {
-"entity": "QuestionnaireQuestion",
-"columns": [
-"question_id"
-]
-}
-},
-{
-"name": "fk_response_set",
-"columns": [
-"response_set_id"
-],
-"references": {
-"entity": "ResponseSet",
-"columns": [
-"response_set_id"
-]
-},
-"on_delete": "cascade"
-}
-],
-"unique": [
-{
-"name": "uq_response_set_question",
-"columns": [
-"response_set_id",
-"question_id"
-]
-}
-],
-"indexes": [
-{
-"name": "ix_response_option",
-"columns": [
-"option_id"
-]
-},
-{
-"name": "ix_response_question",
-"columns": [
-"question_id"
-]
-},
-{
-"name": "ix_response_set",
-"columns": [
-"response_set_id"
-]
-}
-]
-},
-{
-"name": "ResponseSet",
-"fields": [
-{
-"name": "company_id",
-"type": "uuid"
-},
-{
-"name": "created_at",
-"type": "timestamptz"
-},
-{
-"name": "created_by",
-"type": "text"
-},
-{
-"name": "name",
-"type": "text"
-},
-{
-"name": "response_set_id",
-"type": "uuid"
-}
-],
-"primary_key": {
-"name": "pk_response_set",
-"columns": [
-"response_set_id"
-]
-},
-"foreign_keys": [
-{
-"name": "fk_response_set_company",
-"columns": [
-"company_id"
-],
-"references": {
-"entity": "Company",
-"columns": [
-"company_id"
-]
-}
-}
-]
-}
-],
-"encrypted_fields": [
-"Company.legal_name",
-"Company.registered_office_address",
-"Response.value_json",
-"GeneratedDocument.output_uri"
-],
-"constraints_applied": [
-"chk_blob_mime_docx",
-"chk_blob_sha256_len",
-"chk_blob_size_min",
-"chk_document_order_positive",
-"chk_document_version_min",
-"fk_answer_option_question",
-"fk_document_blob_document",
-"fk_generated_document_set",
-"fk_group_value_group",
-"fk_group_value_option",
-"fk_group_value_set",
-"fk_group_value_source_q",
-"fk_q2fg_field_group",
-"fk_q2fg_question",
-"fk_question_parent",
-"fk_question_parent_question",
-"fk_response_option",
-"fk_response_question",
-"fk_response_set",
-"fk_response_set_company",
-"pk_answer_option",
-"pk_company",
-"pk_document",
-"pk_document_blob",
-"pk_document_list_state",
-"pk_field_group",
-"pk_generated_document",
-"pk_group_value",
-"pk_q2fg",
-"pk_questionnaire_question",
-"pk_response",
-"pk_response_set",
-"uq_answer_option_question_value",
-"uq_document_order_number",
-"uq_group_value_per_set",
-"uq_q2fg_question_group",
-"uq_question_external_qid",
-"uq_question_placeholder_code",
-"uq_response_set_question",
-"pk_placeholder",
-"fk_placeholder_document",
-"fk_placeholder_question",
-"uq_placeholder_doc_clause_span",
-"chk_placeholder_span_bounds",
-"pk_enum_option_placeholder_link",
-"fk_eopl_option",
-"fk_eopl_placeholder",
-"uq_eopl_option_unique",
-"pk_idempotency_key",
-"uq_idempotency_key_unique",
-"chk_idempotency_fp_len"
-],
-"notes": [
-"Single handbook template parsed at merge; no template/mapping tables are persisted.",
-"Mapping is on QuestionnaireQuestion.placeholder_code with partial unique index.",
-"answer_kind includes enum_single for single-choice questions.",
-"QuestionnaireQuestion now includes optional parent_question_id (self-referential) and visible_if_value (jsonb) to support server-side conditional visibility.",
-"Epic C adds a minimal document store: Document (ordered, versioned), DocumentBlob (current DOCX metadata), and DocumentListState (list ETag).",
-"Epic D adds Placeholder (document-scoped, span-indexed) with binding to QuestionnaireQuestion; EnumOptionPlaceholderLink models nested placeholder linkage from AnswerOption to Placeholder without changing AnswerOption; IdempotencyKey supports write idempotency for bind/unbind operations."
-]
 }
