@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/QuestionTooltip.schema.json",
+  "title": "QuestionTooltip",
+  "type": "string",
+  "description": "Longer tooltip or help text shown for the question."
+}

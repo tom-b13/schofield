@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/ScreenOrder.schema.json",
+  "title": "ScreenOrder",
+  "type": "integer",
+  "minimum": 1,
+  "description": "1-based order of screens within a questionnaire."
+}
