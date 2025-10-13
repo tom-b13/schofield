@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 import logging
+import sys
 
 from app.logic.repository_screens import list_questions_for_screen, get_visibility_rules_for_screen
 from app.logic.repository_answers import get_existing_answer
@@ -16,6 +17,18 @@ from app.logic.visibility_rules import is_child_visible, compute_visible_set
 from app.logic.etag import compute_screen_etag
 
 logger = logging.getLogger(__name__)
+
+# Ensure module INFO logs are emitted to stdout during tests/integration runs
+try:
+    if not logger.handlers:
+        _handler = logging.StreamHandler(stream=sys.stdout)
+        _handler.setLevel(logging.INFO)
+        _handler.setFormatter(logging.Formatter('%(levelname)s:%(name)s:%(message)s'))
+        logger.addHandler(_handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+except Exception:
+    pass
 
 
 def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any]:
@@ -34,14 +47,59 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
         parents = set()
     parent_values: dict[str, str | None] = {}
     for pid in parents:
-        row = get_existing_answer(response_set_id, pid)
+        pid_str = str(pid)
+        row = get_existing_answer(response_set_id, pid_str)
         if row is None:
-            parent_values[pid] = None
+            parent_values[pid_str] = None
         else:
             _opt, vtext, vnum, vbool = row
-            parent_values[pid] = canonicalize_answer_value(vtext, vnum, vbool)
+            # Guarantee strict string-canonical form for visibility checks
+            cv = canonicalize_answer_value(vtext, vnum, vbool)
+            parent_values[pid_str] = (str(cv) if cv is not None else None)
 
-    visible_ids = compute_visible_set(visibility_rules, parent_values)
+    # Clarke: After initial loop, explicitly re-probe and override any None
+    # parent values by consulting repository again to capture recent writes.
+    try:
+        for pid in list(parents):
+            pid_str = str(pid)
+            if parent_values.get(pid_str) is None:
+                row2 = get_existing_answer(response_set_id, pid_str)
+                if row2 is not None:
+                    _opt2, vtext2, vnum2, vbool2 = row2
+                    cv2 = canonicalize_answer_value(vtext2, vnum2, vbool2)
+                    parent_values[pid_str] = (str(cv2) if cv2 is not None else None)
+    except Exception:
+        # Never fail GET path due to a late re-probe
+        pass
+
+    # Instrumentation only: log raw tuples and canonicalized (string-cast) maps
+    try:
+        raw_map: dict[str, tuple | None] = {}
+        for pid in parents:
+            try:
+                raw_map[str(pid)] = get_existing_answer(response_set_id, str(pid))
+            except Exception:
+                raw_map[str(pid)] = None
+        logger.info(
+            "screen_parent_values_raw rs_id=%s screen_key=%s parent_raw=%s",
+            response_set_id,
+            screen_key,
+            raw_map,
+        )
+        parent_canon_str = {str(k): (str(v) if v is not None else None) for k, v in parent_values.items()}
+        logger.info(
+            "screen_parent_values_canon rs_id=%s screen_key=%s parent_canon=%s",
+            response_set_id,
+            screen_key,
+            parent_canon_str,
+        )
+    except Exception:
+        pass
+
+    # Ensure parent_values map uses string keys matching rules (Clarke directive)
+    parent_values = {str(k): v for k, v in parent_values.items()}
+    # Ensure visible_ids is a set of string question_ids derived from compute_visible_set
+    visible_ids = {str(x) for x in compute_visible_set(visibility_rules, parent_values)}
 
     filtered: list[dict] = []
     for q in questions:

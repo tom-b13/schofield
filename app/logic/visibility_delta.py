@@ -44,6 +44,7 @@ def compute_visibility_delta(
         except Exception:
             return None
 
+    # Normalize any incoming iterable items (dicts/tuples/primitives) to string ids
     pre_set = {qid for qid in (_coerce_id(x) for x in pre_visible) if qid}
     post_set = {qid for qid in (_coerce_id(x) for x in post_visible) if qid}
 
@@ -55,9 +56,17 @@ def compute_visibility_delta(
     # Guarantee now_hidden reflects pre - post on question_id strings
     now_hidden = [str(qid) for qid in sorted(list(pre_set - post_set))]
 
+    # Suppressed answers include newly hidden questions that currently have
+    # stored answers. Probe via provided callable so callers can inject a
+    # repository-backed existence check bound to the active response set.
     suppressed_answers: List[str] = []
     for qid in now_hidden:
-        if has_answer(qid):
-            suppressed_answers.append(qid)
+        try:
+            if bool(has_answer(qid)):
+                suppressed_answers.append(qid)
+        except Exception:
+            # On probe failure, act conservatively and do not mark as suppressed
+            # (callers may separately log/handle the underlying issue).
+            continue
 
     return now_visible, now_hidden, suppressed_answers

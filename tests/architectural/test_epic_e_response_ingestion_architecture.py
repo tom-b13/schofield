@@ -181,29 +181,43 @@ def module_uses_http_client(pm: ParsedModule) -> bool:
 
 
 def module_contains_sql_strings(pm: ParsedModule) -> bool:
-    """Detect presence of inline SQL with unambiguous tokens.
+    """Detect inline SQL by scanning runtime string literals via AST.
 
-    Avoid false positives from natural-language route metadata by requiring
-    specific SQL forms:
-    - SELECT <...>
-    - INSERT INTO <...>
-    - DELETE FROM <...>
-    - UPDATE <...> SET <...> (require ' SET ' somewhere as a heuristic)
+    This intentionally ignores comments and docstrings to prevent false
+    positives from English prose. Only actual string literals reachable at
+    runtime are considered. A match requires one of the following tokens to
+    appear within a single literal:
+    - "INSERT INTO "
+    - "DELETE FROM "
+    - "SELECT "
+    - both "UPDATE " and " SET " within the same literal
     """
-    try:
-        code = pm.path.read_text(encoding="utf-8")
-    except Exception:
-        return False
-    code_upper = code.upper()
+    tree = pm.tree
 
-    if "INSERT INTO " in code_upper:
-        return True
-    if "DELETE FROM " in code_upper:
-        return True
-    if "SELECT " in code_upper:
-        return True
-    if "UPDATE " in code_upper and " SET " in code_upper:
-        return True
+    # Collect docstring Constant nodes (module/class/function first statement)
+    docstring_ids: set[int] = set()
+    for container in ast.walk(tree):
+        if isinstance(container, (ast.Module, ast.ClassDef, ast.FunctionDef)):
+            body = getattr(container, "body", [])
+            if body:
+                first = body[0]
+                if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+                    docstring_ids.add(id(first.value))
+
+    # Now scan all string Constant nodes that are not docstrings
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if id(node) in docstring_ids:
+                continue  # skip docstrings
+            s = node.value.upper()
+            if "INSERT INTO " in s:
+                return True
+            if "DELETE FROM " in s:
+                return True
+            if "SELECT " in s:
+                return True
+            if "UPDATE " in s and " SET " in s:
+                return True
     return False
 
 

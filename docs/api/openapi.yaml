@@ -135,13 +135,30 @@ paths:
               schema:
                 type: object
                 required:
-                - saved
-                - etag
+                  - saved
+                  - etag
                 properties:
                   saved:
                     type: boolean
                   etag:
                     type: string
+                  suppressed_answers:
+                    description: Identifiers of newly hidden questions that currently have stored answers.
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QuestionId'
+                  visibility_delta:
+                    description: Visibility changes since the last GET/ETag for this screen.
+                    type: object
+                    properties:
+                      now_visible:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/QuestionId'
+                      now_hidden:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/QuestionId'
         '409':
           $ref: '#/components/responses/Conflict'
           content:

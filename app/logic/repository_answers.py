@@ -120,31 +120,50 @@ def get_existing_answer(response_set_id: str, question_id: str) -> tuple | None:
 
     Falls back to in-memory store when DB is unavailable.
     """
+    # Clarke hardening: coerce composite key parts to strings once
+    rs_id = str(response_set_id)
+    q_id = str(question_id)
     try:
         eng = get_engine()
         with eng.connect() as conn:
             row = conn.execute(
                 sql_text(
                     """
-                    SELECT option_id, value_text, value_number, value_bool
+                    SELECT option_id, value_text, value_number, value_bool, value_json
                     FROM response
                     WHERE response_set_id = :rs AND question_id = :qid
                     """
                 ),
-                {"rs": response_set_id, "qid": question_id},
+                {"rs": rs_id, "qid": q_id},
             ).fetchone()
         if row is not None:
-            return tuple(row)
+            opt, vtext, vnum, vbool, vjson = row
+            # If only value_json is populated, parse into the first matching scalar slot
+            if (opt is None) and (vtext is None) and (vnum is None) and (vbool is None) and (vjson is not None):
+                try:
+                    parsed = json.loads(vjson) if isinstance(vjson, (str, bytes)) else vjson
+                except Exception:
+                    parsed = None
+                if isinstance(parsed, bool):
+                    vbool = bool(parsed)
+                elif isinstance(parsed, (int, float)) and not isinstance(parsed, bool):
+                    vnum = float(parsed)
+                elif isinstance(parsed, str):
+                    vtext = parsed
+            return (opt, vtext, vnum, vbool)
         # Deterministic fallback: surface prior in-memory upsert when DB has no row
-        return _INMEM_ANSWERS.get((response_set_id, question_id))
+        inm = _INMEM_ANSWERS.get((rs_id, q_id))
+        if inm is not None:
+            return inm
+        return None
     except Exception:
         logger.error(
             "get_existing_answer DB probe failed rs_id=%s q_id=%s; using in-memory fallback",
-            response_set_id,
-            question_id,
+            rs_id,
+            q_id,
             exc_info=True,
         )
-        return _INMEM_ANSWERS.get((response_set_id, question_id))
+        return _INMEM_ANSWERS.get((rs_id, q_id))
 
 
 def upsert_answer(
@@ -236,7 +255,30 @@ def upsert_answer(
                         "vjson": json.dumps(value) if value is not None else "null",
                     },
                 )
-        # After successful commit, bump version for Screen-ETag computation
+        # After successful commit, mirror canonicalized parts into in-memory store
+        try:
+            vtext: str | None = value if isinstance(value, str) else None
+            vnum: float | None = (
+                float(value)
+                if (isinstance(value, (int, float)) and not isinstance(value, bool))
+                else None
+            )
+            vbool: bool | None = (bool(value) if isinstance(value, bool) else None)
+            _INMEM_ANSWERS[(str(response_set_id), str(question_id))] = (
+                option_id,
+                vtext,
+                vnum,
+                vbool,
+            )
+        except Exception:
+            # Mirroring must not break the success path
+            logger.error(
+                "in-memory mirror failed rs_id=%s q_id=%s",
+                response_set_id,
+                question_id,
+                exc_info=True,
+            )
+        # After successful commit and mirror, bump version for Screen-ETag computation
         screen_key = get_screen_key_for_question(question_id) or "profile"
         _bump_screen_version(response_set_id, screen_key)
         state_version = get_screen_version(response_set_id, screen_key)
@@ -257,7 +299,7 @@ def upsert_answer(
             else None
         )
         vbool: bool | None = (bool(value) if isinstance(value, bool) else None)
-        _INMEM_ANSWERS[(response_set_id, question_id)] = (
+        _INMEM_ANSWERS[(str(response_set_id), str(question_id))] = (
             option_id,
             vtext,
             vnum,
@@ -294,6 +336,8 @@ def delete_answer(response_set_id: str, question_id: str) -> None:
                 ),
                 {"rs": response_set_id, "qid": question_id},
             )
+        # Remove any mirrored in-memory entry to keep caches consistent
+        _INMEM_ANSWERS.pop((response_set_id, question_id), None)
         # Ensure subsequent Screen-ETag changes by bumping version after successful delete
         screen_key = get_screen_key_for_question(question_id) or "profile"
         _bump_screen_version(response_set_id, screen_key)

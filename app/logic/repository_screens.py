@@ -278,6 +278,12 @@ def get_visibility_rules_for_screen(screen_key: str) -> dict[str, tuple[str | No
                         else:
                             out.append(xs)
                 return out
+            # If JSON parses to a scalar, treat as single visible value
+            if isinstance(parsed, (str, bool)):
+                if isinstance(parsed, bool):
+                    return ["true" if parsed else "false"]
+                ps = str(parsed)
+                return [ps.lower() if ps.lower() in {"true", "false"} else ps]
         except Exception:
             pass
         # Single value path: canonicalize boolean-like tokens

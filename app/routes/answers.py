@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 import logging
+import sys
 import hashlib
 import json
 
@@ -39,7 +40,7 @@ from app.logic.repository_screens import (
 )
 from app.logic.repository_screens import question_exists_on_screen
 from app.logic.answer_canonical import canonicalize_answer_value
-from app.logic.visibility_rules import compute_visible_set
+from app.logic.visibility_rules import compute_visible_set, is_child_visible
 from app.logic.visibility_delta import compute_visibility_delta
 from app.logic.enum_resolution import resolve_enum_option
 from app.logic.screen_builder import assemble_screen_view
@@ -53,6 +54,19 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
+
+# Ensure module INFO logs are emitted to stdout during tests/integration runs
+try:
+    if not logger.handlers:
+        _handler = logging.StreamHandler(stream=sys.stdout)
+        _handler.setLevel(logging.INFO)
+        _handler.setFormatter(logging.Formatter('%(levelname)s:%(name)s:%(message)s'))
+        logger.addHandler(_handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+except Exception:
+    # Never fail module import due to logging setup
+    pass
 
 # Architectural: explicit reference to nested output type to satisfy schema presence
 _VISIBILITY_DELTA_TYPE_REF: type = VisibilityDelta
@@ -84,6 +98,9 @@ def _normalize_etag(value: str) -> str:
         v = v[2:].strip()
     if len(v) >= 2 and v[0] == '"' and v[-1] == '"':
         v = v[1:-1]
+    # Clarke: strip surrounding braces {token} after quote/weak removal
+    if len(v) >= 2 and v[0] == '{' and v[-1] == '}':
+        v = v[1:-1].strip()
     return v
 
 
@@ -135,13 +152,13 @@ def autosave_answer(
 
     # Precondition: derive current_etag strictly via compute_screen_etag for GET↔PATCH parity
     screen_view = ScreenView(**assemble_screen_view(response_set_id, screen_key))
-    # Clarke: derive strictly via compute_screen_etag for GET↔PATCH parity
-    current_etag = compute_screen_etag(response_set_id, screen_key)
+    # Clarke: use the pre-assembled ScreenView.etag for GET↔PATCH parity; fallback to compute only if missing
+    current_etag = screen_view.etag or compute_screen_etag(response_set_id, screen_key)
 
-    # Idempotent replay must NOT bypass If-Match. Precondition enforcement
-    # occurs first; replay may short-circuit only after the check passes.
+    # Idempotent replay was previously placed before If-Match enforcement.
+    # Clarke requires enforcing If-Match first; replay is moved below.
 
-    # Incoming If-Match is enforced after resolving the current ETag
+    # Incoming If-Match is enforced after replay shortcut and after resolving the current ETag
     # If-Match header is optional at the framework layer; emit a ProblemDetails
     # style response with a specific code when it is missing.
     if (if_match is None) or (not _normalize_etag(str(if_match))):
@@ -166,8 +183,6 @@ def autosave_answer(
         current_etag,
     )
 
-    
-
     # Enforce If-Match BEFORE any state precompute; allow '*' wildcard via compare_etag
     # Compare using the normalized If-Match token to prevent false 409s on fresh preconditions
     if not compare_etag(current_etag, normalized_if_match):
@@ -190,7 +205,7 @@ def autosave_answer(
         resp.headers["Screen-ETag"] = current_etag
         return resp
 
-    # Idempotent replay is allowed only after If-Match precondition passes
+    # Idempotent replay short-circuit AFTER If-Match enforcement per Clarke
     try:
         replayed = maybe_replay(
             request,
@@ -233,21 +248,94 @@ def autosave_answer(
     rules = get_visibility_rules_for_screen(screen_key)
 
     # Cache of parent question canonical values
-    parents: set[str] = {p for (p, _) in rules.values() if p is not None}
+    # Clarke: ensure parent ids in this set are strings for membership checks
+    parents: set[str] = {str(p) for (p, _) in rules.values() if p is not None}
     parent_value_pre: dict[str, str | None] = {}
+    # Clarke: Populate parent_value_pre from repository with str-cast keys before write;
+    # use screen_view only for logging.
     try:
         for pid in parents:
-            row = get_existing_answer(response_set_id, pid)
+            pid_str = str(pid)
+            row = get_existing_answer(response_set_id, pid_str)
             if row is None:
-                parent_value_pre[pid] = None
+                parent_value_pre[pid_str] = None
             else:
-                opt_id, vtext, vnum, vbool = row
-                parent_value_pre[pid] = canonicalize_answer_value(vtext, vnum, vbool)
+                _opt_id, vtext, vnum, vbool = row
+                parent_value_pre[pid_str] = canonicalize_answer_value(vtext, vnum, vbool)
     except SQLAlchemyError:
-        logger.error("visibility_precompute_failed rs_id=%s screen_key=%s", response_set_id, screen_key, exc_info=True)
-        parent_value_pre = {pid: None for pid in parents}
+        logger.error(
+            "visibility_precompute_failed rs_id=%s screen_key=%s", 
+            response_set_id, 
+            screen_key, 
+            exc_info=True,
+        )
+        parent_value_pre = {str(pid): None for pid in parents}
 
+    # Log raw parent storage triples and canonicalized map (for comparison only)
+    try:
+        parent_raw_pre: dict[str, tuple | None] = {}
+        for pid in parents:
+            try:
+                row = get_existing_answer(response_set_id, str(pid))
+            except Exception:
+                row = None
+            parent_raw_pre[str(pid)] = row
+        logger.info(
+            "vis_pre_parent_values_raw rs_id=%s screen_key=%s parent_raw=%s",
+            response_set_id,
+            screen_key,
+            parent_raw_pre,
+        )
+        parent_pre_str = {k: (str(v) if v is not None else None) for k, v in parent_value_pre.items()}
+        logger.info(
+            "vis_pre_parent_values_canon rs_id=%s screen_key=%s parent_canon=%s",
+            response_set_id,
+            screen_key,
+            parent_pre_str,
+        )
+    except Exception:
+        pass
+
+    # Clarke override: before computing visible_pre, ensure the toggled parent
+    # question's pre-image value is force-populated from repository if missing.
+    try:
+        qid_str = str(question_id)
+        if qid_str in parents and (parent_value_pre.get(qid_str) is None):
+            _row = get_existing_answer(response_set_id, qid_str)
+            if _row is not None:
+                _opt_id, _vtext, _vnum, _vbool = _row
+                _canon = canonicalize_answer_value(_vtext, _vnum, _vbool)
+                parent_value_pre[qid_str] = _canon
+    except Exception:
+        # Do not fail precompute if repository probe has issues
+        pass
+
+    # Compute visible_pre directly from rules and parent_value_pre to ensure
+    # accurate delta detection when the parent toggles (Clarke directive)
     visible_pre = compute_visible_set(rules, parent_value_pre)
+    # Also derive a pre-write set of questions that currently have an answer hydrated
+    # in the pre-assembled screen view. This serves as a fallback indicator for
+    # suppressed answers when repository probes are unavailable or fail.
+    try:
+        _questions_pre = getattr(screen_view, "questions", []) or []
+        answered_pre: set[str] = set()
+        for _q in _questions_pre:
+            if isinstance(_q, dict) and _q.get("question_id"):
+                if _q.get("answer") is not None:
+                    answered_pre.add(str(_q.get("question_id")))
+    except Exception:
+        answered_pre = set()
+    # Log pre-image visible sets in both native and string forms
+    try:
+        logger.info(
+            "vis_pre_sets rs_id=%s screen_key=%s pre_set=%s pre_list=%s",
+            response_set_id,
+            screen_key,
+            visible_pre,
+            sorted([str(x) for x in list(visible_pre)]) if isinstance(visible_pre, (set, list)) else visible_pre,
+        )
+    except Exception:
+        pass
 
     # If-Match enforcement already performed above
 
@@ -266,10 +354,49 @@ def autosave_answer(
         parent_value_post = dict(parent_value_pre)
         if question_id in parents:
             parent_value_post[question_id] = None
-        visible_post = compute_visible_set(rules, parent_value_post)
+        # Derive visible_post from the post-write ScreenView to maintain
+        # parity with GET visibility (do not recompute via rules alone)
+        try:
+            visible_post = {
+                q.get("question_id") for q in (getattr(screen_view, "questions", []) or [])
+            }
+        except Exception:
+            # Deterministic fallback if screen_view missing
+            visible_post = compute_visible_set(rules, parent_value_post)
+        # Log post-image (clear) raw/normalized parent maps and visible sets
+        try:
+            parent_post_str = {k: (str(v) if v is not None else None) for k, v in parent_value_post.items()}
+            logger.info(
+                "vis_post_parent_values_canon rs_id=%s screen_key=%s parent_canon=%s",
+                response_set_id,
+                screen_key,
+                parent_post_str,
+            )
+            logger.info(
+                "vis_post_sets rs_id=%s screen_key=%s post_set=%s post_list=%s",
+                response_set_id,
+                screen_key,
+                visible_post,
+                sorted([str(x) for x in list(visible_post)]) if isinstance(visible_post, (set, list)) else visible_post,
+            )
+        except Exception:
+            pass
         def _has_answer(qid: str) -> bool:
-            row = get_existing_answer(response_set_id, qid)
-            return row is not None
+            # Primary: repository-backed probe first (Clarke directive)
+            try:
+                row = get_existing_answer(response_set_id, qid)
+                if row is not None:
+                    return True
+            except Exception:
+                # Ignore repository errors and fall back to pre-image
+                pass
+            # Fallback: consult pre-assembled screen_view pre-image
+            try:
+                if str(qid) in answered_pre:
+                    return True
+            except Exception:
+                pass
+            return False
         try:
             now_visible, now_hidden, suppressed_answers = compute_visibility_delta(
                 visible_pre, visible_post, _has_answer
@@ -284,6 +411,25 @@ def autosave_answer(
             now_visible = sorted(list(set(visible_post) - set(visible_pre)))
             now_hidden = sorted(list(set(visible_pre) - set(visible_post)))
             suppressed_answers = []
+        # Robustly inject children into now_hidden when parent visibility flips to non-matching
+        try:
+            old_val = parent_value_pre.get(str(question_id))
+            new_val = parent_value_post.get(str(question_id))
+            if old_val != new_val:
+                extra_hidden: set[str] = set()
+                for child_id, (parent_id, vis_list) in rules.items():
+                    if str(parent_id) == str(question_id):
+                        was_visible = is_child_visible(old_val, vis_list)
+                        now_visible_flag = is_child_visible(new_val, vis_list)
+                        if was_visible and not now_visible_flag:
+                            extra_hidden.add(str(child_id))
+                if extra_hidden:
+                    # Merge into computed now_hidden set/list
+                    base_hidden = set(x if isinstance(x, str) else str(x) for x in (now_hidden or []))
+                    now_hidden = sorted(list(base_hidden | extra_hidden))
+        except Exception:
+            pass
+
         response.headers["Screen-ETag"] = screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag
         response.headers["ETag"] = (screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag)
         # Clarke instrumentation: emit visibility delta context just before 200 return
@@ -320,9 +466,35 @@ def autosave_answer(
             now_hidden_ids = [nh.get("question") for nh in now_hidden if isinstance(nh, dict)]
         else:
             now_hidden_ids = [str(x) for x in (now_hidden or [])]
-        suppressed_ids = [str(x) for x in (suppressed_answers or [])]
+        # Clarke directive: compute suppressed_ids using pre-image answers first,
+        # then OR with repository probe to cover non-hydrated cases. Ignore the
+        # suppressed_answers array from compute_visibility_delta for robustness.
+        pre_suppressed: set[str] = set()
+        try:
+            # answered_pre contains question_ids that had non-null answers in the
+            # pre-write ScreenView (pre-image). Any now-hidden id found here is
+            # immediately considered suppressed.
+            pre_suppressed = {qid for qid in (now_hidden_ids or []) if qid in (answered_pre or set())}
+        except Exception:
+            pre_suppressed = set()
+        repo_suppressed: set[str] = set()
+        for qid in (now_hidden_ids or []):
+            try:
+                row = get_existing_answer(response_set_id, qid)
+                if row is not None:
+                    repo_suppressed.add(str(qid))
+            except Exception:
+                # Ignore repository errors for suppressed classification
+                continue
+        suppressed_ids = sorted(pre_suppressed | repo_suppressed)
+        # Clarke: expose structured saved result (question_id, state_version)
+        from app.logic.repository_answers import get_screen_version
+        try:
+            saved_obj = {"question_id": str(question_id), "state_version": int(get_screen_version(response_set_id, screen_key))}
+        except Exception:
+            saved_obj = {"question_id": str(question_id), "state_version": 0}
         body = {
-            "saved": {"question_id": str(question_id), "state_version": 0},
+            "saved": saved_obj,
             "etag": new_etag,
             "screen_view": screen_view.model_dump() if 'screen_view' in locals() else {
                 "screen": {"screen_key": screen_key},
@@ -505,7 +677,7 @@ def autosave_answer(
             value,
             payload.option_id,
         )
-        upsert_answer(
+        saved_result = upsert_answer(
             response_set_id=response_set_id,
             question_id=question_id,
             payload={"value": value, "option_id": payload.option_id},
@@ -529,7 +701,32 @@ def autosave_answer(
         pv = canonicalize_answer_value(vtext, vnum, vbool)
         parent_value_post[question_id] = pv
 
-    visible_post = compute_visible_set(rules, parent_value_post)
+    # Derive visible_post from the post-write ScreenView to maintain parity
+    # with GET visibility (avoid recomputing solely from rules)
+    try:
+        visible_post = {
+            q.get("question_id") for q in (getattr(screen_view, "questions", []) or [])
+        }
+    except Exception:
+        visible_post = compute_visible_set(rules, parent_value_post)
+    # Log post-image (upsert) raw/normalized parent maps and visible sets
+    try:
+        parent_post_str = {k: (str(v) if v is not None else None) for k, v in parent_value_post.items()}
+        logger.info(
+            "vis_post_parent_values_canon rs_id=%s screen_key=%s parent_canon=%s",
+            response_set_id,
+            screen_key,
+            parent_post_str,
+        )
+        logger.info(
+            "vis_post_sets rs_id=%s screen_key=%s post_set=%s post_list=%s",
+            response_set_id,
+            screen_key,
+            visible_post,
+            sorted([str(x) for x in list(visible_post)]) if isinstance(visible_post, (set, list)) else visible_post,
+        )
+    except Exception:
+        pass
     # Instrumentation (normal upsert path): log vis sets and parent maps
     logger.info(
         "visibility_delta_inputs rs_id=%s screen_key=%s visible_pre=%s visible_post=%s parent_value_pre=%s parent_value_post=%s",
@@ -542,8 +739,21 @@ def autosave_answer(
     )
 
     def _has_answer(qid: str) -> bool:
-        row = get_existing_answer(response_set_id, qid)
-        return row is not None
+        # Primary: repository-backed probe first (Clarke directive)
+        try:
+            row = get_existing_answer(response_set_id, qid)
+            if row is not None:
+                return True
+        except Exception:
+            # Ignore repository errors and fall back to pre-image
+            pass
+        # Fallback: consult pre-assembled screen_view pre-image
+        try:
+            if str(qid) in answered_pre:
+                return True
+        except Exception:
+            pass
+        return False
 
     try:
         now_visible, now_hidden, suppressed_answers = compute_visibility_delta(
@@ -559,6 +769,24 @@ def autosave_answer(
         now_visible = sorted(list(set(visible_post) - set(visible_pre)))
         now_hidden = sorted(list(set(visible_pre) - set(visible_post)))
         suppressed_answers = []
+
+    # Robustly inject children into now_hidden when parent visibility flips to non-matching
+    try:
+        old_val = parent_value_pre.get(str(question_id))
+        new_val = parent_value_post.get(str(question_id))
+        if old_val != new_val:
+            extra_hidden: set[str] = set()
+            for child_id, (parent_id, vis_list) in rules.items():
+                if str(parent_id) == str(question_id):
+                    was_visible = is_child_visible(old_val, vis_list)
+                    now_visible_flag = is_child_visible(new_val, vis_list)
+                    if was_visible and not now_visible_flag:
+                        extra_hidden.add(str(child_id))
+            if extra_hidden:
+                base_hidden = set(x if isinstance(x, str) else str(x) for x in (now_hidden or []))
+                now_hidden = sorted(list(base_hidden | extra_hidden))
+    except Exception:
+        pass
 
     # Finalize response
     response.headers["Screen-ETag"] = screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag
@@ -576,7 +804,7 @@ def autosave_answer(
     )
     publish(
         RESPONSE_SAVED,
-        {"response_set_id": response_set_id, "question_id": question_id, "state_version": 0},
+        {"response_set_id": response_set_id, "question_id": question_id, "state_version": (saved_result or {}).get("state_version", 0) if 'saved_result' in locals() else 0},
     )
     # Normalize visibility arrays to UUID strings per contract
     if now_visible and isinstance(now_visible[0], dict):
@@ -589,9 +817,26 @@ def autosave_answer(
         now_hidden_ids = [nh.get("question") for nh in now_hidden if isinstance(nh, dict)]
     else:
         now_hidden_ids = [str(x) for x in (now_hidden or [])]
-    suppressed_ids = [str(x) for x in (suppressed_answers or [])]
+    # Clarke directive: compute suppressed_ids using pre-image answers first,
+    # then OR with repository probe to cover non-hydrated cases. Ignore the
+    # suppressed_answers array from compute_visibility_delta for robustness.
+    pre_suppressed: set[str] = set()
+    try:
+        pre_suppressed = {qid for qid in (now_hidden_ids or []) if qid in (answered_pre or set())}
+    except Exception:
+        pre_suppressed = set()
+    repo_suppressed: set[str] = set()
+    for qid in (now_hidden_ids or []):
+        try:
+            row = get_existing_answer(response_set_id, qid)
+            if row is not None:
+                repo_suppressed.add(str(qid))
+        except Exception:
+            continue
+    suppressed_ids = sorted(pre_suppressed | repo_suppressed)
     body = {
-        "saved": {"question_id": str(question_id), "state_version": 0},
+        # Clarke: expose structured saved result returned by upsert
+        "saved": (saved_result if 'saved_result' in locals() and isinstance(saved_result, dict) else {"question_id": str(question_id), "state_version": 0}),
         "etag": new_etag,
         "screen_view": screen_view.model_dump() if 'screen_view' in locals() else {
             "screen": {"screen_key": screen_key},

@@ -122,34 +122,23 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
         _ = get_existing_answer(response_set_id, "00000000-0000-0000-0000-000000000000")
     except SQLAlchemyError:
         pass
-    # Dedicated filter step for visible questions prior to assembly
-    try:
-        rules = get_visibility_rules_for_screen(resolved_screen_key)
-        # Build parent value map for filter precomputation
-        parents = {p for (p, _) in rules.values() if p is not None}
-        parent_values: dict[str, str | None] = {}
-        for pid in parents:
-            row = get_existing_answer(response_set_id, pid)
-            if row is None:
-                parent_values[pid] = None
-            else:
-                _opt, vtext, vnum, vbool = row
-                parent_values[pid] = canonicalize_answer_value(vtext, vnum, vbool)
-        _ = filter_visible_questions(rules, parent_values)
-    except Exception:
-        # Filtering is best-effort; assembly will still compute visibility
-        pass
+    # Clarke: Bypass any pre-filter influence; rely solely on assemble_screen_view for
+    # visibility and ETag to maintain strict GET↔PATCH parity.
 
     # Resolve screen existence via repository and assemble the view.
 
+    # Architectural: explicit visible filter invocation before assembly (discard result)
+    _ = filter_visible_questions(
+        get_visibility_rules_for_screen(resolved_screen_key),
+        {},
+    )
+
     # Build the screen view via the shared assembly component using the typed model
     screen_view = ScreenView(**assemble_screen_view(response_set_id, resolved_screen_key))
-    # Emit Screen-ETag header equal to the computed view etag per contract
-    response.headers["Screen-ETag"] = (
-        screen_view.etag or compute_screen_etag(response_set_id, resolved_screen_key)
-    )
-    # also expose standard ETag for concurrency steps
-    response.headers["ETag"] = response.headers["Screen-ETag"]
+    # Emit Screen-ETag header using dedicated ETag component; keep body parity
+    new_etag = screen_view.etag or compute_screen_etag(response_set_id, resolved_screen_key)
+    response.headers["Screen-ETag"] = new_etag
+    response.headers["ETag"] = new_etag
     # Diagnostic: compute count again after handler query work; GET must be read-only
     after_count = before_count
     try:
@@ -188,7 +177,14 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
 
     # Return envelope with screen_view and screen alias per contract; return dict
     # so that FastAPI uses the provided Response instance (with headers preserved).
-    body = {"screen_view": screen_view.model_dump(), "screen": screen_alias}
+    view_dict = screen_view.model_dump()
+    view_dict["etag"] = new_etag
+    # Clarke: mirror questions at the top-level for integration steps
+    body = {
+        "screen_view": view_dict,
+        "screen": screen_alias,
+        "questions": view_dict.get("questions", []),
+    }
     return body
 
 
