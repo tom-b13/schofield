@@ -146,6 +146,37 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
         )
     except Exception:
         pass
+    # Final hydration pass (Clarke directive): after initial visible_ids compute,
+    # re-probe repository for any parents still None to catch immediate writes,
+    # then recompute visible_ids if any parent value changed.
+    try:
+        changed = False
+        for pid in list(parents):
+            pid_str = str(pid)
+            if parent_values.get(pid_str) is None:
+                row4 = get_existing_answer(response_set_id, pid_str)
+                if row4 is not None:
+                    _opt4, vtext4, vnum4, vbool4 = row4
+                    cv4 = canonicalize_answer_value(vtext4, vnum4, vbool4)
+                    new_val = (str(cv4) if cv4 is not None else None)
+                    if new_val is not None:
+                        parent_values[pid_str] = new_val
+                        changed = True
+        if changed:
+            visible_ids = {str(x) for x in compute_visible_set(visibility_rules, parent_values)}
+            try:
+                logger.info(
+                    "screen_visible_calc_refresh rs_id=%s screen_key=%s parent_canon=%s visible_ids_cnt=%s",
+                    response_set_id,
+                    screen_key,
+                    parent_values,
+                    len(visible_ids),
+                )
+            except Exception:
+                pass
+    except Exception:
+        # Never fail GET path due to final hydration step
+        pass
 
     filtered: list[dict] = []
     for q in questions:

@@ -397,16 +397,24 @@ def autosave_answer(
         )
     except Exception:
         pass
-    # Also derive a pre-write set of questions that currently have an answer hydrated
-    # in the pre-assembled screen view. This serves as a fallback indicator for
-    # suppressed answers when repository probes are unavailable or fail.
+    # Also derive a pre-write set of questions that currently have an answer by
+    # probing the repository for ALL screen questions (Clarke directive). This
+    # avoids relying solely on the pre-assembled screen_view answers, ensuring
+    # suppressed detection is comprehensive.
     try:
-        _questions_pre = getattr(screen_view, "questions", []) or []
         answered_pre: set[str] = set()
-        for _q in _questions_pre:
-            if isinstance(_q, dict) and _q.get("question_id"):
-                if _q.get("answer") is not None:
-                    answered_pre.add(str(_q.get("question_id")))
+        for q in (list_questions_for_screen(screen_key) or []):
+            try:
+                qid = str(q.get("question_id")) if isinstance(q, dict) else str(q)
+            except Exception:
+                continue
+            try:
+                row = get_existing_answer(response_set_id, qid)
+                if row is not None:
+                    answered_pre.add(qid)
+            except Exception:
+                # Ignore repository probe failures for answered_pre computation
+                continue
     except Exception:
         answered_pre = set()
     # Log pre-image visible sets in both native and string forms
@@ -622,6 +630,21 @@ def autosave_answer(
                 # Ignore repository errors for suppressed classification
                 continue
         suppressed_ids = sorted(pre_suppressed | repo_suppressed)
+        # Clarke directive: if no suppressed were detected by either pre-image
+        # or repository probes but the toggled question is a parent whose value
+        # changed to a non-matching state, conservatively suppress all direct
+        # children that are now hidden.
+        try:
+            if (not suppressed_ids) and (str(question_id) in parents):
+                old_val = parent_value_pre.get(str(question_id))
+                new_val = parent_value_post.get(str(question_id))
+                if old_val != new_val:
+                    child_ids = [str(cid) for cid, (pid, _vis) in rules.items() if str(pid) == str(question_id)]
+                    nh_ids_set = set(now_hidden_ids or [])
+                    suppressed_ids = sorted([cid for cid in child_ids if cid in nh_ids_set])
+        except Exception:
+            # Fallback must not affect success path
+            pass
         # Clarke: expose structured saved result (question_id, state_version)
         from app.logic.repository_answers import get_screen_version
         try:
@@ -1075,6 +1098,18 @@ def autosave_answer(
         except Exception:
             continue
     suppressed_ids = sorted(pre_suppressed | repo_suppressed)
+    # Clarke directive: if still empty but parent flipped to a non-matching
+    # value, conservatively include all direct children that are now hidden.
+    try:
+        if (not suppressed_ids) and (str(question_id) in parents):
+            old_val = parent_value_pre.get(str(question_id))
+            new_val = parent_value_post.get(str(question_id))
+            if old_val != new_val:
+                child_ids = [str(cid) for cid, (pid, _vis) in rules.items() if str(pid) == str(question_id)]
+                nh_ids_set = set(now_hidden_ids or [])
+                suppressed_ids = sorted([cid for cid in child_ids if cid in nh_ids_set])
+    except Exception:
+        pass
     body = {
         # Clarke: expose structured saved result returned by upsert
         "saved": (saved_result if 'saved_result' in locals() and isinstance(saved_result, dict) else {"question_id": str(question_id), "state_version": 0}),

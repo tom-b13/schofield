@@ -123,12 +123,8 @@ def get_existing_answer(response_set_id: str, question_id: str) -> tuple | None:
     # Clarke hardening: coerce composite key parts to strings once
     rs_id = str(response_set_id)
     q_id = str(question_id)
-    # Immediate-read path: consult in-memory fallback first to guarantee
-    # read-your-writes semantics within the same process during integration
-    # flows (Clarke directive).
-    inm_first = _INMEM_ANSWERS.get((rs_id, q_id))
-    if inm_first is not None:
-        return inm_first
+    # DB-first probe to guarantee external read-your-writes semantics across
+    # processes; fall back to in-memory only when DB lacks the row or errors.
     try:
         eng = get_engine()
         with eng.connect() as conn:
