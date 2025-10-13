@@ -27,20 +27,25 @@ def compute_visibility_delta(
     callable are allowed to propagate to preserve caller logging semantics.
     """
     def _coerce_id(item: Any) -> str | None:
-        # Defensive normalization: accept dicts with 'question' or 'question_id'
+        """Normalize various shapes to a question_id string.
+
+        Accepts dicts with 'question'/'question_id' (or nested), tuple/list first item,
+        and primitives. Trims whitespace and ignores empty/None values.
+        """
         try:
             if isinstance(item, dict):
-                return (
-                    item.get("question")
-                    or item.get("question_id")
-                    or (str(item.get("id")) if item.get("id") else None)
-                )
-            # tuples/lists: treat first element as id if it's a string-like
+                val = item.get("question") or item.get("question_id") or item.get("id")
+                # Handle nested dicts: {question: {id: ...}}
+                if isinstance(val, dict):
+                    val = val.get("question_id") or val.get("id")
+                return (str(val).strip() or None) if val is not None else None
             if isinstance(item, (list, tuple)) and item:
                 head = item[0]
-                return str(head)
-            # primitives
-            return str(item)
+                return (str(head).strip() or None) if head is not None else None
+            if item is None:
+                return None
+            sid = str(item).strip()
+            return sid or None
         except Exception:
             return None
 

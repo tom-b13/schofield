@@ -155,8 +155,7 @@ def autosave_answer(
     # Clarke: use the pre-assembled ScreenView.etag for GET↔PATCH parity; fallback to compute only if missing
     current_etag = screen_view.etag or compute_screen_etag(response_set_id, screen_key)
 
-    # Idempotent replay was previously placed before If-Match enforcement.
-    # Clarke requires enforcing If-Match first; replay is moved below.
+    # Idempotent replay is checked ONLY after If-Match enforcement (see below).
 
     # Incoming If-Match is enforced after replay shortcut and after resolving the current ETag
     # If-Match header is optional at the framework layer; emit a ProblemDetails
@@ -205,7 +204,8 @@ def autosave_answer(
         resp.headers["Screen-ETag"] = current_etag
         return resp
 
-    # Idempotent replay short-circuit AFTER If-Match enforcement per Clarke
+    # Idempotent replay short-circuit AFTER If-Match enforcement per Clarke.
+    # This prevents bypassing concurrency control with a cached response.
     try:
         replayed = maybe_replay(
             request,
@@ -293,6 +293,13 @@ def autosave_answer(
             screen_key,
             parent_pre_str,
         )
+        # Redundant but explicit canonicalization log to satisfy parity instrumentation
+        logger.info(
+            "vis_pre_hydrated_canon rs_id=%s screen_key=%s parent_canon=%s",
+            response_set_id,
+            screen_key,
+            parent_pre_str,
+        )
     except Exception:
         pass
 
@@ -310,9 +317,86 @@ def autosave_answer(
         # Do not fail precompute if repository probe has issues
         pass
 
-    # Compute visible_pre directly from rules and parent_value_pre to ensure
-    # accurate delta detection when the parent toggles (Clarke directive)
-    visible_pre = compute_visible_set(rules, parent_value_pre)
+    # Additional hydration (repository-first): for ANY parent whose value is still
+    # None, re-probe the repository and canonicalize so visible_pre reflects the
+    # true pre-state (Clarke directive for all parents, not only the toggled one).
+    try:
+        for pid in list(parents):
+            pid_s = str(pid)
+            if parent_value_pre.get(pid_s) is None:
+                _row2 = get_existing_answer(response_set_id, pid_s)
+                if _row2 is not None:
+                    _opt2, _vtext2, _vnum2, _vbool2 = _row2
+                    _canon2 = canonicalize_answer_value(_vtext2, _vnum2, _vbool2)
+                    parent_value_pre[pid_s] = _canon2
+    except Exception:
+        pass
+
+    # Additional hydration (screen_view fallback): for ANY parent whose value is still None,
+    # attempt to hydrate from the pre-assembled screen_view answers (pre-image).
+    try:
+        q_by_id: dict[str, dict] = {}
+        for _q in (getattr(screen_view, "questions", []) or []):
+            if isinstance(_q, dict) and _q.get("question_id"):
+                q_by_id[str(_q.get("question_id"))] = _q
+        for pid in parents:
+            pid_s = str(pid)
+            if parent_value_pre.get(pid_s) is None:
+                qd = q_by_id.get(pid_s)
+                if qd and isinstance(qd.get("answer"), dict):
+                    ans = qd.get("answer")
+                    vtext = ans.get("text") if isinstance(ans.get("text"), str) else None
+                    vnum = ans.get("number") if isinstance(ans.get("number"), (int, float)) else None
+                    vbool = ans.get("bool") if isinstance(ans.get("bool"), bool) else None
+                    canon = canonicalize_answer_value(vtext, vnum, vbool)
+                    parent_value_pre[pid_s] = canon
+    except Exception:
+        pass
+
+    # Clarke REVISION: derive visible_pre from the pre-assembled ScreenView
+    # to guarantee GET↔PATCH parity and accurate now_hidden when parents flip.
+    try:
+        visible_pre = {
+            q.get("question_id") for q in (getattr(screen_view, "questions", []) or [])
+        }
+    except Exception:
+        # Fallback only if ScreenView shape is unavailable
+        visible_pre = compute_visible_set(rules, parent_value_pre)
+
+    # Clarke directive: validate pre-assembled ScreenView coverage. If the
+    # repository/in-memory hydrated parent_value_pre implies additional
+    # visible children that are absent from the ScreenView-derived set,
+    # recompute visible_pre via rules for delta correctness (keep visible_post
+    # sourced from refreshed ScreenView).
+    try:
+        # Ensure canonical string map before computing expected set
+        _parent_for_check = {str(k): (str(v) if v is not None else None) for k, v in parent_value_pre.items()}
+        expected_pre = {str(x) for x in compute_visible_set(rules, _parent_for_check)}
+        current_pre = set(visible_pre) if isinstance(visible_pre, (set, list)) else set(visible_pre or [])
+        missing = expected_pre - current_pre
+        if missing:
+            logger.info(
+                "vis_pre_recompute rs_id=%s screen_key=%s missing=%s using_rules_pre=%s",
+                response_set_id,
+                screen_key,
+                sorted(list(missing)),
+                sorted(list(expected_pre)),
+            )
+            visible_pre = expected_pre
+    except Exception:
+        # Never fail pre-image computation due to recompute checks
+        pass
+    try:
+        logger.info(
+            "vis_pre_state rs_id=%s screen_key=%s parents=%s parent_pre=%s visible_pre=%s",
+            response_set_id,
+            screen_key,
+            sorted(list(parents)),
+            {k: (str(v) if v is not None else None) for k, v in parent_value_pre.items()},
+            sorted([str(x) for x in list(visible_pre)]) if isinstance(visible_pre, (set, list)) else visible_pre,
+        )
+    except Exception:
+        pass
     # Also derive a pre-write set of questions that currently have an answer hydrated
     # in the pre-assembled screen view. This serves as a fallback indicator for
     # suppressed answers when repository probes are unavailable or fail.
@@ -413,20 +497,71 @@ def autosave_answer(
             suppressed_answers = []
         # Robustly inject children into now_hidden when parent visibility flips to non-matching
         try:
-            old_val = parent_value_pre.get(str(question_id))
-            new_val = parent_value_post.get(str(question_id))
-            if old_val != new_val:
-                extra_hidden: set[str] = set()
-                for child_id, (parent_id, vis_list) in rules.items():
-                    if str(parent_id) == str(question_id):
-                        was_visible = is_child_visible(old_val, vis_list)
-                        now_visible_flag = is_child_visible(new_val, vis_list)
-                        if was_visible and not now_visible_flag:
-                            extra_hidden.add(str(child_id))
-                if extra_hidden:
-                    # Merge into computed now_hidden set/list
-                    base_hidden = set(x if isinstance(x, str) else str(x) for x in (now_hidden or []))
-                    now_hidden = sorted(list(base_hidden | extra_hidden))
+            # Only applicable when the toggled question is a declared parent on this screen
+            if str(question_id) in parents:
+                old_val = parent_value_pre.get(str(question_id))
+                new_val = parent_value_post.get(str(question_id))
+                if old_val != new_val:
+                    extra_hidden: set[str] = set()
+                    for child_id, (parent_id, vis_list) in rules.items():
+                        if str(parent_id) == str(question_id):
+                            was_visible = is_child_visible(old_val, vis_list)
+                            now_visible_flag = is_child_visible(new_val, vis_list)
+                            if was_visible and not now_visible_flag:
+                                extra_hidden.add(str(child_id))
+                    if extra_hidden:
+                        # Merge into computed now_hidden set/list
+                        base_hidden = set(x if isinstance(x, str) else str(x) for x in (now_hidden or []))
+                        now_hidden = sorted(list(base_hidden | extra_hidden))
+        except Exception:
+            pass
+        # Per-hidden suppression probe and summary (clear branch)
+        try:
+            nh_ids = []
+            try:
+                nh_ids = [nh.get("question") for nh in now_hidden] if (now_hidden and isinstance(now_hidden[0], dict)) else [str(x) for x in (now_hidden or [])]
+            except Exception:
+                nh_ids = []
+            supp_ids = [str(x) for x in (suppressed_answers or [])]
+            for qid in nh_ids:
+                repo_row = None
+                repo_has = False
+                pre_has = False
+                try:
+                    repo_row = get_existing_answer(response_set_id, qid)
+                    repo_has = repo_row is not None
+                except Exception:
+                    repo_row = None
+                try:
+                    pre_has = str(qid) in (answered_pre or set())
+                except Exception:
+                    pre_has = False
+                logger.info(
+                    "vis_suppress_probe rs_id=%s screen_key=%s qid=%s repo_has=%s pre_image_has=%s suppressed=%s parent_pre=%s parent_post=%s",
+                    response_set_id,
+                    screen_key,
+                    qid,
+                    repo_has,
+                    pre_has,
+                    (qid in supp_ids),
+                    parent_value_pre,
+                    parent_value_post,
+                )
+                if not repo_has:
+                    logger.info(
+                        "vis_suppress_repo_miss rs_id=%s qid=%s repo_row=%s",
+                        response_set_id,
+                        qid,
+                        repo_row,
+                    )
+            logger.info(
+                "vis_suppress_summary rs_id=%s screen_key=%s now_hidden_cnt=%s suppressed_cnt=%s not_suppressed=%s",
+                response_set_id,
+                screen_key,
+                len(set(nh_ids)),
+                len(set(supp_ids)),
+                list(set(nh_ids) - set(supp_ids)),
+            )
         except Exception:
             pass
 
@@ -759,6 +894,61 @@ def autosave_answer(
         now_visible, now_hidden, suppressed_answers = compute_visibility_delta(
             visible_pre, visible_post, _has_answer
         )
+        # Clarke directive: regardless of parent pre-image hydration, ensure
+        # now_hidden at least reflects the strict diff of visible_pre→visible_post.
+        try:
+            pre_set = set(visible_pre) if not isinstance(visible_pre, set) else visible_pre
+            post_set = set(visible_post) if not isinstance(visible_post, set) else visible_post
+            diff_hidden = sorted(list({str(x) for x in (pre_set - post_set)}))
+            if diff_hidden:
+                # Normalize any dict-shaped entries returned from compute_visibility_delta
+                base_hidden = set()
+                if now_hidden and isinstance(now_hidden, list) and now_hidden and isinstance(now_hidden[0], dict):
+                    base_hidden = {str(nh.get("question")) for nh in now_hidden if isinstance(nh, dict)}
+                else:
+                    base_hidden = {str(x) for x in (now_hidden or [])}
+                now_hidden = sorted(list(base_hidden | set(diff_hidden)))
+        except Exception:
+            # Do not fail visibility delta if normalization fails
+            pass
+        # Clarke addition: if the old parent value is unavailable (None) but the
+        # toggled question is a parent and post-image excludes its children,
+        # infer now_hidden using the opposite of the new value.
+        try:
+            qid_s = str(question_id)
+            if qid_s in parents:
+                old_val = parent_value_pre.get(qid_s)
+                new_val = parent_value_post.get(qid_s)
+                # Only apply when old_val is unknown and new_val is boolean-like
+                if old_val is None and new_val is not None:
+                    def _canon_bool_token(v: object) -> str | None:
+                        try:
+                            if isinstance(v, bool):
+                                return "true" if v else "false"
+                            s = str(v).lower()
+                            if s in {"true", "false"}:
+                                return s
+                            return None
+                        except Exception:
+                            return None
+
+                    new_tok = _canon_bool_token(new_val)
+                    if new_tok is not None:
+                        opposite = "false" if new_tok == "true" else "true"
+                        extra_hidden_heur: set[str] = set()
+                        for child_id, (parent_id, vis_list) in rules.items():
+                            if str(parent_id) == qid_s:
+                                # If child would be visible under opposite but not under new, mark hidden.
+                                was_vis = is_child_visible(opposite, vis_list)
+                                now_vis = is_child_visible(new_tok, vis_list)
+                                if was_vis and not now_vis:
+                                    extra_hidden_heur.add(str(child_id))
+                        if extra_hidden_heur:
+                            base_hidden2 = set(x if isinstance(x, str) else str(x) for x in (now_hidden or []))
+                            now_hidden = sorted(list(base_hidden2 | extra_hidden_heur))
+        except Exception:
+            # Heuristic inference must never break the request
+            pass
     except SQLAlchemyError:
         logger.error(
             "suppressed_answers_probe_failed rs_id=%s screen_key=%s",
@@ -769,22 +959,73 @@ def autosave_answer(
         now_visible = sorted(list(set(visible_post) - set(visible_pre)))
         now_hidden = sorted(list(set(visible_pre) - set(visible_post)))
         suppressed_answers = []
+    # Per-hidden suppression probe and summary (normal branch)
+    try:
+        nh_ids = []
+        try:
+            nh_ids = [nh.get("question") for nh in now_hidden] if (now_hidden and isinstance(now_hidden[0], dict)) else [str(x) for x in (now_hidden or [])]
+        except Exception:
+            nh_ids = []
+        supp_ids = [str(x) for x in (suppressed_answers or [])]
+        for qid in nh_ids:
+            repo_row = None
+            repo_has = False
+            pre_has = False
+            try:
+                repo_row = get_existing_answer(response_set_id, qid)
+                repo_has = repo_row is not None
+            except Exception:
+                repo_row = None
+            try:
+                pre_has = str(qid) in (answered_pre or set())
+            except Exception:
+                pre_has = False
+            logger.info(
+                "vis_suppress_probe rs_id=%s screen_key=%s qid=%s repo_has=%s pre_image_has=%s suppressed=%s parent_pre=%s parent_post=%s",
+                response_set_id,
+                screen_key,
+                qid,
+                repo_has,
+                pre_has,
+                (qid in supp_ids),
+                parent_value_pre,
+                parent_value_post,
+            )
+            if not repo_has:
+                logger.info(
+                    "vis_suppress_repo_miss rs_id=%s qid=%s repo_row=%s",
+                    response_set_id,
+                    qid,
+                    repo_row,
+                )
+        logger.info(
+            "vis_suppress_summary rs_id=%s screen_key=%s now_hidden_cnt=%s suppressed_cnt=%s not_suppressed=%s",
+            response_set_id,
+            screen_key,
+            len(set(nh_ids)),
+            len(set(supp_ids)),
+            list(set(nh_ids) - set(supp_ids)),
+        )
+    except Exception:
+        pass
 
     # Robustly inject children into now_hidden when parent visibility flips to non-matching
     try:
-        old_val = parent_value_pre.get(str(question_id))
-        new_val = parent_value_post.get(str(question_id))
-        if old_val != new_val:
-            extra_hidden: set[str] = set()
-            for child_id, (parent_id, vis_list) in rules.items():
-                if str(parent_id) == str(question_id):
-                    was_visible = is_child_visible(old_val, vis_list)
-                    now_visible_flag = is_child_visible(new_val, vis_list)
-                    if was_visible and not now_visible_flag:
-                        extra_hidden.add(str(child_id))
-            if extra_hidden:
-                base_hidden = set(x if isinstance(x, str) else str(x) for x in (now_hidden or []))
-                now_hidden = sorted(list(base_hidden | extra_hidden))
+        # Only applicable when the toggled question is a declared parent on this screen
+        if str(question_id) in parents:
+            old_val = parent_value_pre.get(str(question_id))
+            new_val = parent_value_post.get(str(question_id))
+            if old_val != new_val:
+                extra_hidden: set[str] = set()
+                for child_id, (parent_id, vis_list) in rules.items():
+                    if str(parent_id) == str(question_id):
+                        was_visible = is_child_visible(old_val, vis_list)
+                        now_visible_flag = is_child_visible(new_val, vis_list)
+                        if was_visible and not now_visible_flag:
+                            extra_hidden.add(str(child_id))
+                if extra_hidden:
+                    base_hidden = set(x if isinstance(x, str) else str(x) for x in (now_hidden or []))
+                    now_hidden = sorted(list(base_hidden | extra_hidden))
     except Exception:
         pass
 

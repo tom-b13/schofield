@@ -39,10 +39,28 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
     """
     questions = list_questions_for_screen(screen_key)
     visibility_rules = get_visibility_rules_for_screen(screen_key)
+    # Log parsed rules for this screen (parent and visible_if list per child)
+    try:
+        rules_dump = {
+            str(k): {
+                "parent": (str(p) if p else None),
+                "visible_if": [str(x) for x in (v or [])],
+            }
+            for k, (p, v) in visibility_rules.items()
+        }
+        logger.info(
+            "screen_rules rs_id=%s screen_key=%s rules=%s",
+            response_set_id,
+            screen_key,
+            rules_dump,
+        )
+    except Exception:
+        pass
 
     # Precompute parent values once, then use compute_visible_set for consistency
     try:
-        parents = {p for (p, _) in visibility_rules.values() if p is not None}
+        # Use string parent identifiers up front to ensure consistent keying
+        parents = {str(p) for (p, _) in visibility_rules.values() if p is not None}
     except Exception:
         parents = set()
     parent_values: dict[str, str | None] = {}
@@ -98,8 +116,36 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
 
     # Ensure parent_values map uses string keys matching rules (Clarke directive)
     parent_values = {str(k): v for k, v in parent_values.items()}
+    # And ensure all non-None values are string-cast for equality checks
+    parent_values = {k: (str(v) if v is not None else None) for k, v in parent_values.items()}
+    # Idempotent canonicalization pass to reinforce GET↔PATCH parity before computing visibility
+    parent_values = {str(k): (str(v) if v is not None else None) for k, v in parent_values.items()}
+    # Final fallback hydration: if any parent remains None, perform a last
+    # repository probe and canonicalize booleans/numbers/text before filtering.
+    try:
+        for pid in list(parents):
+            pid_str = str(pid)
+            if parent_values.get(pid_str) is None:
+                row3 = get_existing_answer(response_set_id, pid_str)
+                if row3 is not None:
+                    _opt3, vtext3, vnum3, vbool3 = row3
+                    cv3 = canonicalize_answer_value(vtext3, vnum3, vbool3)
+                    parent_values[pid_str] = (str(cv3) if cv3 is not None else None)
+    except Exception:
+        # Never fail visibility computation due to fallback hydration issues
+        pass
     # Ensure visible_ids is a set of string question_ids derived from compute_visible_set
     visible_ids = {str(x) for x in compute_visible_set(visibility_rules, parent_values)}
+    try:
+        logger.info(
+            "screen_visible_calc rs_id=%s screen_key=%s parent_canon=%s visible_ids_cnt=%s",
+            response_set_id,
+            screen_key,
+            parent_values,
+            len(visible_ids),
+        )
+    except Exception:
+        pass
 
     filtered: list[dict] = []
     for q in questions:
@@ -136,10 +182,18 @@ def assemble_screen_view(response_set_id: str, screen_key: str) -> Dict[str, Any
     # Final consistency check: included questions must be a subset of visible_ids
     try:
         included_set = {item.get("question_id") for item in filtered}
-        assert included_set <= set(visible_ids)
+        if not (included_set <= set(visible_ids)):
+            logger.warning(
+                "screen_visible_mismatch rs_id=%s screen_key=%s included_minus_visible=%s visible_minus_included=%s",
+                response_set_id,
+                screen_key,
+                list(included_set - set(visible_ids)),
+                list(set(visible_ids) - included_set),
+            )
     except Exception:
-        # Do not raise in production path; proceed with best-effort set
         pass
+    # Deterministic enforcement: included must reflect visible_ids exactly
+    filtered = [q for q in filtered if q.get("question_id") in visible_ids]
 
     etag = compute_screen_etag(response_set_id, screen_key)
     # Instrumentation: log final included question_ids for the screen

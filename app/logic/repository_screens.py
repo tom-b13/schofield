@@ -7,12 +7,27 @@ and response counts to keep route handlers free of persistence details.
 from __future__ import annotations
 
 from typing import Any, Dict, List
+import logging
+import sys
 from uuid import UUID
 
 from sqlalchemy import text as sql_text
 from sqlalchemy.exc import ProgrammingError
 
 from app.db.base import get_engine
+
+logger = logging.getLogger(__name__)
+# Ensure module INFO logs are emitted to stdout during tests/integration runs
+try:
+    if not logger.handlers:
+        _handler = logging.StreamHandler(stream=sys.stdout)
+        _handler.setLevel(logging.INFO)
+        _handler.setFormatter(logging.Formatter('%(levelname)s:%(name)s:%(message)s'))
+        logger.addHandler(_handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+except Exception:
+    pass
 
 
 def get_screen_metadata(screen_id: str) -> tuple[str, str] | None:
@@ -329,6 +344,18 @@ def get_visibility_rules_for_screen(screen_key: str) -> dict[str, tuple[str | No
                         # Leave as None when not resolvable; caller will treat as base question
                         parent_qid = None
         vis_list = _to_list(row[2])
+        try:
+            if parent_qid:
+                logger.info(
+                    "rules_parse screen_key=%s qid=%s parent=%s raw_visible_if=%s parsed=%s",
+                    screen_key,
+                    qid,
+                    parent_qid,
+                    row[2],
+                    vis_list,
+                )
+        except Exception:
+            pass
         out[qid] = (parent_qid, vis_list)
     return out
 

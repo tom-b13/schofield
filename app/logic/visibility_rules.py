@@ -51,7 +51,8 @@ def compute_visible_set(
         if parent_id is None:
             visible.add(qid)
             continue
-        pv = parent_values.get(parent_id)
+        # Clarke: ensure parent id is coerced to str for parent_values lookup
+        pv = parent_values.get(str(parent_id))
         if is_child_visible(pv, vis_list):
             visible.add(qid)
     return visible

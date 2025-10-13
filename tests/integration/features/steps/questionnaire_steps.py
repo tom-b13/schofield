@@ -1559,7 +1559,13 @@ def step_then_header_capture(context, var_name: str):
     headers = context.last_response.get("headers", {}) or {}
     val = _get_header_case_insensitive(headers, "ETag")
     assert isinstance(val, str) and val.strip(), "Expected non-empty ETag"
-    context.vars[var_name] = val
+    # Clarke instruction: normalize captured variable name by unescaping underscores
+    # so later interpolation resolves placeholders like {etag_v2} correctly.
+    try:
+        normalized_key = var_name.replace("\\_", "_")
+    except Exception:
+        normalized_key = var_name
+    context.vars[normalized_key] = val
 
 
 # ------------------

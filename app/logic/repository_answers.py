@@ -123,6 +123,12 @@ def get_existing_answer(response_set_id: str, question_id: str) -> tuple | None:
     # Clarke hardening: coerce composite key parts to strings once
     rs_id = str(response_set_id)
     q_id = str(question_id)
+    # Immediate-read path: consult in-memory fallback first to guarantee
+    # read-your-writes semantics within the same process during integration
+    # flows (Clarke directive).
+    inm_first = _INMEM_ANSWERS.get((rs_id, q_id))
+    if inm_first is not None:
+        return inm_first
     try:
         eng = get_engine()
         with eng.connect() as conn:
@@ -140,8 +146,23 @@ def get_existing_answer(response_set_id: str, question_id: str) -> tuple | None:
             opt, vtext, vnum, vbool, vjson = row
             # If only value_json is populated, parse into the first matching scalar slot
             if (opt is None) and (vtext is None) and (vnum is None) and (vbool is None) and (vjson is not None):
+                parsed = None
                 try:
-                    parsed = json.loads(vjson) if isinstance(vjson, (str, bytes)) else vjson
+                    if isinstance(vjson, (bytes, bytearray)):
+                        s = vjson.decode(errors="ignore")
+                    else:
+                        s = vjson if isinstance(vjson, str) else None
+                    if s is not None:
+                        s_trim = s.strip()
+                        lo = s_trim.lower()
+                        if lo in {"true", "false"}:
+                            parsed = (lo == "true")
+                        elif lo in {"null"}:
+                            parsed = None
+                        else:
+                            parsed = json.loads(s_trim)
+                    else:
+                        parsed = vjson
                 except Exception:
                     parsed = None
                 if isinstance(parsed, bool):
@@ -279,6 +300,10 @@ def upsert_answer(
                 exc_info=True,
             )
         # After successful commit and mirror, bump version for Screen-ETag computation
+        try:
+            logger.info("answers_write rs_id=%s q_id=%s path=%s", response_set_id, question_id, "db_ok")
+        except Exception:
+            pass
         screen_key = get_screen_key_for_question(question_id) or "profile"
         _bump_screen_version(response_set_id, screen_key)
         state_version = get_screen_version(response_set_id, screen_key)
@@ -341,6 +366,10 @@ def delete_answer(response_set_id: str, question_id: str) -> None:
         # Ensure subsequent Screen-ETag changes by bumping version after successful delete
         screen_key = get_screen_key_for_question(question_id) or "profile"
         _bump_screen_version(response_set_id, screen_key)
+        try:
+            logger.info("answers_delete rs_id=%s q_id=%s path=%s", response_set_id, question_id, "db_ok")
+        except Exception:
+            pass
     except Exception:
         logger.error(
             "delete_answer DB write failed rs_id=%s q_id=%s; falling back to in-memory",
@@ -351,6 +380,10 @@ def delete_answer(response_set_id: str, question_id: str) -> None:
         _INMEM_ANSWERS.pop((response_set_id, question_id), None)
         screen_key = get_screen_key_for_question(question_id) or "profile"
         _bump_screen_version(response_set_id, screen_key)
+        try:
+            logger.info("answers_delete rs_id=%s q_id=%s path=%s", response_set_id, question_id, "in_memory_fallback")
+        except Exception:
+            pass
 
 __all__ = [
     "get_screen_key_for_question",
