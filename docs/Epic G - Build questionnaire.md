@@ -4069,6 +4069,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.1  
 **Error Mode:** RUN_CREATE_ENTITY_DB_WRITE_FAILED
 
+---
+
 ## 7.3.2.2
 **Title:** Create screen problem+json encoding failure blocks finalisation and prevents STEP-2  
 **Purpose:** Verify that problem+json serialisation failure blocks finalisation of create and prevents the next step.  
@@ -4077,6 +4079,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-1 Create screen** finalisation raises, and not before. Assert **STEP-2 Rename screen and set position** is not invoked following the failure. Assert that error mode **RUN_PROBLEM_JSON_ENCODING_FAILED** is observed.  
 **AC-Ref:** 6.3.2.2  
 **Error Mode:** RUN_PROBLEM_JSON_ENCODING_FAILED
+
+---
 
 ## 7.3.2.3
 **Title:** Rename screen update failure halts STEP-2 and prevents STEP-3  
@@ -4087,6 +4091,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.3  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
 
+---
+
 ## 7.3.2.4
 **Title:** Reorder screens resequence computation failure halts STEP-2 and prevents STEP-3  
 **Purpose:** Verify that runtime resequencing computation failure halts rename/position and prevents question creation.  
@@ -4095,6 +4101,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-2 Rename screen and set position** finalisation raises, and not before. Assert **STEP-3 Create question** is not invoked following the failure. Assert that error mode **RUN_RESEQUENCE_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.4  
 **Error Mode:** RUN_RESEQUENCE_COMPUTE_FAILED
+
+---
 
 ## 7.3.2.5
 **Title:** Rename screen ETag computation failure blocks finalisation and prevents STEP-3  
@@ -4105,6 +4113,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.5  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
 
+---
+
 ## 7.3.2.6
 **Title:** Concurrency token generation failure blocks finalisation of STEP-2 and prevents STEP-3  
 **Purpose:** Verify that generating a concurrency token during STEP-2 fails and blocks the next step.  
@@ -4113,6 +4123,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-2 Rename screen and set position** finalisation raises, and not before. Assert **STEP-3 Create question** is not invoked following the failure. Assert that error mode **RUN_CONCURRENCY_TOKEN_GENERATION_FAILED** is observed.  
 **AC-Ref:** 6.3.2.6  
 **Error Mode:** RUN_CONCURRENCY_TOKEN_GENERATION_FAILED
+
+---
 
 ## 7.3.2.7
 **Title:** Create question write failure halts STEP-3 and prevents STEP-4  
@@ -4123,6 +4135,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.7  
 **Error Mode:** RUN_CREATE_ENTITY_DB_WRITE_FAILED
 
+---
+
 ## 7.3.2.8
 **Title:** Create question ETag computation failure blocks finalisation and prevents STEP-4  
 **Purpose:** Verify ETag compute failure blocks completion of question creation and prevents text update flow.  
@@ -4131,6 +4145,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-3 Create question** finalisation raises, and not before. Assert **STEP-4 Update question text** is not invoked following the failure. Assert that error mode **RUN_ETAG_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.8  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
+
+---
 
 ## 7.3.2.9
 **Title:** Idempotency backend unavailable halts STEP-3 and prevents STEP-4  
@@ -4141,6 +4157,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.9  
 **Error Mode:** RUN_IDEMPOTENCY_STORE_UNAVAILABLE
 
+---
+
 ## 7.3.2.10
 **Title:** Update question write failure halts STEP-4 and prevents STEP-5  
 **Purpose:** Verify DB update failure during question text update halts and prevents reorder.  
@@ -4149,6 +4167,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-4 Update question text** raises, and not before. Assert **STEP-5 Reorder questions within a screen** is not invoked following the failure. Assert that error mode **RUN_UPDATE_ENTITY_DB_WRITE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.10  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
+
+---
 
 ## 7.3.2.11
 **Title:** Update question ETag computation failure blocks finalisation and prevents STEP-5  
@@ -4159,6 +4179,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.11  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
 
+---
+
 ## 7.3.2.12
 **Title:** Concurrency token generation failure blocks finalisation of STEP-4 and prevents STEP-5  
 **Purpose:** Verify generating a new concurrency token fails and blocks reorder step.  
@@ -4167,6 +4189,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-4 Update question text** finalisation raises, and not before. Assert **STEP-5 Reorder questions within a screen** is not invoked following the failure. Assert that error mode **RUN_CONCURRENCY_TOKEN_GENERATION_FAILED** is observed.  
 **AC-Ref:** 6.3.2.12  
 **Error Mode:** RUN_CONCURRENCY_TOKEN_GENERATION_FAILED
+
+---
 
 ## 7.3.2.13
 **Title:** Reorder questions resequence computation failure halts STEP-5 and prevents STEP-6  
@@ -4177,6 +4201,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.13  
 **Error Mode:** RUN_RESEQUENCE_COMPUTE_FAILED
 
+---
+
 ## 7.3.2.14
 **Title:** Reorder questions sequence persist failure halts STEP-5 and prevents STEP-6  
 **Purpose:** Verify DB write failure persisting new question order halts reorder and prevents screen reordering.  
@@ -4185,6 +4211,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-5 Reorder questions within a screen** raises, and not before. Assert **STEP-6 Reorder screens** is not invoked following the failure. Assert that error mode **RUN_UPDATE_ENTITY_DB_WRITE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.14  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
+
+---
 
 ## 7.3.2.15
 **Title:** Reorder questions ETag computation failure blocks finalisation and prevents STEP-6  
@@ -4195,6 +4223,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.15  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
 
+---
+
 ## 7.3.2.16
 **Title:** Reorder screens persist failure halts STEP-6 and prevents STEP-7  
 **Purpose:** Verify DB write failure persisting screen order halts and prevents move.  
@@ -4203,6 +4233,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-6 Reorder screens** raises, and not before. Assert **STEP-7 Move question between screens** is not invoked following the failure. Assert that error mode **RUN_UPDATE_ENTITY_DB_WRITE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.16  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
+
+---
 
 ## 7.3.2.17
 **Title:** Reorder screens read failure halts STEP-6 and prevents STEP-7  
@@ -4213,6 +4245,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.17  
 **Error Mode:** RUN_RETRIEVE_ENTITY_DB_READ_FAILED
 
+---
+
 ## 7.3.2.18
 **Title:** Move question read failure halts STEP-7 and prevents STEP-8  
 **Purpose:** Verify read failure on source/target screens halts move and prevents setting parent.  
@@ -4221,6 +4255,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-7 Move question between screens** raises, and not before. Assert **STEP-8 Set conditional parent** is not invoked following the failure. Assert that error mode **RUN_RETRIEVE_ENTITY_DB_READ_FAILED** is observed.  
 **AC-Ref:** 6.3.2.18  
 **Error Mode:** RUN_RETRIEVE_ENTITY_DB_READ_FAILED
+
+---
 
 ## 7.3.2.19
 **Title:** Move question persist failure halts STEP-7 and prevents STEP-8  
@@ -4231,6 +4267,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.19  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
 
+---
+
 ## 7.3.2.20
 **Title:** Move question resequence computation failure halts STEP-7 and prevents STEP-8  
 **Purpose:** Verify resequencing failure on source or target screen halts move and prevents setting parent.  
@@ -4239,6 +4277,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-7 Move question between screens** raises, and not before. Assert **STEP-8 Set conditional parent** is not invoked following the failure. Assert that error mode **RUN_RESEQUENCE_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.20  
 **Error Mode:** RUN_RESEQUENCE_COMPUTE_FAILED
+
+---
 
 ## 7.3.2.21
 **Title:** Move question ETag computation failure blocks finalisation and prevents STEP-8  
@@ -4249,6 +4289,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.21  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
 
+---
+
 ## 7.3.2.22
 **Title:** Set conditional parent read failure halts STEP-8 and prevents STEP-9  
 **Purpose:** Verify read failure when fetching parent question halts and prevents clearing parent.  
@@ -4257,6 +4299,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-8 Set conditional parent** raises, and not before. Assert **STEP-9 Clear conditional parent** is not invoked following the failure. Assert that error mode **RUN_RETRIEVE_ENTITY_DB_READ_FAILED** is observed.  
 **AC-Ref:** 6.3.2.22  
 **Error Mode:** RUN_RETRIEVE_ENTITY_DB_READ_FAILED
+
+---
 
 ## 7.3.2.23
 **Title:** Set conditional parent persist failure halts STEP-8 and prevents STEP-9  
@@ -4267,6 +4311,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.23  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
 
+---
+
 ## 7.3.2.24
 **Title:** Set conditional parent ETag computation failure blocks finalisation and prevents STEP-9  
 **Purpose:** Verify ETag compute failure after setting parent blocks completion and prevents clearing flow.  
@@ -4275,6 +4321,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-8 Set conditional parent** finalisation raises, and not before. Assert **STEP-9 Clear conditional parent** is not invoked following the failure. Assert that error mode **RUN_ETAG_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.24  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
+
+---
 
 ## 7.3.2.25
 **Title:** Clear conditional parent persist failure halts STEP-9  
@@ -4285,6 +4333,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.25  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
 
+---
+
 ## 7.3.2.26
 **Title:** Clear conditional parent ETag computation failure blocks finalisation  
 **Purpose:** Verify ETag compute failure after clearing parent blocks completion.  
@@ -4293,6 +4343,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-9 Clear conditional parent** finalisation raises, and not before. Assert **STEP-1 Create screen** is not invoked within the same transaction context. Assert that error mode **RUN_ETAG_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.26  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
+
+---
 
 ## 7.3.2.27
 **Title:** Allocate first placeholder persist failure halts STEP-3A and prevents STEP-4  
@@ -4303,6 +4355,8 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.27  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
 
+---
+
 ## 7.3.2.28
 **Title:** Allocate first placeholder ETag computation failure blocks finalisation and prevents STEP-4  
 **Purpose:** Verify ETag compute failure after first placeholder allocation blocks completion and prevents text update flow.  
@@ -4311,6 +4365,8 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-3A Allocate first placeholder** finalisation raises, and not before. Assert **STEP-4 Update question text** is not invoked following the failure. Assert that error mode **RUN_ETAG_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.28  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
+
+---
 
 ## 7.3.2.29
 **Title:** Unidentified runtime error halts STEP-7 and prevents STEP-8  
