@@ -246,90 +246,30 @@ This story sits in the authoring domain and complements existing read and runtim
 * **STEP-8** Set conditional parent → U6, U5, E25, E26, E27, O3, N1, N5, N6
 * **STEP-9** Clear conditional parent → U5, E28, O3, N1
 
-# Input Fields
-
-For each field required as an effective input to this feature, complete the table with the following columns:
-
-Field – The exact name of the input. Use consistent naming with APIs, UI forms, or system references.
-
-Include inputs from three origins:
-
-* provided – supplied by the caller at the entrypoint
-* acquired – fetched internally by this feature from outside its scope (for example file system, environment, network) and then consumed as input
-* returned – data produced by a call to an external function or service that is outside this spec’s scope, which then becomes input to downstream steps
-
-If (and only if) an input is a declared structured object with a known or proposed schema, list its relevant declared nested fields as separate rows using dot or bracket notation (for example parent.child, parent.items\[].subfield). This applies to structured inputs of any origin.
-
-Do not infer or invent nested fields for inputs that are atomic (for example string, number, boolean, date, file) or for objects without a declared or proposed schema.
-
-Description – A short, plain-language explanation of what the field represents. Avoid technical jargon.
-
-Type – The data type (for example string, integer, boolean, date, array, object).
-
-Schema / Reference – Always populate this.
-
-Prefer an authoritative reference: OpenAPI \$ref (for example #/components/schemas/UserId) or a JSON Schema URI or fragment.
-
-If no schema exists, propose a provisional schema name and path that can later be formalised (for example #/components/schemas/InputObject, #/components/schemas/RequestContext).
-
-For structured inputs (known or proposed) list nested rows and reflect their actual or proposed nested path here as well (for example #/components/schemas/RequestContext/properties/request\_id).
-
-For atomic inputs, provide a single schema reference (actual or provisional) and do not invent nested property paths.
-
-Notes – Capture explanatory details, business context, or guidance that is helpful but not enforceable as a requirement. Examples include optional defaults, usage examples, or domain clarifications. If there is no additional context, write “None.” Do not place constraints or validity rules here; all requirements must go in Pre-Conditions.
-
-Pre-Conditions – List every condition that must hold true before this input can be processed. Write each condition as a clear clause using a verb and object, and separate clauses with semicolons ;.
-Examples:
-
-* provided: “Field is required and must be provided”; “Value must conform to ISO 8601 date format”
-* acquired: “Resource must exist and be readable by the process”; “Document must parse as valid JSON”; “Reference must resolve to a known identifier”
-* returned: “Call must complete without error”; “Return value must match the declared schema”; “Return value must be treated as immutable within this step”
-  These conditions will drive the Pre-Condition Error Modes.
-
-Origin – Use exactly one of: provided, acquired, returned.
-
-* provided: data supplied by the caller at the entrypoint
-* acquired: data fetched internally from outside this spec’s scope and then used as input
-* returned: data produced by an out-of-scope call that is subsequently consumed as input
-
-Guidelines
-
-Scope: Include all effective inputs consumed by this feature, whether provided, acquired, or returned. Do not include system-generated identifiers, derived values created inside this feature, intermediate artefacts not consumed as inputs, or outputs.
-
-Granularity: Expand nested rows only for inputs that are declared or proposed structured objects. Do not expand atomic types or any input lacking a declared or proposed schema for subfields.
-
-Cover every input necessary for the feature to operate.
-
-Be precise and unambiguous. One row per field.
-
-Use semicolons ; to separate pre-conditions (one clause per condition).
-
-Each clause must be at least four words and include the subject and the required state or action.
-
-Do not duplicate conditions between Notes and Pre-Conditions. All enforceable requirements belong in Pre-Conditions. Notes are strictly for contextual or descriptive information.
-
-If no input is required, write “None.”
-
-Additional constraints for consistency and testability:
-
-* Type vocabulary for resources: for filesystem and code resources, choose Type from this set only: path, file (yaml|json|python), directory, directory of files (json|python), module, dict, list\[type]. Do not use generic types like string or array for these resources.
-* Origin gating: use returned only when the value is produced by a named external call outside this spec. When Origin is returned, include “Provider: <function or service name>” in Notes and reference the provider’s declared return contract in Schema / Reference. Otherwise classify as acquired.
-* Concrete locator requirement: for acquired resources, the Field value must be a project-relative path or a glob pattern based on a configured base path (for example routes/langgraph\_routing.yaml, schemas/\*\*/\*.json). Do not use absolute OS paths or generic labels.
-* Pre-Condition scope: Pre-Conditions must state verifiable properties of the input itself. Do not include system behaviours, process steps, or goals.
-* Resource-specific Pre-Condition templates:
-
-  * file: “File exists and is readable; Content parses as valid \<yaml|json>; Content conforms to the referenced schema”
-  * directory of files (json): “Directory exists and is readable; Each file parses as valid JSON; Each schema includes a unique \$id; Each \$ref resolves to an existing definition”
-  * directory of files (python): “Directory exists and is readable; Each file is importable as a module; Relative imports are not present; Each module exposes required symbols”
-  * module: “Module is importable; Relative imports are not present; Module exposes callable <name>(state: dict) -> dict”
-* Precision requirement: avoid vague phrases such as “defined correctly” or “adheres to conventions”. Write specific, testable conditions.
-* Inclusion rule for derived artefacts: include a derived artefact as an input only if it crosses a boundary and is consumed as an input by a later step within this spec. Do not include logs, error objects, metrics, or internal caches unless they are provided by the caller or explicitly returned by a named external provider.
-* Override pairing: when an acquired resource can be overridden by configuration (for example an environment variable or function argument), also include a corresponding provided input row for that override.
-* Schema reference rule: always prefer an authoritative schema URI. If none exists, use a provisional name. For structured objects, include sub-rows for declared fields with dot or bracket paths.
-
-Output format: Produce a plain Markdown table only, with columns exactly: Field, Description, Type, Schema / Reference, Notes, Pre-Conditions, Origin. Do not include code fences, language tags, or section headings around the table.
-
-Reuse existing schemas and follow the same schema structure from the schemas folder in the attached codebase
+| Field                                              | Description                                                                       | Type                   | Schema / Reference                        | Notes                                                                         | Pre-Conditions                                                                                                                                                 | Origin   |
+| -------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| questionnaire_id                                   | Identifier of the questionnaire being authored.                                   | string                 | schemas/QuestionnaireId.schema.json       | None.                                                                         | Field is required and must be provided; Value must match the declared schema; Identifier must resolve to an existing questionnaire.                            | provided |
+| screen_id                                          | Identifier of the screen to update, reorder, or as the source for a move.         | string                 | schemas/ScreenId.schema.json              | None.                                                                         | Field is required when targeting a specific screen; Value must match the declared schema; Identifier must resolve to an existing screen in the questionnaire.  | provided |
+| target_screen_id                                   | Identifier of the destination screen when moving a question.                      | string                 | schemas/ScreenId.schema.json              | None.                                                                         | Field is required when moving a question; Value must match the declared schema; Identifier must resolve to an existing screen in the same questionnaire.       | provided |
+| question_id                                        | Identifier of the question to update, reorder, move, or link.                     | string                 | schemas/question_id.schema.json           | None.                                                                         | Field is required when operating on a question; Value must match the declared schema; Identifier must resolve to an existing question in the questionnaire.    | provided |
+| title                                              | Title to create or rename a screen.                                               | string                 | schemas/ScreenTitle.schema.json           | Provisional.                                                                  | Field is required for create or rename operations; Value must be a non-empty string; Value must be unique within the questionnaire.                            | provided |
+| question_text                                      | Human-readable text of the question.                                              | string                 | schemas/QuestionText.schema.json          | Provisional.                                                                  | Field is required for question creation and updates; Value must be a non-empty string; Value must match the declared schema.                                   | provided |
+| hint                                               | Short input hint displayed with the question.                                     | string                 | schemas/QuestionHint.schema.json          | Provisional.                                                                  | Field is optional and may be omitted; When provided, value must be a string; Value must match the declared schema.                                             | provided |
+| tooltip                                            | Longer tooltip or help text shown for the question.                               | string                 | schemas/QuestionTooltip.schema.json       | Provisional.                                                                  | Field is optional and may be omitted; When provided, value must be a string; Value must match the declared schema.                                             | provided |
+| proposed_position                                  | Proposed position for a screen within the questionnaire.                          | integer                | schemas/ProposedPosition.schema.json      | Provisional.                                                                  | Field is optional and may be omitted; When provided, value must be an integer ≥ 1; Value must not exceed current screen count plus one.                        | provided |
+| proposed_question_order                            | Proposed position for a question within a screen.                                 | integer                | schemas/ProposedQuestionOrder.schema.json | Provisional.                                                                  | Field is optional and may be omitted; When provided, value must be an integer ≥ 1; Value must not exceed current question count plus one.                      | provided |
+| parent_question_id                                 | Identifier of the parent question for conditional visibility.                     | string                 | schemas/question_id.schema.json           | Reuses QuestionId.                                                            | Field is required when setting a visibility rule; Value must match the declared schema; Identifier must resolve to an existing question that is not the child. | provided |
+| visible_if_value                                   | Value(s) that must equal the parent’s canonical value for visibility.             | string or list[string] | schemas/VisibleIfValue.schema.json        | Provisional; for multiple allowed values, supply a list of canonical strings. | Field is required when setting a visibility rule; Value must be a string or list of strings; Values must belong to the parent’s canonical domain.              | provided |
+| request_headers.idempotency_key                    | Opaque key to de-duplicate create requests.                                       | string                 | schemas/IdempotencyKey.schema.json        | Provisional.                                                                  | Header is optional and may be omitted; When provided, value must be an opaque string; Value must match the declared schema.                                    | provided |
+| request_headers.if_match                           | ETag value for optimistic concurrency on PATCH.                                   | string                 | schemas/ETag.schema.json                  | Provisional.                                                                  | Header is required on PATCH requests; Value must equal the latest entity ETag known to the caller; Value must match the declared schema.                       | provided |
+| screens[].screen_id                                | Screen identifier used during reindexing.                                         | string                 | schemas/ScreenId.schema.json              | Reuses ScreenId.                                                              | Resource must exist and be readable by the process; Identifier must resolve to an existing screen; Value must match the declared schema.                       | acquired |
+| screens[].screen_order                             | Current stored order for each screen used to recalculate a contiguous sequence.   | integer                | schemas/ScreenOrder.schema.json           | Provisional.                                                                  | Resource must exist and be readable by the process; Value must be an integer ≥ 1; Value must match the declared schema.                                        | acquired |
+| questions[].question_id                            | Question identifier used during reindexing.                                       | string                 | schemas/question_id.schema.json           | Reuses QuestionId.                                                            | Resource must exist and be readable by the process; Identifier must resolve to an existing question; Value must match the declared schema.                     | acquired |
+| questions[].question_order                         | Current stored order for each question used to recalculate a contiguous sequence. | integer                | schemas/QuestionOrder.schema.json         | Provisional.                                                                  | Resource must exist and be readable by the process; Value must be an integer ≥ 1; Value must match the declared schema.                                        | acquired |
+| parent_question.question_id                        | Loaded parent question identifier used for rule validation.                       | string                 | schemas/question_id.schema.json           | Reuses QuestionId.                                                            | Resource must exist and be readable by the process; Identifier must match the provided parent_question_id; Value must match the declared schema.               | acquired |
+| parent_question.answer_kind                        | Loaded parent question type used for compatibility checks.                        | string (enum)          | schemas/AnswerKind.json                   | Existing enum.                                                                | Resource must exist and be readable by the process; Value must be one of the supported answer kinds; Value must match the declared schema.                     | acquired |
+| placeholder_allocation_result.placeholder_id       | Identifier of the allocated placeholder that triggered typing.                    | string                 | schemas/Placeholder.json#/properties/id   | Existing; reuse Placeholder id property.                                      | Call must complete without error; Return value must match the declared schema; Return value must be treated as immutable within this step.                     | returned |
+| placeholder_allocation_result.inferred_answer_kind | Answer kind inferred from the allocation context.                                 | string (enum)          | schemas/AnswerKind.json                   | Existing enum; reuse for inferred kind.                                       | Call must complete without error; Return value must match the declared schema; Return value must be treated as immutable within this step.                     | returned |
 
 | Field                               | Description                                                                                                     | Type                   | Schema / Reference                                                             | Notes                                                                                             | Post-Conditions                                                                                                                                                                                                                        |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -718,6 +658,82 @@ Reference: S1; outputs.screen.screen_order.
 **6.2.1.31 Read questions sorted by question_order**
 Given a screen with one or more questions, When questions are retrieved, Then the list is sorted by ascending question_order.
 Reference: S2; outputs.question.question_order.
+
+**6.2.1.32 Create screen returns HTTP 201**
+Given a valid create-screen request, When the system creates the screen, Then **status == 201**.
+Reference: E1, E4; **status**. 
+
+**6.2.1.33 Create screen exposes ETag headers**
+Given a successful create-screen operation, When the response is produced, Then **meta.Screen-ETag** and **meta.Questionnaire-ETag** are present.
+Reference: U5, E5; **meta.Screen-ETag, meta.Questionnaire-ETag**. 
+
+**6.2.1.34 Update screen returns HTTP 200**
+Given a valid update-screen request, When the system applies the change, Then **status == 200**.
+Reference: E6, E8; **status**. 
+
+**6.2.1.35 Update screen exposes ETag headers**
+Given a successful screen rename or reposition, When the response is produced, Then **meta.Screen-ETag** and **meta.Questionnaire-ETag** are present.
+Reference: U5, E9; **meta.Screen-ETag, meta.Questionnaire-ETag**. 
+
+**6.2.1.36 Create question returns HTTP 201**
+Given a valid create-question request, When the system creates the question, Then **status == 201**.
+Reference: E10, E12; **status**. 
+
+**6.2.1.37 Create question exposes ETag headers**
+Given a successful create-question operation, When the response is produced, Then **meta.Question-ETag**, **meta.Screen-ETag**, and **meta.Questionnaire-ETag** are present.
+Reference: U5, E13, E14; **meta.Question-ETag, meta.Screen-ETag, meta.Questionnaire-ETag**. 
+
+**6.2.1.38 Update question text returns HTTP 200**
+Given a valid update-question-text request, When the system applies the change, Then **status == 200**.
+Reference: E15, E16; **status**. 
+
+**6.2.1.39 Update question exposes ETag headers**
+Given a successful question-text update, When the response is produced, Then **meta.Question-ETag**, **meta.Screen-ETag**, and **meta.Questionnaire-ETag** are present.
+Reference: U5, E17; **meta.Question-ETag, meta.Screen-ETag, meta.Questionnaire-ETag**. 
+
+**6.2.1.40 Reorder question returns HTTP 200**
+Given a valid reorder-question request, When the system persists the new order, Then **status == 200**.
+Reference: E18, E19, E20; **status**. 
+
+**6.2.1.41 Set conditional parent returns HTTP 200**
+Given a valid set-visibility request, When the system persists the link, Then **status == 200**.
+Reference: E25, E26, E27; **status**. 
+
+**6.2.1.42 Move question exposes Question ETag header**
+Given a successful move-question operation, When the response is produced, Then **meta.Question-ETag** is present.
+Reference: U5, E24; **meta.Question-ETag**. 
+
+**6.2.1.43 ETag parity on screen writes**
+Given any successful screen write, When ETags are returned, Then **meta.Screen-ETag equals outputs.etags.screen**.
+Reference: U5; **meta.Screen-ETag, outputs.etags.screen**. 
+
+**6.2.1.44 ETag parity on question writes**
+Given any successful question write, When ETags are returned, Then **meta.Question-ETag equals outputs.etags.question**.
+Reference: U5; **meta.Question-ETag, outputs.etags.question**. 
+
+**6.2.1.45 Create screen is idempotent by Idempotency-Key**
+Given two identical create-screen requests with the same **Idempotency-Key**, When the second request is retried, Then **body.screen.screen_id equals the first response’s outputs.screen.screen_id**.
+Reference: O2; **body.screen.screen_id, outputs.screen.screen_id**. 
+
+**6.2.1.46 Create question is idempotent by Idempotency-Key**
+Given two identical create-question requests with the same **Idempotency-Key**, When the second request is retried, Then **body.question.question_id equals the first response’s outputs.question.question_id**.
+Reference: O2; **body.question.question_id, outputs.question.question_id**. 
+
+**6.2.1.47 Conditional write succeeds with valid If-Match (screen)**
+Given a screen PATCH that supplies **If-Match** equal to the current **Screen-ETag**, When the update is applied, Then **status == 200**.
+Reference: O3; **status, meta.Screen-ETag**.  
+
+**6.2.1.48 Conditional write succeeds with valid If-Match (question)**
+Given a question PATCH that supplies **If-Match** equal to the current **Question-ETag**, When the update is applied, Then **status == 200**.
+Reference: O3; **status, meta.Question-ETag**.  
+
+**6.2.1.49 Set conditional parent exposes all ETag headers**
+Given a successful set-visibility operation, When the response is produced, Then **meta.Question-ETag**, **meta.Screen-ETag**, and **meta.Questionnaire-ETag** are present.
+Reference: U5, E25, E26, E27; **meta.Question-ETag, meta.Screen-ETag, meta.Questionnaire-ETag**. 
+
+**6.2.1.50 Clear conditional parent exposes all ETag headers**
+Given a successful clear-visibility operation, When the response is produced, Then **meta.Question-ETag**, **meta.Screen-ETag**, and **meta.Questionnaire-ETag** are present.
+Reference: U5, E28; **meta.Question-ETag, meta.Screen-ETag, meta.Questionnaire-ETag**.
 
 **6.2.2.1 questionnaire_id missing**
 Criterion: Given a request without questionnaire_id, When inputs are validated, Then the system returns PRE_QUESTIONNAIRE_ID_MISSING.
@@ -2400,6 +2416,393 @@ Assertions:
   **AC-Ref:** 6.2.1.31
   **EARS-Refs:** S2
 
+Here are the **happy-path contractual tests** generated **only** for the *additional ACs* you added (6.2.1.32 → 6.2.1.50). Numbering continues accordingly (7.2.1.32 → 7.2.1.50). Source spec: Epic G – Build questionnaire. 
+
+---
+
+**ID**: 7.2.1.32
+**Title**: Create screen returns HTTP 201
+**Purpose**: Verify that creating a screen returns HTTP 201 and a successful envelope.
+**Test data**:
+
+* Request (POST `/api/v1/authoring/questionnaires/q_001/screens`):
+  Body: `{ "title": "Intake", "proposed_position": 1 }`
+  Headers: `Idempotency-Key: "idem-001"`, `Authorization: "Bearer sk-test123"`
+  Agent: `agent_type = "authoring"`
+  **Mocking**:
+* Mock `ScreensRepo.create(title)` → `screen_id = "scr_001"`.
+* Mock `Ordering.assign_screen_order(... )` → assigns `screen_order = 1`.
+* Mock `ETags.generate(screen, questionnaire)` → `Screen-ETag="s-e1"`, `Questionnaire-ETag="q-e1"`.
+* Mock `LogSink` collects logs; assert redact of secrets.
+* Real orchestration; no internal decision logic mocked.
+  **Assertions**:
+* `http.status_code == 201`
+* Envelope invariants: `envelope.capability == "authoring"`, `envelope.status == "ok"`, `envelope.output is present`, `envelope.error is absent`, `envelope.metadata.request_id != ""`, `envelope.metadata.latency_ms >= 0`
+* `body.outputs.screen == { "screen_id": "scr_001", "title": "Intake", "screen_order": 1 }`
+* Headers/meta present: `meta.Screen-ETag == "s-e1"`, `meta.Questionnaire-ETag == "q-e1"`
+* Logging secrecy: `"sk-test123" not in LogSink.text`; `request_id` and `agent_type="authoring"` appear in logs.
+* Non-mutation snapshot: prior list of questions for `q_001` unchanged (deep equality).
+  **AC-Ref**: 6.2.1.32
+  **EARS-Refs**: E1, E4, U5
+
+---
+
+**ID**: 7.2.1.33
+**Title**: Create screen exposes ETag headers
+**Purpose**: Verify Screen-ETag and Questionnaire-ETag are present and well-formed on create.
+**Test data**: Same as 7.2.1.32.
+**Mocking**: Same as 7.2.1.32.
+**Assertions**:
+
+* `http.status_code in {200,201}` and `envelope.status == "ok"`
+* `meta.Screen-ETag` and `meta.Questionnaire-ETag` exist, are non-empty opaque strings (e.g., regex `^[A-Za-z0-9._~-]+$`).
+* `outputs.etags.screen == "s-e1"` and `outputs.etags.questionnaire == "q-e1"` (projection present).
+* Secrecy + metadata invariants as in 7.2.1.32.
+  **AC-Ref**: 6.2.1.33
+  **EARS-Refs**: U5, E5
+
+---
+
+**ID**: 7.2.1.34
+**Title**: Update screen returns HTTP 200
+**Purpose**: Verify renaming a screen returns HTTP 200.
+**Test data**:
+
+* Request (PATCH `/api/v1/authoring/questionnaires/q_001/screens/scr_001`):
+  Body: `{ "title": "Intake (v2)", "proposed_position": 1 }`
+  Headers: `If-Match: "s-e1"`, `Authorization: "Bearer sk-test123"`
+  Agent: `agent_type = "authoring"`
+  **Mocking**:
+* Mock `ScreensRepo.update_title(scr_001, "Intake (v2)")` → ok.
+* Mock `Ordering.reindex_screens(q_001)` → contiguous sequence with `screen_order=1` for `scr_001`.
+* Mock `ETags.generate(...)` → new `Screen-ETag="s-e2"`, `Questionnaire-ETag="q-e2"`.
+* Log sink as above.
+  **Assertions**:
+* `http.status_code == 200`, `envelope.status == "ok"`, invariants & secrecy checks.
+* `outputs.screen.title == "Intake (v2)"` and `outputs.screen.screen_order == 1`.
+  **AC-Ref**: 6.2.1.34
+  **EARS-Refs**: E6, E8
+
+---
+
+**ID**: 7.2.1.35
+**Title**: Update screen exposes ETag headers
+**Purpose**: Verify Screen-ETag & Questionnaire-ETag present after rename/reposition.
+**Test data**: Same as 7.2.1.34.
+**Mocking**: Same as 7.2.1.34 with `s-e2`, `q-e2`.
+**Assertions**:
+
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `meta.Screen-ETag == "s-e2"`, `meta.Questionnaire-ETag == "q-e2"`
+* `outputs.etags.screen == "s-e2"`, `outputs.etags.questionnaire == "q-e2"`
+* Secrecy + metadata invariants as above.
+  **AC-Ref**: 6.2.1.35
+  **EARS-Refs**: U5, E9
+
+---
+
+**ID**: 7.2.1.36
+**Title**: Create question returns HTTP 201
+**Purpose**: Verify creating a question returns HTTP 201 and success envelope.
+**Test data**:
+
+* Request (POST `/api/v1/authoring/questionnaires/q_001/questions`):
+  Body: `{ "screen_id": "scr_001", "question_text": "What is your age?", "proposed_question_order": 1 }`
+  Headers: `Idempotency-Key: "idem-q-001"`, `Authorization: "Bearer sk-test123"`
+  Agent: `agent_type = "authoring"`
+  **Mocking**:
+* `QuestionsRepo.create(...)` → `question_id="q_001"`, `answer_kind=null`.
+* `Ordering.assign_question_order(scr_001)` → `question_order=1`.
+* `ETags.generate(...)` → `Question-ETag="qe1"`, `Screen-ETag="s-e3"`, `Questionnaire-ETag="q-e3"`.
+* Log sink as above.
+  **Assertions**:
+* `http.status_code == 201`, `envelope.status == "ok"` and invariants.
+* `outputs.question == { "question_id":"q_001","screen_id":"scr_001","question_text":"What is your age?","question_order":1 }`
+* Secrecy + metadata invariants as above.
+  **AC-Ref**: 6.2.1.36
+  **EARS-Refs**: E10, E12
+
+---
+
+**ID**: 7.2.1.37
+**Title**: Create question exposes Question/Screen/Questionnaire ETag headers
+**Purpose**: Verify all applicable ETag headers on question create.
+**Test data**: Same as 7.2.1.36.
+**Mocking**: Same as 7.2.1.36 with `qe1`, `s-e3`, `q-e3`.
+**Assertions**:
+
+* `http.status_code in {200,201}`, `envelope.status == "ok"`
+* `meta.Question-ETag == "qe1"`, `meta.Screen-ETag == "s-e3"`, `meta.Questionnaire-ETag == "q-e3"`
+* `outputs.etags == { "question":"qe1", "screen":"s-e3", "questionnaire":"q-e3" }`
+* Secrecy + metadata invariants as above.
+  **AC-Ref**: 6.2.1.37
+  **EARS-Refs**: U5, E13, E14
+
+---
+
+**ID**: 7.2.1.38
+**Title**: Update question text returns HTTP 200
+**Purpose**: Verify updating question_text returns HTTP 200.
+**Test data**:
+
+* Request (PATCH `/api/v1/authoring/questions/q_001`):
+  Body: `{ "question_text": "What is your age (years)?" }`
+  Headers: `If-Match: "qe1"`, `Authorization: "Bearer sk-test123"`
+  Agent: `agent_type = "authoring"`
+  **Mocking**:
+* `QuestionsRepo.update_text(q_001, ...)` → ok.
+* `ETags.generate(...)` → `Question-ETag="qe2"`, `Screen-ETag="s-e4"`, `Questionnaire-ETag="q-e4"`.
+* Log sink as above.
+  **Assertions**:
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `outputs.question.question_text == "What is your age (years)?"`
+* Secrecy + metadata invariants.
+  **AC-Ref**: 6.2.1.38
+  **EARS-Refs**: E15, E16
+
+---
+
+**ID**: 7.2.1.39
+**Title**: Update question exposes all ETag headers
+**Purpose**: Verify ETag headers present after question update.
+**Test data**: Same as 7.2.1.38.
+**Mocking**: Same as 7.2.1.38 with `qe2`, `s-e4`, `q-e4`.
+**Assertions**:
+
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `meta.Question-ETag == "qe2"`, `meta.Screen-ETag == "s-e4"`, `meta.Questionnaire-ETag == "q-e4"`
+* `outputs.etags.question == "qe2"`.
+  **AC-Ref**: 6.2.1.39
+  **EARS-Refs**: U5, E17
+
+---
+
+**ID**: 7.2.1.40
+**Title**: Reorder question returns HTTP 200
+**Purpose**: Verify reordering a question returns HTTP 200.
+**Test data**:
+
+* Request (PATCH `/api/v1/authoring/questions/q_001/position`):
+  Body: `{ "proposed_question_order": 2 }`
+  Headers: `If-Match: "qe2"`, `Authorization: "Bearer sk-test123"`
+  Agent: `agent_type = "authoring"`
+  **Mocking**:
+* `Ordering.reindex_questions(scr_001)` → contiguous; final `question_order=2`.
+* `QuestionsRepo.persist_order(...)` → ok.
+* `ETags.generate(...)` → `Question-ETag="qe3"`.
+* Log sink as above.
+  **Assertions**:
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `outputs.question.question_order == 2`
+* Secrecy + metadata invariants.
+  **AC-Ref**: 6.2.1.40
+  **EARS-Refs**: E18, E19, E20
+
+---
+
+**ID**: 7.2.1.41
+**Title**: Set conditional parent returns HTTP 200
+**Purpose**: Verify setting a visibility link returns HTTP 200.
+**Test data**:
+
+* Request (PATCH `/api/v1/authoring/questions/q_001/visibility`):
+  Body: `{ "parent_question_id": "q_002", "rule": { "equals": "yes" } }`
+  Headers: `If-Match: "qe3"`, `Authorization: "Bearer sk-test123"`
+  Agent: `agent_type = "authoring"`
+  **Mocking**:
+* `QuestionsRepo.set_visibility(q_001, q_002, rule)` → ok.
+* `ETags.generate(...)` → `Question-ETag="qe4"`.
+* Log sink as above.
+  **Assertions**:
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `outputs.question.parent_question_id == "q_002"` and `outputs.question.visible_if_value == "yes"`
+* Secrecy + metadata invariants.
+  **AC-Ref**: 6.2.1.41
+  **EARS-Refs**: E25, E26, E27
+
+---
+
+**ID**: 7.2.1.42
+**Title**: Move question exposes Question ETag header
+**Purpose**: Verify Question-ETag header is present after moving a question.
+**Test data**:
+
+* Request (PATCH `/api/v1/authoring/questions/q_001/position`):
+  Body: `{ "screen_id": "scr_002", "proposed_question_order": 1 }`
+  Headers: `If-Match: "qe4"`, `Authorization: "Bearer sk-test123"`
+  **Mocking**:
+* `Ordering.move_question(q_001, scr_002)` → new `question_order=1`; reindex source+target.
+* `QuestionsRepo.persist_move(...)` → ok.
+* `ETags.generate(...)` → `Question-ETag="qe5"`.
+* Log sink as above.
+  **Assertions**:
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `meta.Question-ETag == "qe5"` and `outputs.etags.question == "qe5"`
+* Secrecy + metadata invariants.
+  **AC-Ref**: 6.2.1.42
+  **EARS-Refs**: U5, E24
+
+---
+
+**ID**: 7.2.1.43
+**Title**: ETag parity on screen writes
+**Purpose**: Verify `meta.Screen-ETag` equals `outputs.etags.screen` after a screen write.
+**Test data**: Use successful screen PATCH from 7.2.1.34.
+**Mocking**: As in 7.2.1.34 with `s-e2`.
+**Assertions**:
+
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `meta.Screen-ETag == outputs.etags.screen == "s-e2"`.
+  **AC-Ref**: 6.2.1.43
+  **EARS-Refs**: U5
+
+---
+
+**ID**: 7.2.1.44
+**Title**: ETag parity on question writes
+**Purpose**: Verify `meta.Question-ETag` equals `outputs.etags.question` after a question write.
+**Test data**: Use successful question PATCH from 7.2.1.38.
+**Mocking**: As in 7.2.1.38 with `qe2`.
+**Assertions**:
+
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `meta.Question-ETag == outputs.etags.question == "qe2"`.
+  **AC-Ref**: 6.2.1.44
+  **EARS-Refs**: U5
+
+---
+
+**ID**: 7.2.1.45
+**Title**: Create screen is idempotent by Idempotency-Key
+**Purpose**: Verify duplicate create with same key returns same screen_id.
+**Test data**:
+
+* First request: as in 7.2.1.32 with `Idempotency-Key: "idem-777"`.
+* Second request: identical body/headers (replay).
+  **Mocking**:
+* `IdempotencyStore.get("idem-777")` → miss on first, hit with cached response on second.
+* On first call, create path as 7.2.1.32 → `screen_id="scr_777"`.
+* On replay, return cached response without invoking `ScreensRepo.create`.
+* Log sink as above.
+  **Assertions**:
+* First response: `http.status_code == 201`, `outputs.screen.screen_id == "scr_777"`.
+* Second response: `http.status_code in {200,201}`, `outputs.screen.screen_id == "scr_777"`.
+* `ScreensRepo.create` called exactly once across both calls.
+* Secrecy + metadata invariants.
+  **AC-Ref**: 6.2.1.45
+  **EARS-Refs**: O2
+
+---
+
+**ID**: 7.2.1.46
+**Title**: Create question is idempotent by Idempotency-Key
+**Purpose**: Verify duplicate question create with same key returns same question_id.
+**Test data**:
+
+* First request: as in 7.2.1.36 with `Idempotency-Key: "idem-q-777"`.
+* Second request: identical replay.
+  **Mocking**:
+* `IdempotencyStore.get("idem-q-777")` → miss then hit.
+* First call creates `question_id="q_777"`.
+* On replay, return cached response; no new `QuestionsRepo.create` call.
+* Log sink as above.
+  **Assertions**:
+* First: `http.status_code == 201`, `outputs.question.question_id == "q_777"`.
+* Second: `http.status_code in {200,201}`, `outputs.question.question_id == "q_777"`.
+* `QuestionsRepo.create` called exactly once across both calls.
+* Secrecy + metadata invariants.
+  **AC-Ref**: 6.2.1.46
+  **EARS-Refs**: O2
+
+---
+
+**ID**: 7.2.1.47
+**Title**: Conditional screen write succeeds with valid If-Match
+**Purpose**: Verify screen PATCH with correct If-Match proceeds and returns 200.
+**Test data**:
+
+* Request: PATCH screen with `If-Match: "s-e2"` (current).
+* Body: `{ "title": "Intake (v3)" }`
+* Agent: `agent_type = "authoring"`
+  **Mocking**:
+* `IfMatchValidator.validate("s-e2")` → match true.
+* `ScreensRepo.update_title(...)` → ok.
+* `ETags.generate(...)` → `s-e3`.
+* Log sink as above.
+  **Assertions**:
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `outputs.screen.title == "Intake (v3)"`
+* `meta.Screen-ETag == "s-e3"`
+* Secrecy + metadata invariants.
+  **AC-Ref**: 6.2.1.47
+  **EARS-Refs**: O3
+
+---
+
+**ID**: 7.2.1.48
+**Title**: Conditional question write succeeds with valid If-Match
+**Purpose**: Verify question PATCH with correct If-Match proceeds and returns 200.
+**Test data**:
+
+* Request: PATCH question with `If-Match: "qe2"` (current).
+* Body: `{ "question_text": "What is your age today?" }`
+* Agent: `agent_type = "authoring"`
+  **Mocking**:
+* `IfMatchValidator.validate("qe2")` → match true.
+* `QuestionsRepo.update_text(...)` → ok.
+* `ETags.generate(...)` → `qe3`.
+* Log sink as above.
+  **Assertions**:
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `outputs.question.question_text == "What is your age today?"`
+* `meta.Question-ETag == "qe3"`
+* Secrecy + metadata invariants.
+  **AC-Ref**: 6.2.1.48
+  **EARS-Refs**: O3
+
+---
+
+**ID**: 7.2.1.49
+**Title**: Set conditional parent exposes Question/Screen/Questionnaire ETags
+**Purpose**: Verify all ETag headers present when setting visibility.
+**Test data**: As in 7.2.1.41.
+**Mocking**:
+
+* After persist, `ETags.generate(...)` → `qe5`, `s-e5`, `q-e5`.
+* Log sink as above.
+  **Assertions**:
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `meta.Question-ETag == "qe5"`, `meta.Screen-ETag == "s-e5"`, `meta.Questionnaire-ETag == "q-e5"`
+* `outputs.etags == { "question":"qe5","screen":"s-e5","questionnaire":"q-e5" }`
+* Secrecy + metadata invariants.
+  **AC-Ref**: 6.2.1.49
+  **EARS-Refs**: U5, E25, E26, E27
+
+---
+
+**ID**: 7.2.1.50
+**Title**: Clear conditional parent exposes Question/Screen/Questionnaire ETags
+**Purpose**: Verify all ETag headers present when clearing visibility.
+**Test data**:
+
+* Request (PATCH `/api/v1/authoring/questions/q_001/visibility`):
+  Body: `{ "parent_question_id": null, "rule": null }`
+  Headers: `If-Match: "qe5"`, `Authorization: "Bearer sk-test123"`
+  Agent: `agent_type = "authoring"`
+  **Mocking**:
+* `QuestionsRepo.clear_visibility(q_001)` → ok.
+* `ETags.generate(...)` → `qe6`, `s-e6`, `q-e6`.
+* Log sink as above.
+  **Assertions**:
+* `http.status_code == 200`, `envelope.status == "ok"`
+* `outputs.question.parent_question_id is None` and `outputs.question.visible_if_value is None`
+* `meta.Question-ETag == "qe6"`, `meta.Screen-ETag == "s-e6"`, `meta.Questionnaire-ETag == "q-e6"`
+* Secrecy + metadata invariants.
+  **AC-Ref**: 6.2.1.50
+  **EARS-Refs**: U5, E28
+
+---
+
 ID: 7.2.2.1
 Title: questionnaire_id missing
 Purpose: Verify that the specified invalid condition triggers the documented error mode and prevents downstream processing.
@@ -3896,62 +4299,6 @@ Assertions: HTTP status == 400; response.status == 'error'; response.error.code 
 AC-Ref: 6.2.2.136
 Error Mode: POST_OUTPUTS_ETAGS_QUESTIONNAIRE_NOT_CHANGED_ON_UPDATE
 
-7.3.1.1 — Create screen → Rename/Reposition
-Purpose: Verify that after a successful screen create, initiating a rename or re-position triggers the rename/position step.
-Test Data: questionnaire_id="11111111-1111-1111-1111-111111111111", create-screen request {title:"Intro"}; subsequent rename/position request {title:"Introduction", proposed_position:1}.
-Mocking: No external dependencies mocked. Attach a spy to the public entrypoint for STEP-2 Rename screen and set position to observe invocation (observation only; does not alter behaviour).
-Assertions: Assert invoked once immediately after STEP-1 Create screen completes, and not before.
-AC-Ref: 6.3.1.1.
-
-7.3.1.2 — Create screen → Create question
-Purpose: Verify that after a successful screen create, a create-question request triggers the question creation step.
-Test Data: questionnaire_id="11111111-1111-1111-1111-111111111111", screen_id="S-001", create-question request {screen_id:"S-001", question_text:"Your name?"}.
-Mocking: No external dependencies mocked. Attach a spy to the public entrypoint for STEP-3 Create question.
-Assertions: Assert invoked once immediately after STEP-1 Create screen completes, and not before.
-AC-Ref: 6.3.1.2.
-
-7.3.1.3 — Create screen → Reorder screens
-Purpose: Verify that after a successful screen create, proposing a new position triggers screen reordering.
-Test Data: questionnaire_id="11111111-1111-1111-1111-111111111111", propose {proposed_position:2} for newly created screen S-002.
-Mocking: No external dependencies mocked. Attach a spy to the public entrypoint for STEP-6 Reorder screens.
-Assertions: Assert invoked once immediately after STEP-1 Create screen completes, and not before.
-AC-Ref: 6.3.1.3.
-
-7.3.1.4 — Rename/Reposition → Reorder screens
-Purpose: Verify that after a successful rename/reposition, proposing an additional position change triggers screen reordering.
-Test Data: questionnaire_id="11111111-1111-1111-1111-111111111111", rename/position applied to S-001; follow-up {proposed_position:3}.
-Mocking: No external dependencies mocked. Attach a spy to STEP-6 Reorder screens.
-Assertions: Assert invoked once immediately after STEP-2 Rename screen and set position completes, and not before.
-AC-Ref: 6.3.1.4.
-
-7.3.1.5 — Rename/Reposition → Create question
-Purpose: Verify that after a successful rename/reposition, a create-question request triggers question creation.
-Test Data: questionnaire_id="1111…1111", screen_id="S-001", create-question {screen_id:"S-001", question_text:"Date of birth?"}.
-Mocking: No external dependencies mocked. Attach a spy to STEP-3 Create question.
-Assertions: Assert invoked once immediately after STEP-2 Rename screen and set position completes, and not before.
-AC-Ref: 6.3.1.5.
-
-7.3.1.6 — Create question → Allocate first placeholder
-Purpose: Verify that after a successful question scaffold create, allocating the first placeholder triggers the placeholder allocation step.
-Test Data: question_id="Q-001", allocate-placeholder request {placeholder_id:"PH-001", context:"bind enum options"}.
-Mocking: No external dependencies mocked. Attach a spy to STEP-3A Allocate first placeholder.
-Assertions: Assert invoked once immediately after STEP-3 Create question completes, and not before.
-AC-Ref: 6.3.1.6.
-
-7.3.1.7 — Create question → Update question
-Purpose: Verify that after a successful question create, an update request triggers the question-update step.
-Test Data: question_id="Q-001", update {question_text:"What is your full name?"}.
-Mocking: No external dependencies mocked. Attach a spy to STEP-4 Update question text.
-Assertions: Assert invoked once immediately after STEP-3 Create question completes, and not before.
-AC-Ref: 6.3.1.7.
-
-7.3.1.8 — Create question → Reorder within screen
-Purpose: Verify that after a successful question create, proposing a new question position triggers in-screen reordering.
-Test Data: question_id="Q-002", reorder {proposed_question_order:1} within screen_id="S-001".
-Mocking: No external dependencies mocked. Attach a spy to STEP-5 Reorder questions within a screen.
-Assertions: Assert invoked once immediately after STEP-3 Create question completes, and not before.
-AC-Ref: 6.3.1.8.
-
 **7.3.1.9 — Create question → Move between screens**
 **Purpose:** Verify that after a successful question create, a move request triggers the cross-screen move step.
 **Test Data:** `question_id="Q-003"`, created on `screen_id="S-001"`; move request `{screen_id:"S-002"}`.
@@ -4069,8 +4416,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.1  
 **Error Mode:** RUN_CREATE_ENTITY_DB_WRITE_FAILED
 
----
-
 ## 7.3.2.2
 **Title:** Create screen problem+json encoding failure blocks finalisation and prevents STEP-2  
 **Purpose:** Verify that problem+json serialisation failure blocks finalisation of create and prevents the next step.  
@@ -4079,8 +4424,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-1 Create screen** finalisation raises, and not before. Assert **STEP-2 Rename screen and set position** is not invoked following the failure. Assert that error mode **RUN_PROBLEM_JSON_ENCODING_FAILED** is observed.  
 **AC-Ref:** 6.3.2.2  
 **Error Mode:** RUN_PROBLEM_JSON_ENCODING_FAILED
-
----
 
 ## 7.3.2.3
 **Title:** Rename screen update failure halts STEP-2 and prevents STEP-3  
@@ -4091,8 +4434,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.3  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
 
----
-
 ## 7.3.2.4
 **Title:** Reorder screens resequence computation failure halts STEP-2 and prevents STEP-3  
 **Purpose:** Verify that runtime resequencing computation failure halts rename/position and prevents question creation.  
@@ -4101,8 +4442,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-2 Rename screen and set position** finalisation raises, and not before. Assert **STEP-3 Create question** is not invoked following the failure. Assert that error mode **RUN_RESEQUENCE_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.4  
 **Error Mode:** RUN_RESEQUENCE_COMPUTE_FAILED
-
----
 
 ## 7.3.2.5
 **Title:** Rename screen ETag computation failure blocks finalisation and prevents STEP-3  
@@ -4113,8 +4452,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.5  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
 
----
-
 ## 7.3.2.6
 **Title:** Concurrency token generation failure blocks finalisation of STEP-2 and prevents STEP-3  
 **Purpose:** Verify that generating a concurrency token during STEP-2 fails and blocks the next step.  
@@ -4123,8 +4460,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-2 Rename screen and set position** finalisation raises, and not before. Assert **STEP-3 Create question** is not invoked following the failure. Assert that error mode **RUN_CONCURRENCY_TOKEN_GENERATION_FAILED** is observed.  
 **AC-Ref:** 6.3.2.6  
 **Error Mode:** RUN_CONCURRENCY_TOKEN_GENERATION_FAILED
-
----
 
 ## 7.3.2.7
 **Title:** Create question write failure halts STEP-3 and prevents STEP-4  
@@ -4135,8 +4470,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.7  
 **Error Mode:** RUN_CREATE_ENTITY_DB_WRITE_FAILED
 
----
-
 ## 7.3.2.8
 **Title:** Create question ETag computation failure blocks finalisation and prevents STEP-4  
 **Purpose:** Verify ETag compute failure blocks completion of question creation and prevents text update flow.  
@@ -4145,8 +4478,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-3 Create question** finalisation raises, and not before. Assert **STEP-4 Update question text** is not invoked following the failure. Assert that error mode **RUN_ETAG_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.8  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
-
----
 
 ## 7.3.2.9
 **Title:** Idempotency backend unavailable halts STEP-3 and prevents STEP-4  
@@ -4157,8 +4488,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.9  
 **Error Mode:** RUN_IDEMPOTENCY_STORE_UNAVAILABLE
 
----
-
 ## 7.3.2.10
 **Title:** Update question write failure halts STEP-4 and prevents STEP-5  
 **Purpose:** Verify DB update failure during question text update halts and prevents reorder.  
@@ -4167,8 +4496,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-4 Update question text** raises, and not before. Assert **STEP-5 Reorder questions within a screen** is not invoked following the failure. Assert that error mode **RUN_UPDATE_ENTITY_DB_WRITE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.10  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
-
----
 
 ## 7.3.2.11
 **Title:** Update question ETag computation failure blocks finalisation and prevents STEP-5  
@@ -4179,8 +4506,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.11  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
 
----
-
 ## 7.3.2.12
 **Title:** Concurrency token generation failure blocks finalisation of STEP-4 and prevents STEP-5  
 **Purpose:** Verify generating a new concurrency token fails and blocks reorder step.  
@@ -4189,8 +4514,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-4 Update question text** finalisation raises, and not before. Assert **STEP-5 Reorder questions within a screen** is not invoked following the failure. Assert that error mode **RUN_CONCURRENCY_TOKEN_GENERATION_FAILED** is observed.  
 **AC-Ref:** 6.3.2.12  
 **Error Mode:** RUN_CONCURRENCY_TOKEN_GENERATION_FAILED
-
----
 
 ## 7.3.2.13
 **Title:** Reorder questions resequence computation failure halts STEP-5 and prevents STEP-6  
@@ -4201,8 +4524,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.13  
 **Error Mode:** RUN_RESEQUENCE_COMPUTE_FAILED
 
----
-
 ## 7.3.2.14
 **Title:** Reorder questions sequence persist failure halts STEP-5 and prevents STEP-6  
 **Purpose:** Verify DB write failure persisting new question order halts reorder and prevents screen reordering.  
@@ -4211,8 +4532,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-5 Reorder questions within a screen** raises, and not before. Assert **STEP-6 Reorder screens** is not invoked following the failure. Assert that error mode **RUN_UPDATE_ENTITY_DB_WRITE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.14  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
-
----
 
 ## 7.3.2.15
 **Title:** Reorder questions ETag computation failure blocks finalisation and prevents STEP-6  
@@ -4223,8 +4542,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.15  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
 
----
-
 ## 7.3.2.16
 **Title:** Reorder screens persist failure halts STEP-6 and prevents STEP-7  
 **Purpose:** Verify DB write failure persisting screen order halts and prevents move.  
@@ -4233,8 +4550,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-6 Reorder screens** raises, and not before. Assert **STEP-7 Move question between screens** is not invoked following the failure. Assert that error mode **RUN_UPDATE_ENTITY_DB_WRITE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.16  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
-
----
 
 ## 7.3.2.17
 **Title:** Reorder screens read failure halts STEP-6 and prevents STEP-7  
@@ -4245,8 +4560,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.17  
 **Error Mode:** RUN_RETRIEVE_ENTITY_DB_READ_FAILED
 
----
-
 ## 7.3.2.18
 **Title:** Move question read failure halts STEP-7 and prevents STEP-8  
 **Purpose:** Verify read failure on source/target screens halts move and prevents setting parent.  
@@ -4255,8 +4568,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-7 Move question between screens** raises, and not before. Assert **STEP-8 Set conditional parent** is not invoked following the failure. Assert that error mode **RUN_RETRIEVE_ENTITY_DB_READ_FAILED** is observed.  
 **AC-Ref:** 6.3.2.18  
 **Error Mode:** RUN_RETRIEVE_ENTITY_DB_READ_FAILED
-
----
 
 ## 7.3.2.19
 **Title:** Move question persist failure halts STEP-7 and prevents STEP-8  
@@ -4267,8 +4578,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.19  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
 
----
-
 ## 7.3.2.20
 **Title:** Move question resequence computation failure halts STEP-7 and prevents STEP-8  
 **Purpose:** Verify resequencing failure on source or target screen halts move and prevents setting parent.  
@@ -4277,8 +4586,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-7 Move question between screens** raises, and not before. Assert **STEP-8 Set conditional parent** is not invoked following the failure. Assert that error mode **RUN_RESEQUENCE_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.20  
 **Error Mode:** RUN_RESEQUENCE_COMPUTE_FAILED
-
----
 
 ## 7.3.2.21
 **Title:** Move question ETag computation failure blocks finalisation and prevents STEP-8  
@@ -4289,8 +4596,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.21  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
 
----
-
 ## 7.3.2.22
 **Title:** Set conditional parent read failure halts STEP-8 and prevents STEP-9  
 **Purpose:** Verify read failure when fetching parent question halts and prevents clearing parent.  
@@ -4299,8 +4604,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-8 Set conditional parent** raises, and not before. Assert **STEP-9 Clear conditional parent** is not invoked following the failure. Assert that error mode **RUN_RETRIEVE_ENTITY_DB_READ_FAILED** is observed.  
 **AC-Ref:** 6.3.2.22  
 **Error Mode:** RUN_RETRIEVE_ENTITY_DB_READ_FAILED
-
----
 
 ## 7.3.2.23
 **Title:** Set conditional parent persist failure halts STEP-8 and prevents STEP-9  
@@ -4311,8 +4614,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.23  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
 
----
-
 ## 7.3.2.24
 **Title:** Set conditional parent ETag computation failure blocks finalisation and prevents STEP-9  
 **Purpose:** Verify ETag compute failure after setting parent blocks completion and prevents clearing flow.  
@@ -4321,8 +4622,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-8 Set conditional parent** finalisation raises, and not before. Assert **STEP-9 Clear conditional parent** is not invoked following the failure. Assert that error mode **RUN_ETAG_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.24  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
-
----
 
 ## 7.3.2.25
 **Title:** Clear conditional parent persist failure halts STEP-9  
@@ -4333,8 +4632,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.25  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
 
----
-
 ## 7.3.2.26
 **Title:** Clear conditional parent ETag computation failure blocks finalisation  
 **Purpose:** Verify ETag compute failure after clearing parent blocks completion.  
@@ -4343,8 +4640,6 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-9 Clear conditional parent** finalisation raises, and not before. Assert **STEP-1 Create screen** is not invoked within the same transaction context. Assert that error mode **RUN_ETAG_COMPUTE_FAILED** is observed.  
 **AC-Ref:** 6.3.2.26  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
-
----
 
 ## 7.3.2.27
 **Title:** Allocate first placeholder persist failure halts STEP-3A and prevents STEP-4  
@@ -4355,8 +4650,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.27  
 **Error Mode:** RUN_UPDATE_ENTITY_DB_WRITE_FAILED
 
----
-
 ## 7.3.2.28
 **Title:** Allocate first placeholder ETag computation failure blocks finalisation and prevents STEP-4  
 **Purpose:** Verify ETag compute failure after first placeholder allocation blocks completion and prevents text update flow.  
@@ -4366,8 +4659,6 @@ AC-Ref: 6.3.1.8.
 **AC-Ref:** 6.3.2.28  
 **Error Mode:** RUN_ETAG_COMPUTE_FAILED
 
----
-
 ## 7.3.2.29
 **Title:** Unidentified runtime error halts STEP-7 and prevents STEP-8  
 **Purpose:** Verify catch-all runtime failure stops move and prevents setting parent.  
@@ -4376,3 +4667,86 @@ AC-Ref: 6.3.1.8.
 **Assertions:** Assert error handler is invoked once immediately when **STEP-7 Move question between screens** raises, and not before. Assert **STEP-8 Set conditional parent** is not invoked following the failure. Assert that error mode **RUN_UNIDENTIFIED_ERROR** is observed.  
 **AC-Ref:** 6.3.2.29  
 **Error Mode:** RUN_UNIDENTIFIED_ERROR
+
+## 7.3.2 Sad Path Behavioural Tests – Environmental Errors Only
+
+**7.3.2.30**  
+**Title:** Database network unreachable halts Create screen  
+**Purpose:** Prevent any downstream steps when STEP-1 cannot reach the database.  
+**Test Data:** `POST /api/v1/authoring/questionnaires/q-123/screens` with body `{ "title":"Screen A" }` and header `Idempotency-Key: idem-001`.  
+**Mocking:** Mock the database client `persist_screen()` to raise a network unreachable exception on first attempt (simulating routing failure). This is mocked to trigger the environmental failure at the boundary; internal orchestration is not mocked. Assert the mock is called once with the screen payload.  
+**Assertions:** Assert error handler is invoked once immediately when **STEP-1 Create screen** raises due to network unreachable, and not before. Assert **STEP-2 Rename screen and set position** is not invoked following the failure. Assert that error mode **ENV_DB_NETWORK_UNREACHABLE** is observed. Assert no unintended side-effects. Assert one error telemetry event is emitted.  
+**AC-Ref:** 6.3.2.30  
+**Error Mode:** ENV_DB_NETWORK_UNREACHABLE
+
+**7.3.2.31**  
+**Title:** DNS resolution failure halts Rename screen and set position  
+**Purpose:** Prevent any downstream steps when STEP-2 cannot resolve the database host.  
+**Test Data:** `PATCH /api/v1/authoring/questionnaires/q-123/screens/s-1` with body `{ "title":"New Title", "proposed_position":2 }` and header `If-Match: "etag-screen-1"`.  
+**Mocking:** Mock the database connection factory to raise a DNS resolution failure prior to acquiring a connection. This boundary mock triggers the environmental failure only. Assert the connection factory is called once with the configured host.  
+**Assertions:** Assert error handler is invoked once immediately when **STEP-2 Rename screen and set position** raises due to DNS resolution failure, and not before. Assert **STEP-3 Create question** is not invoked following the failure. Assert that error mode **ENV_DB_DNS_RESOLUTION_FAILED** is observed. Assert no unintended side-effects. Assert one error telemetry event is emitted.  
+**AC-Ref:** 6.3.2.31  
+**Error Mode:** ENV_DB_DNS_RESOLUTION_FAILED
+
+**7.3.2.32**  
+**Title:** TLS handshake failure halts Create question  
+**Purpose:** Prevent any downstream steps when STEP-3 cannot establish a secure DB connection.  
+**Test Data:** `POST /api/v1/authoring/questionnaires/q-123/questions` with body `{ "screen_id":"s-1", "question_text":"Q1?", "answer_kind":"short_string" }` and header `Idempotency-Key: idem-002`.  
+**Mocking:** Mock the database driver `connect()` to raise a TLS handshake failure (certificate invalid). Boundary-only mocking; orchestration remains real. Assert `connect()` called once.  
+**Assertions:** Assert error handler is invoked once immediately when **STEP-3 Create question** raises due to TLS handshake failure, and not before. Assert **STEP-4 Update question text** is not invoked following the failure. Assert that error mode **ENV_DB_TLS_HANDSHAKE_FAILED** is observed. Assert no unintended side-effects. Assert one error telemetry event is emitted.  
+**AC-Ref:** 6.3.2.32  
+**Error Mode:** ENV_DB_TLS_HANDSHAKE_FAILED
+
+**7.3.2.33**  
+**Title:** Missing DB configuration halts Update question text  
+**Purpose:** Prevent any downstream steps when STEP-4 lacks required runtime DB configuration.  
+**Test Data:** `PATCH /api/v1/authoring/questions/qq-1` with body `{ "question_text":"Updated Q1?" }` and header `If-Match: "etag-q1"`.  
+**Mocking:** Mock the configuration provider `get("DB_DSN")` to return `None`. Boundary-only mocking to simulate missing runtime config. Assert `get("DB_DSN")` called once.  
+**Assertions:** Assert error handler is invoked once immediately when **STEP-4 Update question text** raises due to missing configuration, and not before. Assert **STEP-5 Reorder questions within a screen** is not invoked following the failure. Assert that error mode **ENV_DB_CONFIG_MISSING** is observed. Assert no unintended side-effects. Assert one error telemetry event is emitted.  
+**AC-Ref:** 6.3.2.33  
+**Error Mode:** ENV_DB_CONFIG_MISSING
+
+**7.3.2.34**  
+**Title:** Invalid DB credentials halt Reorder questions within a screen  
+**Purpose:** Prevent any downstream steps when STEP-5 cannot authenticate to the database.  
+**Test Data:** `PATCH /api/v1/authoring/questions/qq-1/position` with body `{ "proposed_question_order": 1 }` and header `If-Match: "etag-q1"`.  
+**Mocking:** Mock the database client `authenticate()` to raise “invalid credentials”. Boundary mock only; sequencing logic remains real. Assert `authenticate()` called once.  
+**Assertions:** Assert error handler is invoked once immediately when **STEP-5 Reorder questions within a screen** raises due to invalid credentials, and not before. Assert **STEP-6 Reorder screens** is not invoked following the failure. Assert that error mode **ENV_DB_CREDENTIALS_INVALID** is observed. Assert no unintended side-effects. Assert one error telemetry event is emitted.  
+**AC-Ref:** 6.3.2.34  
+**Error Mode:** ENV_DB_CREDENTIALS_INVALID
+
+**7.3.2.35**  
+**Title:** DB authorisation denied halts Reorder screens  
+**Purpose:** Prevent any downstream steps when STEP-6 lacks privileges to write.  
+**Test Data:** `PATCH /api/v1/authoring/questionnaires/q-123/screens/{screen_id}` with body `{ "proposed_position": 3 }` and header `If-Match: "etag-screen-2"`.  
+**Mocking:** Mock the DB client `persist_screen_order()` to raise an authorisation denied error. Boundary-only mock; orchestration remains real. Assert the method is called once with the expected payload.  
+**Assertions:** Assert error handler is invoked once immediately when **STEP-6 Reorder screens** raises due to authorisation denied, and not before. Assert **STEP-7 Move question between screens** is not invoked following the failure. Assert that error mode **ENV_DB_AUTHZ_DENIED** is observed. Assert no unintended side-effects. Assert one error telemetry event is emitted.  
+**AC-Ref:** 6.3.2.35  
+**Error Mode:** ENV_DB_AUTHZ_DENIED
+
+**7.3.2.36**  
+**Title:** DB connection limit exceeded halts Move question between screens  
+**Purpose:** Prevent any downstream steps when STEP-7 cannot obtain a DB connection.  
+**Test Data:** `PATCH /api/v1/authoring/questions/qq-1/position` with body `{ "screen_id":"s-2", "proposed_question_order":2 }` and header `If-Match: "etag-q1"`.  
+**Mocking:** Mock the DB connection pool `acquire()` to raise “connection limit exceeded”. Boundary-only mock; orchestration remains real. Assert `acquire()` is called once.  
+**Assertions:** Assert error handler is invoked once immediately when **STEP-7 Move question between screens** raises due to connection limit exceeded, and not before. Assert **STEP-8 Set conditional parent** is not invoked following the failure. Assert that error mode **ENV_DB_CONNECTION_LIMIT_EXCEEDED** is observed. Assert no unintended side-effects. Assert one error telemetry event is emitted.  
+**AC-Ref:** 6.3.2.36  
+**Error Mode:** ENV_DB_CONNECTION_LIMIT_EXCEEDED
+
+**7.3.2.37**  
+**Title:** DB storage quota exceeded halts Create screen  
+**Purpose:** Prevent any downstream steps when STEP-1 cannot write due to storage quota.  
+**Test Data:** `POST /api/v1/authoring/questionnaires/q-123/screens` with body `{ "title":"Screen B" }` and header `Idempotency-Key: idem-003`.  
+**Mocking:** Mock the DB client `persist_screen()` to raise “storage quota exceeded” on write. Boundary-only mock; orchestration remains real. Assert the method is called once.  
+**Assertions:** Assert error handler is invoked once immediately when **STEP-1 Create screen** raises due to storage quota exceeded, and not before. Assert **STEP-2 Rename screen and set position** is not invoked following the failure. Assert that error mode **ENV_DB_STORAGE_QUOTA_EXCEEDED** is observed. Assert no unintended side-effects. Assert one error telemetry event is emitted.  
+**AC-Ref:** 6.3.2.37  
+**Error Mode:** ENV_DB_STORAGE_QUOTA_EXCEEDED
+
+**7.3.2.38**  
+**Title:** Transaction deadlock halts Rename screen and prevents downstream steps  
+**Purpose:** Prevent any downstream steps when STEP-2 transaction deadlocks.  
+**Test Data:** `PATCH /api/v1/authoring/questionnaires/q-123/screens/s-1` with body `{ "proposed_position":1 }` and header `If-Match: "etag-screen-1"`.  
+**Mocking:** Mock the DB client `update_screen_order_txn()` to raise a transaction deadlock error on commit. Boundary-only mock; orchestration remains real. Assert the method is called once.  
+**Assertions:** Assert error handler is invoked once immediately when **STEP-2 Rename screen and set position** raises due to transaction deadlock, and not before. Assert **STEP-3 Create question** is not invoked following the failure. Assert that error mode **ENV_DB_TRANSACTION_DEADLOCK** is observed. Assert no unintended side-effects. Assert one error telemetry event is emitted.  
+**AC-Ref:** 6.3.2.38  
+**Error Mode:** ENV_DB_TRANSACTION_DEADLOCK
