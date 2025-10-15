@@ -6,6 +6,7 @@ import uuid
 from typing import Callable
 
 from fastapi import FastAPI, Request, Response
+from app.logging_setup import configure_logging
 from app.db.base import get_engine
 from app.db.migrations_runner import apply_migrations
 from app.routes import api_router
@@ -43,6 +44,11 @@ def _health_check() -> Callable[[], dict]:
 
 
 def create_app() -> FastAPI:
+    # Configure global logging before app instantiation so all modules emit
+    try:
+        configure_logging()
+    except Exception:
+        logging.getLogger(__name__).error("global_logging_configuration_failed", exc_info=True)
     app = FastAPI()
 
     # Architectural stub: response schema validation middleware registration

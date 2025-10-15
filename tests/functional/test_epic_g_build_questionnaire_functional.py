@@ -1,0 +1,747 @@
+"""Functional unit-level contractual and behavioural tests for EPIC G — Build questionnaire.
+
+Source of truth: docs/Epic G - Build questionnaire.md
+
+Scope implemented here:
+- 7.2.1.x (Contractual happy-path API behaviour)
+- 7.2.2.x (Contractual problem+json error modes)
+- 7.3.1.x (Behavioural sequencing assertions)
+- 7.3.2.x (Behavioural failure-mode sequencing assertions)
+
+Conventions:
+- Each spec section is implemented as exactly one test function.
+- Tests are intentionally failing at this TDD stage — no app logic yet.
+- A safe helper returns a stable envelope and never raises; assertions operate
+  on this envelope so the suite remains stable even when behaviour is missing.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from ast import literal_eval
+import re
+import typing as t
+
+import pytest
+
+
+# ---------------------------------------------------------------------------
+# Stable response envelope and helper (prevents unhandled exceptions)
+# ---------------------------------------------------------------------------
+
+class ResponseEnvelope(t.TypedDict, total=False):
+    status_code: t.Optional[int]
+    headers: dict[str, str]
+    json: dict
+    outputs: dict
+    body: t.Any
+    error: dict
+    error_mode: t.Optional[str]
+    context: dict
+
+
+def invoke_epic_g(
+    method: str,
+    path: str,
+    *,
+    headers: t.Optional[dict[str, str]] = None,
+    body: t.Optional[dict] = None,
+    note: str = "",
+) -> ResponseEnvelope:
+    """Return a safe, never-raising response envelope for EPIC G tests.
+
+    This function does not perform real I/O. It provides a consistent structure
+    for assertions so tests fail deterministically without crashing the runner.
+    """
+    # Minimal stable envelope; fields intentionally empty so assertions fail.
+    return ResponseEnvelope(
+        status_code=None,
+        headers=headers or {},
+        json={},
+        outputs={},
+        body=None,
+        error={},
+        error_mode=None,
+        context={
+            # Call sequencing captured here by real implementation; empty now.
+            "call_order": [],
+            # External boundaries (repos, publisher, cache, clock) go here.
+            "mocks": {},
+            "note": note,
+            "path": path,
+            "method": method,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Helpers to dynamically generate large families of tests from the spec file
+# ---------------------------------------------------------------------------
+
+SPEC_PATH = Path("docs") / "Epic G - Build questionnaire.md"
+_SPEC_TEXT = SPEC_PATH.read_text(encoding="utf-8") if SPEC_PATH.exists() else ""
+
+
+def _mk_test(fn_name: str, doc: str, func: t.Callable[[], None]) -> None:
+    """Register a generated test function in module globals with docstring."""
+    func.__name__ = fn_name
+    func.__doc__ = doc
+    globals()[fn_name] = func
+
+
+# ---------------------------------------------------------------------------
+# 7.2.1.x — Contractual happy path tests (explicit definitions)
+# ---------------------------------------------------------------------------
+
+def _non_empty_string(v: t.Any) -> bool:
+    return isinstance(v, str) and len(v.strip()) > 0
+
+
+def _test_7_2_1_factory(sec_id: str, title: str, req: dict, asserts: list[str]):
+    def _test(mocker):
+        # Verifies {sec_id} – {title}
+        env = invoke_epic_g(req.get("method", "GET"), req.get("path", "/"), headers=req.get("headers"), body=req.get("body"), note=title)
+
+        # Implement each assert line from the spec with explanatory comments.
+        for a in asserts:
+            # HTTP status checks
+            if a.startswith("HTTP "):
+                expected = int(a.split()[1])
+                # Assert: HTTP status equals expected
+                assert env.get("status_code") == expected, f"Expected status {expected}"
+            elif a == "SUCCESS_200_201":
+                # Assert: success status (200 or 201)
+                assert env.get("status_code") in {200, 201}, "Expected 200/201"
+            # outputs presence checks
+            elif a == "HAS_outputs.screen":
+                # Assert: response JSON has outputs.screen object
+                assert isinstance(env.get("outputs", {}).get("screen"), dict)
+            elif a == "HAS_outputs.question":
+                # Assert: response JSON has outputs.question object
+                assert isinstance(env.get("outputs", {}).get("question"), dict)
+            # field equality checks
+            elif a.startswith("EQ_"):
+                # Pattern: EQ_outputs.screen.title=Eligibility
+                lhs, rhs = a[3:].split("=", 1)
+                target = env
+                for part in lhs.split("."):
+                    target = target.get(part) if isinstance(target, dict) else None
+                assert target == (None if rhs == "<NULL>" else rhs)
+            # non-empty string checks
+            elif a.startswith("NONEMPTY_"):
+                # Pattern: NONEMPTY_outputs.etags.screen
+                path_s = a[len("NONEMPTY_"):]
+                target = env
+                for part in path_s.split("."):
+                    target = target.get(part) if isinstance(target, dict) else None
+                assert _non_empty_string(target), f"Expected non-empty string at {path_s}"
+            # is-null checks
+            elif a.startswith("ISNULL_"):
+                # Pattern: ISNULL_outputs.question.answer_kind
+                path_s = a[len("ISNULL_"):]
+                target = env
+                for part in path_s.split("."):
+                    target = target.get(part) if isinstance(target, dict) else None
+                assert target is None, f"Expected null at {path_s}"
+            # list equality checks for deterministic reads
+            elif a.startswith("LISTEQ_"):
+                # Pattern: LISTEQ_outputs.screen[].screen_order=[1,2,3]
+                path_s, exp = a[len("LISTEQ_"):].split("=", 1)
+                # Use literal_eval to safely parse the expected list from the spec
+                expected_list = literal_eval(exp)
+                # Extract the list from env using a simple path
+                # Only used for deterministic read tests; implementation is minimal.
+                seq: list[int] = []
+                if path_s.startswith("outputs.screen[]"):
+                    seq = [s.get("screen_order") for s in env.get("outputs", {}).get("screen", [])]
+                elif path_s.startswith("outputs.question[]"):
+                    seq = [q.get("question_order") for q in env.get("outputs", {}).get("question", [])]
+                assert seq == expected_list
+            else:
+                # Unknown assert key from mapping — keep as explicit failure to surface gaps
+                pytest.fail(f"Unhandled assertion mapping for {sec_id}: {a}")
+
+    name = f"test_epic_g_{sec_id.replace('.', '_')}"
+    doc = f"Verifies {sec_id} – {title}"
+    _mk_test(name, doc, _test)
+
+
+# Explicitly define 7.2.1.x tests (31 items) with concrete assertions.
+_spec_7_2_1: list[tuple[str, str, dict, list[str]]] = [
+    (
+        "7.2.1.1",
+        "Create screen returns screen payload",
+        {
+            "method": "POST",
+            "path": "/api/v1/authoring/questionnaires/q-001/screens",
+            "headers": {"Idempotency-Key": "idemp-001"},
+            "body": {"title": "Eligibility"},
+        },
+        [
+            "HTTP 201",
+            "HAS_outputs.screen",
+            "NONEMPTY_outputs.screen.screen_id",
+            "EQ_outputs.screen.title=Eligibility",
+            "EQ_outputs.screen.screen_order=1",
+        ],
+    ),
+    (
+        "7.2.1.2",
+        "Create screen assigns backend order",
+        {
+            "method": "POST",
+            "path": "/api/v1/authoring/questionnaires/q-001/screens",
+            "headers": {"Idempotency-Key": "idemp-002"},
+            "body": {"title": "Background"},
+        },
+        [
+            "HTTP 201",
+            "EQ_outputs.screen.title=Background",
+            "EQ_outputs.screen.screen_order=2",
+        ],
+    ),
+    (
+        "7.2.1.3",
+        "Create screen returns ETags",
+        {
+            "method": "POST",
+            "path": "/api/v1/authoring/questionnaires/q-001/screens",
+            "headers": {"Idempotency-Key": "idemp-003"},
+            "body": {"title": "Consent"},
+        },
+        [
+            "HTTP 201",
+            "NONEMPTY_outputs.etags.screen",
+            "NONEMPTY_outputs.etags.questionnaire",
+        ],
+    ),
+    (
+        "7.2.1.4",
+        "Rename screen returns updated title",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questionnaires/q-001/screens/scr-001",
+            "headers": {"If-Match": "W/\"etag-scr-001\""},
+            "body": {"title": "Applicant Eligibility"},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.screen.screen_id=scr-001",
+            "EQ_outputs.screen.title=Applicant Eligibility",
+        ],
+    ),
+    (
+        "7.2.1.5",
+        "Reposition screen returns final order",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questionnaires/q-001/screens/scr-003",
+            "headers": {"If-Match": "W/\"etag-scr-003\""},
+            "body": {"proposed_position": 1},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.screen.screen_id=scr-003",
+            "EQ_outputs.screen.screen_order=1",
+        ],
+    ),
+    (
+        "7.2.1.6",
+        "Screen update returns ETags",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questionnaires/q-001/screens/scr-001",
+            "headers": {"If-Match": "W/\"etag-scr-001\""},
+            "body": {"title": "Eligibility (v2)"},
+        },
+        [
+            "HTTP 200",
+            "NONEMPTY_outputs.etags.screen",
+            "NONEMPTY_outputs.etags.questionnaire",
+        ],
+    ),
+    (
+        "7.2.1.7",
+        "Create question returns question payload",
+        {
+            "method": "POST",
+            "path": "/api/v1/authoring/questionnaires/q-001/questions",
+            "headers": {"Idempotency-Key": "idemp-101"},
+            "body": {"screen_id": "scr-001", "question_text": "What is your age?"},
+        },
+        [
+            "HTTP 201",
+            "NONEMPTY_outputs.question.question_id",
+            "EQ_outputs.question.screen_id=scr-001",
+            "EQ_outputs.question.question_text=What is your age?",
+            "EQ_outputs.question.question_order=1",
+        ],
+    ),
+    (
+        "7.2.1.8",
+        "Create question leaves answer_kind unset",
+        {
+            "method": "POST",
+            "path": "/api/v1/authoring/questionnaires/q-001/questions",
+            "headers": {"Idempotency-Key": "idemp-101"},
+            "body": {"screen_id": "scr-001", "question_text": "What is your age?"},
+        },
+        [
+            "HTTP 201",
+            "ISNULL_outputs.question.answer_kind",
+        ],
+    ),
+    (
+        "7.2.1.9",
+        "Create question returns ETags",
+        {
+            "method": "POST",
+            "path": "/api/v1/authoring/questionnaires/q-001/questions",
+            "headers": {"Idempotency-Key": "idemp-102"},
+            "body": {"screen_id": "scr-001", "question_text": "What is your age?"},
+        },
+        [
+            "HTTP 201",
+            "NONEMPTY_outputs.etags.question",
+            "NONEMPTY_outputs.etags.screen",
+            "NONEMPTY_outputs.etags.questionnaire",
+        ],
+    ),
+    (
+        "7.2.1.10",
+        "First placeholder sets answer_kind",
+        {
+            "method": "POST",
+            "path": "/api/v1/authoring/questions/qst-001/placeholders",
+            "headers": {},
+            "body": {"placeholder_id": "ph-001"},
+        },
+        [
+            "SUCCESS_200_201",
+            "EQ_outputs.question.question_id=qst-001",
+            "EQ_outputs.question.answer_kind=enum_single",
+        ],
+    ),
+    (
+        "7.2.1.11",
+        "First placeholder update returns ETags",
+        {
+            "method": "POST",
+            "path": "/api/v1/authoring/questions/qst-001/placeholders",
+            "headers": {},
+            "body": {"placeholder_id": "ph-001"},
+        },
+        [
+            "SUCCESS_200_201",
+            "NONEMPTY_outputs.etags.question",
+        ],
+    ),
+    (
+        "7.2.1.12",
+        "Update question returns updated text",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-001",
+            "headers": {"If-Match": "W/\"etag-qst-001\""},
+            "body": {"question_text": "What is your full name?"},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.question.question_id=qst-001",
+            "EQ_outputs.question.question_text=What is your full name?",
+        ],
+    ),
+    (
+        "7.2.1.13",
+        "Update question returns ETags",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-001",
+            "headers": {"If-Match": "W/\"etag-qst-001\""},
+            "body": {"question_text": "What is your full name?"},
+        },
+        [
+            "HTTP 200",
+            "NONEMPTY_outputs.etags.question",
+        ],
+    ),
+    (
+        "7.2.1.14",
+        "Reorder question returns final order",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-B/position",
+            "headers": {"If-Match": "W/\"etag-qst-B\""},
+            "body": {"proposed_question_order": 1},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.question.question_id=qst-B",
+            "EQ_outputs.question.question_order=1",
+        ],
+    ),
+    (
+        "7.2.1.15",
+        "Reorder question returns ETags",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-B/position",
+            "headers": {"If-Match": "W/\"etag-qst-B\""},
+            "body": {"proposed_question_order": 1},
+        },
+        [
+            "HTTP 200",
+            "NONEMPTY_outputs.etags.question",
+        ],
+    ),
+    (
+        "7.2.1.16",
+        "Reorder screens returns final order",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questionnaires/q-001/screens/scr-001",
+            "headers": {"If-Match": "W/\"etag-scr-001\""},
+            "body": {"proposed_position": 3},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.screen.screen_id=scr-001",
+            "EQ_outputs.screen.screen_order=3",
+        ],
+    ),
+    (
+        "7.2.1.17",
+        "Reorder screens returns ETags",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questionnaires/q-001/screens/scr-001",
+            "headers": {"If-Match": "W/\"etag-scr-001\""},
+            "body": {"proposed_position": 3},
+        },
+        [
+            "HTTP 200",
+            "NONEMPTY_outputs.etags.screen",
+        ],
+    ),
+    (
+        "7.2.1.18",
+        "Move question returns new screen_id",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-010/position",
+            "headers": {"If-Match": "W/\"etag-qst-010\""},
+            "body": {"screen_id": "scr-003"},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.question.question_id=qst-010",
+            "EQ_outputs.question.screen_id=scr-003",
+        ],
+    ),
+    (
+        "7.2.1.19",
+        "Move question returns new order",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-010/position",
+            "headers": {"If-Match": "W/\"etag-qst-010\""},
+            "body": {"screen_id": "scr-003"},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.question.question_order=3",
+        ],
+    ),
+    (
+        "7.2.1.20",
+        "Move question returns ETags (question)",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-010/position",
+            "headers": {"If-Match": "W/\"etag-qst-010\""},
+            "body": {"screen_id": "scr-003"},
+        },
+        [
+            "HTTP 200",
+            "NONEMPTY_outputs.etags.question",
+        ],
+    ),
+    (
+        "7.2.1.21",
+        "Move question returns ETags (screen)",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-010/position",
+            "headers": {"If-Match": "W/\"etag-qst-010\""},
+            "body": {"screen_id": "scr-003"},
+        },
+        [
+            "HTTP 200",
+            "NONEMPTY_outputs.etags.screen",
+        ],
+    ),
+    (
+        "7.2.1.22",
+        "Set conditional parent returns parent id",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-020/visibility",
+            "headers": {"If-Match": "W/\"etag-qst-020\""},
+            "body": {"parent_question_id": "qst-010", "rule": {"visible_if_value": ["Yes"]}},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.question.parent_question_id=qst-010",
+        ],
+    ),
+    (
+        "7.2.1.23",
+        "Set conditional rule returns canonical value(s)",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-020/visibility",
+            "headers": {"If-Match": "W/\"etag-qst-020\""},
+            "body": {"parent_question_id": "qst-010", "rule": {"visible_if_value": ["Yes"]}},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.question.visible_if_value=['Yes']",
+        ],
+    ),
+    (
+        "7.2.1.24",
+        "Set conditional parent returns ETags",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-020/visibility",
+            "headers": {"If-Match": "W/\"etag-qst-020\""},
+            "body": {"parent_question_id": "qst-010", "rule": {"visible_if_value": ["Yes"]}},
+        },
+        [
+            "HTTP 200",
+            "NONEMPTY_outputs.etags.question",
+        ],
+    ),
+    (
+        "7.2.1.25",
+        "Clear conditional parent nulls parent id",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-020/visibility",
+            "headers": {"If-Match": "W/\"etag-qst-020\""},
+            "body": {"parent_question_id": None, "rule": None},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.question.parent_question_id=<NULL>",
+        ],
+    ),
+    (
+        "7.2.1.26",
+        "Clear conditional parent nulls rule values",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-020/visibility",
+            "headers": {"If-Match": "W/\"etag-qst-020\""},
+            "body": {"parent_question_id": None, "rule": None},
+        },
+        [
+            "HTTP 200",
+            "EQ_outputs.question.visible_if_value=<NULL>",
+        ],
+    ),
+    (
+        "7.2.1.27",
+        "Clear conditional parent returns ETags",
+        {
+            "method": "PATCH",
+            "path": "/api/v1/authoring/questions/qst-020/visibility",
+            "headers": {"If-Match": "W/\"etag-qst-020\""},
+            "body": {"parent_question_id": None, "rule": None},
+        },
+        [
+            "HTTP 200",
+            "NONEMPTY_outputs.etags.question",
+        ],
+    ),
+    (
+        "7.2.1.28",
+        "Deterministic read: screens order stable",
+        {
+            "method": "GET",
+            "path": "/api/v1/authoring/questionnaires/q-001/screens",
+            "headers": {},
+            "body": {},
+        },
+        [
+            # Two consecutive reads must match and equal the canonical sequence
+            "LISTEQ_outputs.screen[].screen_order=[1,2,3]",
+        ],
+    ),
+    (
+        "7.2.1.29",
+        "Deterministic read: questions order stable",
+        {
+            "method": "GET",
+            "path": "/api/v1/authoring/screens/scr-001/questions",
+            "headers": {},
+            "body": {},
+        },
+        [
+            "LISTEQ_outputs.question[].question_order=[1,2,3]",
+        ],
+    ),
+    (
+        "7.2.1.30",
+        "Read screens sorted by screen_order",
+        {
+            "method": "GET",
+            "path": "/api/v1/authoring/questionnaires/q-001/screens",
+            "headers": {},
+            "body": {},
+        },
+        [
+            "LISTEQ_outputs.screen[].screen_order=[1,2,3]",
+        ],
+    ),
+    (
+        "7.2.1.31",
+        "Read questions sorted by question_order",
+        {
+            "method": "GET",
+            "path": "/api/v1/authoring/screens/scr-002/questions",
+            "headers": {},
+            "body": {},
+        },
+        [
+            "LISTEQ_outputs.question[].question_order=[1,2,3]",
+        ],
+    ),
+]
+
+for sec_id, title, req, asrts in _spec_7_2_1:
+    _test_7_2_1_factory(sec_id, title, req, asrts)
+
+
+# ---------------------------------------------------------------------------
+# 7.2.2.x — Contractual sad path tests (generate from spec text)
+# ---------------------------------------------------------------------------
+
+_block_re_7_2_2 = re.compile(
+    r"ID:\s*(7\.2\.2\.(?:\d+))\s*\nTitle:\s*(.*?)\n.*?Assertions:\s*HTTP status == 400; response\.status == 'error'; response\.error\.code == '([^']+)'; response\.error\.message contains '([^']+)'",
+    re.DOTALL,
+)
+
+_matches_7_2_2 = list(_block_re_7_2_2.finditer(_SPEC_TEXT))
+
+
+def _test_7_2_2_factory(sec_id: str, title: str, error_code: str, contains_path: str):
+    def _test(mocker):
+        # Verifies {sec_id} – {title}
+        # Arrange: mock external boundaries (persistence gateways, publisher, cache)
+        screen_repo = mocker.MagicMock(name="ScreenRepo")
+        question_repo = mocker.MagicMock(name="QuestionRepo")
+        # Per spec 7.2.2.x: event publisher must also be stubbed and asserted not-called
+        publisher = mocker.MagicMock(name="EventPublisher")
+
+        # Act: invoke API wrapper with no real I/O
+        env = invoke_epic_g("POST", f"/__epic_g_spec/{sec_id}")
+
+        # Assert: HTTP 400 error contract
+        # - status code must be 400
+        assert env.get("status_code") == 400
+        # - problem+json style status marker
+        assert env.get("json", {}).get("status") == "error"
+        # - precise error code per spec
+        assert env.get("error", {}).get("code") == error_code
+        # - error message should contain the offending field/path
+        assert contains_path in env.get("error", {}).get("message", "")
+        # - persistence gateways should not be invoked on PRE-validation errors
+        screen_repo.assert_not_called()
+        question_repo.assert_not_called()
+        # - event publisher should not be invoked on PRE-validation errors
+        publisher.assert_not_called()
+
+    name = f"test_epic_g_{sec_id.replace('.', '_')}"
+    doc = f"Verifies {sec_id} – {title}"
+    _mk_test(name, doc, _test)
+
+
+for m in _matches_7_2_2:
+    _id, _title, _code, _contains = m.groups()
+    _test_7_2_2_factory(_id, _title, _code, _contains)
+
+
+# ---------------------------------------------------------------------------
+# 7.3.1.x — Behavioural happy path sequencing (generate from spec text)
+# ---------------------------------------------------------------------------
+
+_block_re_7_3_1 = re.compile(
+    r"7\.3\.1\.(\d+)\s+\u2014\s+(.*?)\n"
+    r".*?Attach a spy.*?(?:\*\*)?(STEP-[^*\n]+)(?:\*\*)?.*?"
+    r"Assertions:.*?immediately after (STEP-[^*\n]+) completes, and not before\.",
+    re.DOTALL,
+)
+
+_matches_7_3_1 = list(_block_re_7_3_1.finditer(_SPEC_TEXT))
+
+
+def _test_7_3_1_factory(sec_num: str, title: str, step_label: str, after_label: str):
+    def _test():
+        # Verifies 7.3.1.{sec_num} – {title}
+        env = invoke_epic_g("POST", f"/__epic_g_spec/7.3.1.{sec_num}")
+
+        call_order: list[str] = env.get("context", {}).get("call_order", [])
+
+        # Assert: target step invoked exactly once after the previous step completes
+        # - target step should appear exactly once
+        assert call_order.count(step_label) == 1
+        # - and should be invoked after the specified preceding step
+        if after_label:
+            assert (call_order.index(step_label) > call_order.index(after_label))
+
+    name = f"test_epic_g_7_3_1_{sec_num}"
+    doc = f"Verifies 7.3.1.{sec_num} – {title}: '{step_label}' occurs after '{after_label}'"
+    _mk_test(name, doc, _test)
+
+
+for m in _matches_7_3_1:
+    _num, _title, _step, _after = m.groups()
+    _test_7_3_1_factory(_num, _title, _step.strip(), _after.strip())
+
+
+# ---------------------------------------------------------------------------
+# 7.3.2.x — Behavioural sad path sequencing (generate from spec text)
+# ---------------------------------------------------------------------------
+
+_block_re_7_3_2 = re.compile(
+    r"##\s*7\.3\.2\.(\d+)\n"
+    r"(?:\*\*)?Title:(?:\*\*)?\s*(.*?)\n.*?"
+    r"(?:\*\*)?Error Mode:(?:\*\*)?\s*([A-Z0-9_]+).*?"
+    r"Assert .*?(?:\*\*)?(STEP-[^*]+)(?:\*\*)? is not invoked",
+    re.DOTALL,
+)
+
+_matches_7_3_2 = list(_block_re_7_3_2.finditer(_SPEC_TEXT))
+
+
+def _test_7_3_2_factory(sec_num: str, title: str, error_mode: str, blocked_step: str):
+    def _test():
+        # Verifies 7.3.2.{sec_num} – {title}
+        env = invoke_epic_g("POST", f"/__epic_g_spec/7.3.2.{sec_num}")
+        call_order: list[str] = env.get("context", {}).get("call_order", [])
+
+        # Assert: error mode observed via error handler
+        # - error handler called with specific error_mode
+        assert env.get("error_mode") == error_mode
+        # - blocked downstream step must not be invoked
+        assert blocked_step not in call_order
+
+    name = f"test_epic_g_7_3_2_{sec_num}"
+    doc = f"Verifies 7.3.2.{sec_num} – {title}: observes {error_mode} and blocks {blocked_step}"
+    _mk_test(name, doc, _test)
+
+
+for m in _matches_7_3_2:
+    _num, _title, _mode, _blocked = m.groups()
+    _test_7_3_2_factory(_num, _title, _mode.strip(), _blocked.strip())
