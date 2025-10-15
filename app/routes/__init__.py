@@ -12,6 +12,11 @@ except ImportError:
 from app.routes.documents import router as documents_router
 from app.routes.questionnaires import router as questionnaires_router
 from app.routes.screens import router as screens_router
+# Epic G authoring skeleton routes
+try:
+    from app.routes.authoring import router as authoring_router  # type: ignore
+except ImportError:
+    authoring_router = None  # type: ignore
 # Epic D skeleton routers (Clarke): transforms and placeholders
 try:
     from app.routes.transforms import router as transforms_router  # type: ignore
@@ -39,5 +44,7 @@ if placeholders_router is not None:
     api_router.include_router(placeholders_router, tags=["Placeholders", "Bindings"])  # Epic D skeleton
 if bindings_purge_router is not None:
     api_router.include_router(bindings_purge_router, tags=["Bindings", "Documents"])  # Epic D skeleton
+if authoring_router is not None:
+    api_router.include_router(authoring_router, tags=["Authoring"])  # Epic G skeleton
 
 __all__ = ["api_router"]

@@ -1550,8 +1550,13 @@ def step_then_header_equals(context, header_name: str, expected: str):
     headers = context.last_response.get("headers", {}) or {}
     # Case-insensitive header fetch to tolerate server casing
     val = _get_header_case_insensitive(headers, header_name)
-    expected = expected.replace("\\_", "_")
-    assert val == expected, f"Expected header {header_name}={expected}, got {val}"
+    # Clarke: resolve expected against captured variables when present;
+    # otherwise fall back to literal comparison. Preserve underscore unescaping.
+    normalized_expected = expected.replace("\\_", "_")
+    resolved_expected = context.vars.get(normalized_expected, normalized_expected)
+    assert val == resolved_expected, (
+        f"Expected header {header_name}={resolved_expected}, got {val}"
+    )
 
 
 @then('the response header "ETag" should be a non-empty string and capture as "{var_name}"')
@@ -1940,17 +1945,49 @@ def epic_i_get_and_store_etag_alias(context, path: str, var_name: str):
 
 @when('I PATCH "{path}" with body:')
 def epic_i_patch_with_body_first(context, path: str):
-    raw = context.text or "{}"
+    # Support both inline JSON (context.text) and table-form key/value rows (context.table)
+    body: Any
+    if getattr(context, "table", None) is not None and len(context.table.rows) > 0:  # type: ignore[attr-defined]
+        # Parse rows into a JSON object with simple literal coercion
+        data: Dict[str, Any] = {}
+        for row in context.table:  # type: ignore[attr-defined]
+            key = str(row[0]).replace("\\_", "_")
+            raw_val = (str(row[1]) if row[1] is not None else "").replace("\\_", "_").strip()
+            val: Any
+            if raw_val.lower() == "null":
+                val = None
+            else:
+                # Attempt int/bool/array/object coercion; fallback to string
+                try:
+                    if raw_val.isdigit():
+                        val = int(raw_val)
+                    else:
+                        val = json.loads(raw_val)
+                except Exception:
+                    val = raw_val
+            data[key] = val
+        body = data
+    else:
+        raw = context.text or "{}"
+        try:
+            raw = raw.replace("\\_", "_")
+        except Exception:
+            pass
+        try:
+            body = json.loads(raw)
+        except Exception as exc:
+            raise AssertionError(f"Invalid JSON body: {exc}\n{raw}")
+    # Canonicalize path and determine if this is a response-answers endpoint
+    context._pending_path = _rewrite_path(context, path)
+    is_answer_endpoint = False
     try:
-        raw = raw.replace("\\_", "_")
+        p = str(context._pending_path or "")
+        is_answer_endpoint = (p.startswith("/response-sets/") or ("/answers/" in p))
     except Exception:
-        pass
-    try:
-        body = json.loads(raw)
-    except Exception as exc:
-        raise AssertionError(f"Invalid JSON body: {exc}\n{raw}")
-    # Normalize typed value_* keys before validation and sending (Clarke)
-    if isinstance(body, dict):
+        is_answer_endpoint = False
+
+    # Normalize and validate only for response-set answers endpoints (Clarke)
+    if isinstance(body, dict) and is_answer_endpoint:
         body = _normalize_answer_upsert_payload(body)
         # Validate AnswerUpsert overlay after normalization
         base = _schema("AnswerUpsert")
@@ -1962,15 +1999,52 @@ def epic_i_patch_with_body_first(context, path: str):
         if isinstance(req, list) and "answer_kind" in req:
             overlay["required"] = [r for r in req if r != "answer_kind"]
         _validate(body, overlay)
-    # Canonicalize path and translate body.question_id using mapping
-    context._pending_path = _rewrite_path(context, path)
-    if isinstance(body, dict) and "question_id" in body:
+
+    # Translate question_id only for answers endpoints
+    if isinstance(body, dict) and is_answer_endpoint and "question_id" in body:
         vars_map = context.vars if hasattr(context, "vars") else {}
         q_map: Dict[str, str] = vars_map.setdefault("qid_by_ext", {})
         q_val = str(body.get("question_id"))
         body = dict(body)
         body["question_id"] = _resolve_id(q_val, q_map, prefix="q:")
     context._pending_body = body
+    # Clarke: If headers were staged before body, send the PATCH now
+    try:
+        pending_headers = getattr(context, "_pending_headers", None)
+        if pending_headers and getattr(context, "_pending_path", None):
+            path = context._pending_path
+            body = context._pending_body
+            # Ensure the body is normalized only for answers endpoints (idempotent)
+            try:
+                is_answer_endpoint = (str(path).startswith("/response-sets/") or ("/answers/" in str(path)))
+            except Exception:
+                is_answer_endpoint = False
+            if isinstance(body, dict) and is_answer_endpoint:
+                body = _normalize_answer_upsert_payload(body)
+            status, headers_out, body_json, body_text = _http_request(
+                context, "PATCH", path, headers=pending_headers, json_body=body
+            )
+            context.last_response = {
+                "status": status,
+                "headers": headers_out,
+                "json": body_json,
+                "text": body_text,
+                "path": path,
+                "method": "PATCH",
+            }
+            # Persist canonicalized artifacts for idempotency checks
+            context._last_patch_path = path
+            context._last_patch_headers = pending_headers
+            context._last_patch_body = body
+            if not hasattr(context, "first_response") or context.first_response is None:
+                context.first_response = context.last_response
+            # Clear pending staged data now that the request has been dispatched
+            context._pending_path = None
+            context._pending_body = None
+            context._pending_headers = None
+    except Exception:
+        # Do not block the scenario; fallback to headers: step to send
+        pass
 
 
 @step("headers:")
@@ -1978,9 +2052,13 @@ def epic_i_headers_then_send(context):
     headers = {row[0]: _interpolate(row[1], context) for row in context.table}
     if getattr(context, "_pending_body", None) is not None and getattr(context, "_pending_path", None):
         path = context._pending_path
-        # Ensure the body is normalized before sending (idempotent)
+        # Ensure the body is normalized only for answers endpoints (idempotent)
         body = context._pending_body
-        if isinstance(body, dict):
+        try:
+            is_answer_endpoint = (str(path).startswith("/response-sets/") or ("/answers/" in str(path)))
+        except Exception:
+            is_answer_endpoint = False
+        if isinstance(body, dict) and is_answer_endpoint:
             body = _normalize_answer_upsert_payload(body)
         status, headers_out, body_json, body_text = _http_request(context, "PATCH", path, headers=headers, json_body=body)
         context.last_response = {
