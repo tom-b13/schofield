@@ -68,6 +68,24 @@ ALTER TABLE questionnaire_question
     ADD CONSTRAINT uq_question_external_qid
         UNIQUE (external_qid);
 
+-- Screen ordering uniqueness per questionnaire (Epic G)
+ALTER TABLE screen
+    ADD CONSTRAINT uq_screen_questionnaire_order
+        UNIQUE (questionnaire_id, screen_order);
+
+-- QuestionnaireQuestion FK to Screen and per-screen ordering uniqueness
+ALTER TABLE questionnaire_question
+    ADD CONSTRAINT fk_question_screen
+        FOREIGN KEY (screen_id) REFERENCES screen(screen_id);
+ALTER TABLE questionnaire_question
+    ADD CONSTRAINT uq_question_per_screen_order
+        UNIQUE (screen_id, question_order);
+
+-- Named FK for Screen -> Questionnaire (singular table names per ERD)
+ALTER TABLE screen
+    ADD CONSTRAINT fk_screen_questionnaire
+        FOREIGN KEY (questionnaire_id) REFERENCES questionnaire(questionnaire_id);
+
 -- 8) Partial unique index for placeholder code (deterministic lookup contract)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_question_placeholder_code
     ON questionnaire_question (placeholder_code)

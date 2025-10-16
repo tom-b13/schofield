@@ -16,6 +16,10 @@ router = APIRouter()
 
 
 @router.get(
+    "/api/v1/questionnaires/{id}",
+    include_in_schema=False,
+)
+@router.get(
     "/questionnaires/{id}",
     summary="Get questionnaire metadata and screens index (no questions)",
     operation_id="getQuestionnaire",

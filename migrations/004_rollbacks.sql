@@ -1,6 +1,7 @@
 -- Rollbacks (strict reverse of 003 -> 002 -> 001 creation order)
 
 -- 003: Indexes (drop in exact reverse of appearance in migrations/003_indexes.sql)
+DROP INDEX IF EXISTS ix_screen_questionnaire;
 DROP INDEX IF EXISTS ix_idempotency_expires;
 DROP INDEX IF EXISTS ix_eopl_placeholder;
 DROP INDEX IF EXISTS ix_eopl_option;
@@ -20,9 +21,10 @@ DROP INDEX IF EXISTS ix_response_question;
 DROP INDEX IF EXISTS ix_response_set;
 DROP INDEX IF EXISTS ix_answer_option_question;
 DROP INDEX IF EXISTS ix_question_parent;
-DROP INDEX IF EXISTS ix_question_answer_type;
+DROP INDEX IF EXISTS ix_question_answer_kind;
 
 -- 002: Constraints and named uniques (reverse of migrations/002_constraints.sql)
+-- Drop constraints created in sections 13 through 9 (reverse order of creation)
 ALTER TABLE idempotency_key
     DROP CONSTRAINT IF EXISTS uq_idempotency_key_unique;
 ALTER TABLE placeholder
@@ -39,7 +41,19 @@ ALTER TABLE document
     DROP CONSTRAINT IF EXISTS uq_document_order_number;
 ALTER TABLE document_blob
     DROP CONSTRAINT IF EXISTS fk_document_blob_document;
+
+-- Drop partial unique index created in section 8
 DROP INDEX IF EXISTS uq_question_placeholder_code;
+
+-- Screen/Questionnaire constraints in strict reverse of creation order
+ALTER TABLE screen
+    DROP CONSTRAINT IF EXISTS fk_screen_questionnaire;
+ALTER TABLE questionnaire_question
+    DROP CONSTRAINT IF EXISTS uq_question_per_screen_order;
+ALTER TABLE questionnaire_question
+    DROP CONSTRAINT IF EXISTS fk_question_screen;
+ALTER TABLE screen
+    DROP CONSTRAINT IF EXISTS uq_screen_questionnaire_order;
 
 ALTER TABLE questionnaire_question
     DROP CONSTRAINT IF EXISTS uq_question_external_qid,
@@ -89,8 +103,8 @@ DROP TABLE IF EXISTS answer_option;
 DROP TABLE IF EXISTS questionnaire_question;
 DROP TABLE IF EXISTS field_group;
 DROP TABLE IF EXISTS company;
-DROP TABLE IF EXISTS screens;
-DROP TABLE IF EXISTS questionnaires;
+DROP TABLE IF EXISTS screen;
+DROP TABLE IF EXISTS questionnaire;
 
 -- Enum types
 DROP TYPE IF EXISTS answer_kind;

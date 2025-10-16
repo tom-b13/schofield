@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.engine import Engine
 import logging
+from app.db import base  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,7 @@
 -- Lookup & performance indexes
 
 -- QuestionnaireQuestion
-CREATE INDEX IF NOT EXISTS ix_question_answer_type ON questionnaire_question(answer_type);
+CREATE INDEX IF NOT EXISTS ix_question_answer_kind ON questionnaire_question(answer_kind);
 CREATE INDEX IF NOT EXISTS ix_question_parent ON questionnaire_question(parent_question_id);
 
 -- AnswerOption
@@ -39,3 +39,6 @@ CREATE INDEX IF NOT EXISTS ix_eopl_placeholder ON enum_option_placeholder_link(p
 
 -- IdempotencyKey
 CREATE INDEX IF NOT EXISTS ix_idempotency_expires ON idempotency_key(expires_at);
+
+-- Screen
+CREATE INDEX IF NOT EXISTS ix_screen_questionnaire ON screen(questionnaire_id);

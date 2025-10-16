@@ -8,17 +8,18 @@ EXCEPTION
 END $$;
 
 -- Keep legacy helper tables for local runs
-CREATE TABLE IF NOT EXISTS questionnaires (
+CREATE TABLE IF NOT EXISTS questionnaire (
     questionnaire_id uuid PRIMARY KEY,
     name text NOT NULL,
     description text
 );
 
-CREATE TABLE IF NOT EXISTS screens (
+CREATE TABLE IF NOT EXISTS screen (
     screen_id uuid PRIMARY KEY,
-    questionnaire_id uuid NOT NULL REFERENCES questionnaires(questionnaire_id),
+    questionnaire_id uuid NOT NULL,
     screen_key text NOT NULL,
-    title text NOT NULL
+    title text NOT NULL,
+    screen_order int NOT NULL
 );
 
 -- === ERD Entities (canonical snake_case table names) ===
@@ -48,9 +49,10 @@ CREATE TABLE IF NOT EXISTS questionnaire_question (
     external_qid text,
     question_order int NOT NULL,
     question_text text NOT NULL,
-    answer_type answer_kind NOT NULL,
+    answer_kind answer_kind NOT NULL,
     mandatory boolean NOT NULL DEFAULT FALSE,
     placeholder_code text,
+    screen_id uuid NOT NULL,
     parent_question_id uuid,
     visible_if_value jsonb
 );

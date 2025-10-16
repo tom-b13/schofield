@@ -7,8 +7,10 @@ based on latest answer state. Centralizes logic to satisfy DRY per AGENTS.md.
 from __future__ import annotations
 
 import hashlib
+from sqlalchemy import text as sql_text
 
 from app.logic.repository_screens import get_visibility_rules_for_screen
+from app.db.base import get_engine
 from app.logic.repository_answers import get_existing_answer, get_screen_version
 from app.logic.answer_canonical import canonicalize_answer_value
 from app.logic.visibility_rules import compute_visible_set
@@ -77,6 +79,57 @@ def compute_document_list_etag(docs: list[dict]) -> str:
         token = f"{doc['document_id']}|{doc['title']}|{int(doc['order_number'])}|{int(doc['version'])}"
         parts.append(token.encode("utf-8"))
     return hashlib.sha1(b"\n".join(parts)).hexdigest()
+
+
+def compute_questionnaire_etag_for_authoring(questionnaire_id: str) -> str:
+    """Compute a weak ETag over the questionnaire's authoring state (screens).
+
+    The digest is derived from the ordered set of (screen_key, title, screen_order)
+    for all screens within the questionnaire, ordered by screen_order ascending
+    and then screen_key for stability. Returns a weak ETag string (W/"<hex>").
+    """
+    try:
+        eng = get_engine()
+        with eng.connect() as conn:
+            rows = conn.execute(
+                # Support schemas with or without screen_order; when absent, coalesce to 0
+                # to retain a deterministic token shape.
+                # screen_key is used for stability across renames of UUIDs.
+                sql_text(
+                    """
+                    SELECT screen_key, title,
+                           COALESCE(screen_order, 0) AS screen_order
+                    FROM screens
+                    WHERE questionnaire_id = :qid
+                    ORDER BY screen_order ASC, screen_key ASC
+                    """
+                ),
+                {"qid": questionnaire_id},
+            ).fetchall()
+    except Exception:
+        rows = []
+
+    if not rows:
+        digest = hashlib.sha1(b"empty").hexdigest()
+        return f'W/"{digest}"'
+
+    parts: list[bytes] = []
+    for r in rows:
+        try:
+            skey = str(r[0])
+            title = str(r[1])
+            order_val = int(r[2])
+        except Exception:
+            skey = str(r[0]) if len(r) > 0 else ""
+            title = str(r[1]) if len(r) > 1 else ""
+            try:
+                order_val = int(r[2]) if len(r) > 2 else 0
+            except Exception:
+                order_val = 0
+        token = f"{skey}|{title}|{order_val}".encode("utf-8")
+        parts.append(token)
+    digest = hashlib.sha1(b"\n".join(parts)).hexdigest()
+    return f'W/"{digest}"'
 
 
 def _normalize_etag_token(value: str | None) -> str:

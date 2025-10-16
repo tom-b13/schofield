@@ -70,6 +70,10 @@ except Exception:
 
 
 @router.get(
+    "/api/v1/response-sets/{response_set_id}/screens/{screen_key}",
+    include_in_schema=False,
+)
+@router.get(
     "/response-sets/{response_set_id}/screens/{screen_key}",
     summary="Get a screen with its questions and any existing answers",
     operation_id="getScreenWithAnswers",

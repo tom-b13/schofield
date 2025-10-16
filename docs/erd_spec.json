@@ -241,12 +241,12 @@
       ],
       "checks": [
         {
-          "name": "chk_blob_sha256_len",
-          "expression": "char_length(file_sha256) = 64"
-        },
-        {
           "name": "chk_blob_mime_docx",
           "expression": "mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'"
+        },
+        {
+          "name": "chk_blob_sha256_len",
+          "expression": "char_length(file_sha256) = 64"
         },
         {
           "name": "chk_blob_size_min",
@@ -809,6 +809,25 @@
       ]
     },
     {
+      "name": "Questionnaire",
+      "fields": [
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "questionnaire_id",
+          "type": "uuid"
+        }
+      ],
+      "primary_key": {
+        "name": "pk_questionnaire",
+        "columns": [
+          "questionnaire_id"
+        ]
+      }
+    },
+    {
       "name": "QuestionnaireQuestion",
       "fields": [
         {
@@ -888,25 +907,25 @@
           ]
         },
         {
-          "name": "uq_question_placeholder_code",
-          "columns": [
-            "placeholder_code"
-          ],
-          "where": "placeholder_code IS NOT NULL"
-        },
-        {
           "name": "uq_question_per_screen_order",
           "columns": [
             "screen_id",
             "question_order"
           ]
+        },
+        {
+          "name": "uq_question_placeholder_code",
+          "columns": [
+            "placeholder_code"
+          ],
+          "where": "placeholder_code IS NOT NULL"
         }
       ],
       "indexes": [
         {
-          "name": "ix_question_answer_type",
+          "name": "ix_question_answer_kind",
           "columns": [
-            "answer_type"
+            "answer_kind"
           ]
         },
         {
@@ -1086,42 +1105,23 @@
       ]
     },
     {
-      "name": "Questionnaire",
+      "name": "Screen",
       "fields": [
         {
           "name": "questionnaire_id",
           "type": "uuid"
         },
-        {
-          "name": "name",
-          "type": "text"
-        }
-      ],
-      "primary_key": {
-        "name": "pk_questionnaire",
-        "columns": [
-          "questionnaire_id"
-        ]
-      }
-    },
-    {
-      "name": "Screen",
-      "fields": [
         {
           "name": "screen_id",
           "type": "uuid"
         },
         {
-          "name": "questionnaire_id",
-          "type": "uuid"
+          "name": "screen_order",
+          "type": "int"
         },
         {
           "name": "title",
           "type": "text"
-        },
-        {
-          "name": "screen_order",
-          "type": "int"
         }
       ],
       "primary_key": {
@@ -1228,7 +1228,6 @@
     "pk_placeholder",
     "uq_placeholder_doc_clause_span",
     "pk_idempotency_key",
-    "ix_screen_questionnaire",
     "fk_group_value_group",
     "fk_eopl_option",
     "pk_screen",

@@ -13,9 +13,11 @@ class GroupValue
 class IdempotencyKey
 class Placeholder
 class QuestionToFieldGroup
+class Questionnaire
 class QuestionnaireQuestion
 class Response
 class ResponseSet
+class Screen
 
 %% === FK edges (one-to-many unless noted) ===
 AnswerOption --> QuestionnaireQuestion
@@ -32,26 +34,11 @@ Placeholder --> QuestionnaireQuestion
 QuestionToFieldGroup --> FieldGroup
 QuestionToFieldGroup --> QuestionnaireQuestion
 QuestionnaireQuestion --> QuestionnaireQuestion
+QuestionnaireQuestion --> Screen
 Response --> AnswerOption
 Response --> QuestionnaireQuestion
 Response --> ResponseSet
 ResponseSet --> Company
+Screen --> Questionnaire
 
-%% Mermaid “erDiagram” overview for visual graph renderers
-erDiagram
-  AnswerOption ||--o{ EnumOptionPlaceholderLink : "links_to_child_placeholder"
-  AnswerOption ||--o{ GroupValue : "groups"
-  AnswerOption ||--o{ Response : "chosen_by"
-  Company ||--o{ ResponseSet : "has"
-  Document ||--|| DocumentBlob : "current_blob"
-  Document ||--o{ Placeholder : "contains_spans"
-  FieldGroup ||--o{ GroupValue : "has_values"
-  Placeholder ||--o{ EnumOptionPlaceholderLink : "child_of_option"
-  QuestionnaireQuestion ||--o{ AnswerOption : "offers"
-  QuestionnaireQuestion ||--o{ GroupValue : "sources"
-  QuestionnaireQuestion ||--o{ Placeholder : "binds"
-  QuestionnaireQuestion ||--o{ QuestionToFieldGroup : "maps"
-  QuestionnaireQuestion ||--o{ QuestionnaireQuestion : "parents"  %% self parent
-  QuestionToFieldGroup }o--|| FieldGroup : "targets_group"
-  ResponseSet ||--o{ GeneratedDocument : "produces"
-  ResponseSet ||--o{ Response : "includes"
+%% Mermaid overview block removed to avoid edges not present in ERD direction set
