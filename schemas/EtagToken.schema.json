@@ -1,0 +1,8 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/EtagToken.schema.json",
+  "title": "EtagToken",
+  "type": "string",
+  "minLength": 1,
+  "description": "Opaque legacy ETag token string. Phase-0 preserves exact format."
+}

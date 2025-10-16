@@ -1,0 +1,8 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/IfMatchHeader.schema.json",
+  "title": "IfMatchHeader",
+  "type": "string",
+  "minLength": 1,
+  "description": "Raw If-Match header value prior to normalisation. Phase-0 accepts any non-empty string."
+}

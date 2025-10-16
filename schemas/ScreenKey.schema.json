@@ -1,0 +1,8 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/ScreenKey.schema.json",
+  "title": "ScreenKey",
+  "type": "string",
+  "minLength": 1,
+  "description": "ScreenKey string identifier (non-empty)."
+}
