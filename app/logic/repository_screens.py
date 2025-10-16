@@ -387,3 +387,24 @@ def count_responses_for_screen(response_set_id: str, screen_key: str) -> int:
             {"rs": response_set_id, "skey": screen_key},
         ).scalar_one()
     return int(count)
+
+
+def update_screen_title(screen_key: str, title: str) -> None:
+    """Update a screen's title by `screen_key` in its own transaction.
+
+    Single-purpose helper used by authoring routes to preserve separation of
+    concerns. Logs and re-raises unexpected errors to avoid silent failure.
+    """
+    eng = get_engine()
+    try:
+        with eng.begin() as conn:
+            conn.execute(
+                sql_text("UPDATE screens SET title = :t WHERE screen_key = :skey"),
+                {"t": str(title).strip(), "skey": str(screen_key)},
+            )
+    except Exception:
+        logger.error(
+            "update_screen_title failed screen_key=%s", screen_key, exc_info=True
+        )
+        # Preserve previous behavior by propagating so route can decide handling
+        raise

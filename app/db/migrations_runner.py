@@ -65,7 +65,8 @@ def apply_migrations(engine: Engine, migrations_dir: str | os.PathLike[str] = "m
             # Append to file-backed journal and write atomically
             entry = {
                 "filename": f"migrations/{fname}",
-                "applied_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                # applied_at must be ISO-8601 UTC without fractional seconds (e.g., 2024-01-01T00:00:00Z)
+                "applied_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             }
             journal_entries.append(entry)
             _atomic_write_json(journal_path, journal_entries)

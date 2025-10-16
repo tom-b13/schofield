@@ -560,9 +560,28 @@ def _rewrite_path(context, path: str) -> str:
         vars_map = getattr(context, "vars", {})
         rs_map: Dict[str, str] = vars_map.setdefault("rs_ids", {})  # ext -> uuid
         q_map: Dict[str, str] = vars_map.setdefault("qid_by_ext", {})  # ext -> uuid
+        qn_map: Dict[str, str] = vars_map.setdefault("questionnaire_ids", {})  # ext -> uuid
         # keep existing mapping for other routes; no screen_id rewriting per Clarke
 
         parts = p.strip("/").split("/")
+        # New: handle /authoring/* questionnaires and /questions/{ext} generic rewrite
+        try:
+            ai = parts.index("authoring")
+        except ValueError:
+            ai = -1
+        if ai >= 0 and len(parts) > ai + 1:
+            # /api/v1/authoring/questionnaires/{ext}/...
+            if parts[ai + 1] == "questionnaires" and len(parts) > ai + 2:
+                ext_qn = parts[ai + 2]
+                qn_id = _resolve_id(ext_qn, qn_map, prefix="qn:")
+                parts[ai + 2] = qn_id
+                return "/" + "/".join(parts)
+            # /api/v1/authoring/questions/{ext}[/*]
+            if parts[ai + 1] == "questions" and len(parts) > ai + 2:
+                q_ext = parts[ai + 2]
+                q_id = _resolve_id(q_ext, q_map, prefix="q:")
+                parts[ai + 2] = q_id
+                return "/" + "/".join(parts)
         if len(parts) >= 4 and parts[0] == "response-sets" and parts[2] == "screens":
             rs_ext = parts[1]
             # screen_key must remain unchanged unless it is already a UUID (pass-through)
@@ -688,6 +707,19 @@ def _http_request(
     url = base + str(effective_path)
     hdrs = (headers or {}).copy()
     hdrs.setdefault("Accept", "*/*")
+    # Clarke: ensure Content-Type for authoring JSON requests and log pre-dispatch preview
+    try:
+        if str(effective_path).startswith("/api/v1/authoring") and json_body is not None:
+            hdrs.setdefault("Content-Type", "application/json")
+            try:
+                preview = json.dumps(json_body, ensure_ascii=False, separators=(",", ":"))
+            except Exception:
+                preview = str(json_body)
+            pre_line = f"[HTTP-REQ] {method.upper()} {effective_path} json={preview}"
+            print(pre_line)
+    except Exception:
+        # Pre-dispatch logging must never break the call
+        pass
     with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
         resp = client.request(
             method.upper(),
@@ -1021,14 +1053,46 @@ def step_setup_screen_by_key_with_visibility(context, screen_key: str):
         "ON CONFLICT (questionnaire_id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description",
         {"id": questionnaire_id, "name": "epic-i", "desc": "Epic I test questionnaire"},
     )
-    # Create screen row
+    # Create screen row with a contiguous screen_order per questionnaire.
+    # Compute next order as COALESCE(MAX(screen_order), 0) + 1 when the column exists.
     screen_id = str(uuid.uuid4())
-    _db_exec(
-        context,
-        "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title) VALUES (:sid, :qid, :key, :title) "
-        "ON CONFLICT (screen_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, title=EXCLUDED.title",
-        {"sid": screen_id, "qid": questionnaire_id, "key": screen_key, "title": screen_key},
-    )
+    next_order = 1
+    eng = _db_engine(context)
+    try:
+        assert eng is not None, "Database not configured; TEST_DATABASE_URL is required"
+        with eng.connect() as conn:
+            try:
+                res = conn.execute(
+                    sql_text(
+                        "SELECT COALESCE(MAX(screen_order), 0) + 1 AS next_order FROM screens WHERE questionnaire_id = :qid"
+                    ),
+                    {"qid": questionnaire_id},
+                ).scalar_one()
+                if isinstance(res, int) and res >= 1:
+                    next_order = res
+            except Exception:
+                # If the screen_order column is absent, retain default order = 1
+                next_order = 1
+    except Exception:
+        # Non-fatal; fall back to default next_order = 1
+        next_order = 1
+
+    # Attempt insert including screen_order; if column is absent, fall back without it.
+    try:
+        _db_exec(
+            context,
+            "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title, screen_order) "
+            "VALUES (:sid, :qid, :key, :title, :ord) "
+            "ON CONFLICT (screen_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, title=EXCLUDED.title, screen_order=EXCLUDED.screen_order",
+            {"sid": screen_id, "qid": questionnaire_id, "key": screen_key, "title": screen_key, "ord": next_order},
+        )
+    except Exception:
+        _db_exec(
+            context,
+            "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title) VALUES (:sid, :qid, :key, :title) "
+            "ON CONFLICT (screen_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, title=EXCLUDED.title",
+            {"sid": screen_id, "qid": questionnaire_id, "key": screen_key, "title": screen_key},
+        )
     # Clarke: record screen_key -> screen_id mapping so _rewrite_path can rewrite
     # /response-sets/{ext}/screens/{screen_key} to the seeded UUID instead of a
     # deterministic uuid5. This enables subsequent GETs to return 200.
@@ -1947,17 +2011,75 @@ def epic_i_get_and_store_etag_alias(context, path: str, var_name: str):
 def epic_i_patch_with_body_first(context, path: str):
     # Support both inline JSON (context.text) and table-form key/value rows (context.table)
     body: Any
-    if getattr(context, "table", None) is not None and len(context.table.rows) > 0:  # type: ignore[attr-defined]
+    table = getattr(context, "table", None)
+    if table is not None:  # Do not guard on len(table.rows); tolerate varied Behave shapes
         # Parse rows into a JSON object with simple literal coercion
         data: Dict[str, Any] = {}
-        for row in context.table:  # type: ignore[attr-defined]
-            key = str(row[0]).replace("\\_", "_")
-            raw_val = (str(row[1]) if row[1] is not None else "").replace("\\_", "_").strip()
+        rows = getattr(table, "rows", table)
+        headings = getattr(table, "headings", None)
+        # Clarke: If headings provide a two-column pair, seed body with it
+        try:
+            if headings and len(headings) >= 2:
+                h_key = str(headings[0]).replace("\\_", "_").strip()
+                h_raw = str(headings[1]).replace("\\_", "_").strip()
+                if h_key:
+                    if h_raw.lower() == "null":
+                        h_val: Any = None
+                    else:
+                        try:
+                            h_val = int(h_raw) if h_raw.isdigit() else json.loads(h_raw)
+                        except Exception:
+                            h_val = h_raw
+                    data[h_key] = h_val
+        except Exception:
+            # Non-fatal; continue with row parsing
+            pass
+        for row in rows or []:  # type: ignore[attr-defined]
+            key: str = ""
+            raw_val_str: str = ""
+            try:
+                # Prefer cells when available
+                cells = getattr(row, "cells", None)
+                if cells is not None:
+                    if len(cells) >= 2:
+                        key = str(cells[0])
+                        raw_val_str = str(cells[1]) if cells[1] is not None else ""
+                    elif len(cells) == 1:
+                        # Fallback: single cell formatted as "key: value"
+                        cell_text = str(cells[0])
+                        if ":" in cell_text:
+                            k, v = cell_text.split(":", 1)
+                            key = k
+                            raw_val_str = v
+                elif headings and len(headings) >= 2:
+                    # Access by heading names if provided
+                    key = str(row[headings[0]])  # type: ignore[index]
+                    raw_val_str = str(row[headings[1]])  # type: ignore[index]
+                else:
+                    try:
+                        key = str(row[0])
+                        raw_val_str = str(row[1]) if row[1] is not None else ""
+                    except Exception:
+                        # Fallback: sequence row with single "key: value" cell
+                        cell_text = str(row[0])
+                        if ":" in cell_text:
+                            k, v = cell_text.split(":", 1)
+                            key = k
+                            raw_val_str = v
+            except Exception:
+                try:
+                    key = str(row[0])
+                    raw_val_str = str(row[1]) if row[1] is not None else ""
+                except Exception:
+                    key = ""
+                    raw_val_str = ""
+            # Normalize escapes and coerce types
+            key = key.replace("\\_", "_").strip()
+            raw_val = raw_val_str.replace("\\_", "_").strip()
             val: Any
             if raw_val.lower() == "null":
                 val = None
             else:
-                # Attempt int/bool/array/object coercion; fallback to string
                 try:
                     if raw_val.isdigit():
                         val = int(raw_val)
@@ -1965,8 +2087,15 @@ def epic_i_patch_with_body_first(context, path: str):
                         val = json.loads(raw_val)
                 except Exception:
                     val = raw_val
-            data[key] = val
+            if key:
+                data[key] = val
         body = data
+        # Instrumentation: number of rows and headings to aid debugging
+        try:
+            row_count = len(rows) if rows is not None else 0
+            print(f"[PATCH-BODY-BUILD] rows={row_count} headings={list(headings) if headings else None}")
+        except Exception:
+            pass
     else:
         raw = context.text or "{}"
         try:
@@ -2007,6 +2136,12 @@ def epic_i_patch_with_body_first(context, path: str):
         q_val = str(body.get("question_id"))
         body = dict(body)
         body["question_id"] = _resolve_id(q_val, q_map, prefix="q:")
+    # Debug instrumentation: show keys of the body we've built prior to staging
+    try:
+        keys = list(body.keys()) if isinstance(body, dict) else None
+        print(f"[PATCH-BODY-BUILD] keys={keys}")
+    except Exception:
+        pass
     context._pending_body = body
     # Clarke: If headers were staged before body, send the PATCH now
     try:

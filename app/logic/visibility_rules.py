@@ -68,3 +68,44 @@ def filter_visible_questions(
     step executed prior to screen assembly.
     """
     return compute_visible_set(rules, parent_values)
+
+
+def validate_visibility_compatibility(parent_answer_kind: str, visible_if_value: object) -> None:
+    """Validate that the provided visible_if_value is compatible with parent kind.
+
+    - Interprets answer kinds per AnswerKind schema; only boolean parents accept
+      visible_if_value tokens, which must be one of ['true','false'] (case-insensitive).
+    - Raises ValueError with a code token when incompatible; returns None when OK.
+    """
+    kind = (parent_answer_kind or "").strip().lower() if isinstance(parent_answer_kind, str) else ""
+    if kind in {"bool", "boolean", "yesno"}:
+        # Accept lists and scalars; normalize to boolean tokens
+        def _canon(val: object) -> list[str] | None:
+            if val is None:
+                return None
+            if isinstance(val, bool):
+                return ["true" if val else "false"]
+            try:
+                s = str(val).strip().lower()
+            except Exception:
+                s = str(val)
+            if isinstance(val, (list, tuple)):
+                out: list[str] = []
+                for item in val:
+                    if isinstance(item, bool):
+                        out.append("true" if item else "false")
+                    else:
+                        t = str(item).strip().lower()
+                        if t in {"true", "false"}:
+                            out.append(t)
+                        else:
+                            return None
+                return out if out else None
+            return [s] if s in {"true", "false"} else None
+        if _canon(visible_if_value) is None:
+            raise ValueError("incompatible_with_parent_answer_kind")
+        return None
+    # Non-boolean parent: only accept null visible_if_value
+    if visible_if_value is None:
+        return None
+    raise ValueError("incompatible_with_parent_answer_kind")

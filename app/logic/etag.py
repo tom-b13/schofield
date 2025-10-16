@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from sqlalchemy import text as sql_text
+import logging
 
 from app.logic.repository_screens import get_visibility_rules_for_screen
 from app.db.base import get_engine
@@ -15,6 +16,7 @@ from app.logic.repository_answers import get_existing_answer, get_screen_version
 from app.logic.answer_canonical import canonicalize_answer_value
 from app.logic.visibility_rules import compute_visible_set
 
+logger = logging.getLogger(__name__)
 
 def compute_screen_etag(response_set_id: str, screen_key: str) -> str:
     """Compute a weak ETag for a screen within a response set.
@@ -107,6 +109,11 @@ def compute_questionnaire_etag_for_authoring(questionnaire_id: str) -> str:
                 {"qid": questionnaire_id},
             ).fetchall()
     except Exception:
+        logger.error(
+            "compute_questionnaire_etag_for_authoring DB read failed qid=%s",
+            questionnaire_id,
+            exc_info=True,
+        )
         rows = []
 
     if not rows:

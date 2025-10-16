@@ -87,14 +87,35 @@ def create_app() -> FastAPI:
             logger.error("Failed to build DB engine before migrations", exc_info=True)
             raise
         try:
-            # Schema readiness short-circuit: if core objects exist, skip migrations
+            # Schema readiness short-circuit with Epic G columns awareness
             from sqlalchemy import text
             with engine.connect() as conn:
-                # Check a core table and a core index as sentinels
+                # Check core objects first
                 has_questionnaires = conn.execute(text("SELECT to_regclass('public.questionnaires')")).scalar()
                 has_placeholder_idx = conn.execute(
                     text("SELECT to_regclass('public.uq_question_placeholder_code')")
                 ).scalar()
+
+                # Explicitly verify Epic G columns exist; if missing, force migrations
+                epic_g_missing = False
+                try:
+                    conn.execute(text("SELECT screen_order FROM screens LIMIT 1"))
+                except Exception:
+                    epic_g_missing = True
+                try:
+                    conn.execute(text("SELECT question_order FROM questionnaire_question LIMIT 1"))
+                except Exception:
+                    epic_g_missing = True
+
+                if epic_g_missing:
+                    logger.info("Epic G columns missing; forcing migrations regardless of AUTO_APPLY_MIGRATIONS")
+                    try:
+                        apply_migrations(engine)
+                    except Exception:
+                        logger.error("Forced migrations for Epic G failed", exc_info=True)
+                        raise
+                    return
+
                 if has_questionnaires and has_placeholder_idx:
                     logger.info("DB schema appears ready; skipping migrations at startup")
                     return

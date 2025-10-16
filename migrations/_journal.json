@@ -1,6 +1,62 @@
 [
-  {"filename": "migrations/001_init.sql", "applied_at": "2024-01-01T00:00:00Z"},
-  {"filename": "migrations/002_constraints.sql", "applied_at": "2024-01-01T00:00:10Z"},
-  {"filename": "migrations/003_indexes.sql", "applied_at": "2024-01-01T00:00:20Z"}
+  {
+    "filename": "migrations/001_init.sql",
+    "applied_at": "2024-01-01T00:00:00Z"
+  },
+  {
+    "filename": "migrations/002_constraints.sql",
+    "applied_at": "2024-01-01T00:00:10Z"
+  },
+  {
+    "filename": "migrations/003_indexes.sql",
+    "applied_at": "2024-01-01T00:00:20Z"
+  },
+  {
+    "filename": "migrations/003_seed.sql",
+    "applied_at": "2025-10-16T00:42:41Z"
+  },
+  {
+    "filename": "migrations/005_add_enum_single.sql",
+    "applied_at": "2025-10-16T00:42:41Z"
+  },
+  {
+    "filename": "migrations/006_epic_a1_parent_value_condition_and_question_ref.sql",
+    "applied_at": "2025-10-16T00:42:41Z"
+  },
+  {
+    "filename": "migrations/007_backfill_missing_columns.sql",
+    "applied_at": "2025-10-16T00:42:41Z"
+  },
+  {
+    "filename": "migrations/008_add_question_order.sql",
+    "applied_at": "2025-10-16T00:42:41Z"
+  },
+  {
+    "filename": "migrations/009_ensure_answer_kind_labels.sql",
+    "applied_at": "2025-10-16T00:42:41Z"
+  },
+  {
+    "filename": "migrations/010_make_value_json_nullable.sql",
+    "applied_at": "2025-10-16T00:42:41Z"
+  },
+  {
+    "filename": "migrations/011_add_enum_single_to_answer_kind.sql",
+    "applied_at": "2025-10-16T00:42:41Z"
+  },
+  {
+    "filename": "migrations/012_add_screen_order.sql",
+    "applied_at": "2025-10-16T01:07:56Z"
+  },
+  {
+    "filename": "migrations/013_rename_answer_type_to_answer_kind.sql",
+    "applied_at": "2025-10-16T01:07:56Z"
+  },
+  {
+    "filename": "migrations/014_add_question_screen_id.sql",
+    "applied_at": "2025-10-16T01:30:55Z"
+  },
+  {
+    "filename": "migrations/005_epic_g_build_questionnaire.sql",
+    "applied_at": "2025-10-16T03:55:29Z"
+  }
 ]
-
