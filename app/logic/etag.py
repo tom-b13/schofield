@@ -17,6 +17,33 @@ from app.logic.answer_canonical import canonicalize_answer_value
 from app.logic.visibility_rules import compute_visible_set
 
 logger = logging.getLogger(__name__)
+ 
+def compute_authoring_screen_etag(screen_key: str, title: str, order: int) -> str:
+    """Compute weak ETag for an authoring screen.
+
+    Token shape mirrors routes: "{screen_key}|{title}|{order}" -> SHA1 -> W/"…".
+    """
+    token = f"{screen_key}|{title}|{int(order)}".encode("utf-8")
+    return f'W/"{hashlib.sha1(token).hexdigest()}"'
+
+
+def compute_authoring_screen_etag_from_order(screen_id: str, order: int) -> str:
+    """Compute weak ETag for a screen when only id and order are available.
+
+    Token: "{screen_id}|{order}" -> SHA1 -> W/"…".
+    Centralizes logic to avoid inline hashing in routes per AGENTS.md DRY rule.
+    """
+    token = f"{screen_id}|{int(order)}".encode("utf-8")
+    return f'W/"{hashlib.sha1(token).hexdigest()}"'
+
+
+def compute_authoring_question_etag(question_id: str, question_text: str, order: int) -> str:
+    """Compute weak ETag for an authoring question.
+
+    Token shape mirrors routes: "{question_id}|{question_text}|{order}" -> SHA1 -> W/"…".
+    """
+    token = f"{question_id}|{question_text}|{int(order)}".encode("utf-8")
+    return f'W/"{hashlib.sha1(token).hexdigest()}"'
 
 def compute_screen_etag(response_set_id: str, screen_key: str) -> str:
     """Compute a weak ETag for a screen within a response set.
@@ -30,6 +57,12 @@ def compute_screen_etag(response_set_id: str, screen_key: str) -> str:
     try:
         version = int(get_screen_version(response_set_id, screen_key))
     except Exception:
+        logger.error(
+            "compute_screen_etag version compute failed response_set_id=%s screen_key=%s",
+            response_set_id,
+            screen_key,
+            exc_info=True,
+        )
         version = 0
 
     # Visibility fingerprint component (rules + parent values -> visible set)
@@ -49,6 +82,12 @@ def compute_screen_etag(response_set_id: str, screen_key: str) -> str:
         visible_ids = sorted(str(x) for x in compute_visible_set(rules, parent_values))
         vis_fp = hashlib.sha1("\n".join(visible_ids).encode("utf-8")).hexdigest()
     except Exception:
+        logger.error(
+            "compute_screen_etag visibility fingerprint failed response_set_id=%s screen_key=%s",
+            response_set_id,
+            screen_key,
+            exc_info=True,
+        )
         # Conservative fallback when rules/answers unavailable
         vis_fp = "none"
 

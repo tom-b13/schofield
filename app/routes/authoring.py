@@ -11,22 +11,26 @@ import logging
 
 from fastapi import APIRouter, Header, Request, Response
 from fastapi.responses import JSONResponse
-from sqlalchemy import text as sql_text
-import uuid
-import hashlib
 import json
 
-from app.db.base import get_engine
 from app.logic.request_replay import (
     check_replay_before_write,
     store_replay_after_success,
 )
-from app.logic.etag import compare_etag, compute_questionnaire_etag_for_authoring
+from app.logic.etag import (
+    compare_etag,
+    compute_questionnaire_etag_for_authoring,
+    compute_authoring_screen_etag,
+    compute_authoring_screen_etag_from_order,
+    compute_authoring_question_etag,
+)
 from app.logic.order_sequences import reindex_screens, reindex_questions, reindex_screens_move
 from app.logic.repository_screens import update_screen_title
 from app.logic.repository_questions import (
     get_next_question_order,
     move_question_to_screen,
+    get_question_metadata,
+    update_question_visibility as repo_update_question_visibility,
 )
 
 
@@ -65,6 +69,11 @@ async def create_screen(
     try:
         dbg_payload = await request.json() if request is not None else {}
     except Exception:
+        logger.error(
+            "create_screen debug payload parse failed questionnaire_id=%s",
+            questionnaire_id,
+            exc_info=True,
+        )
         dbg_payload = {}
     if isinstance(dbg_payload, dict):
         dbg_title = str(dbg_payload.get("title") or "").strip()
@@ -95,6 +104,11 @@ async def create_screen(
     try:
         payload = await request.json() if request is not None else {}
     except Exception:
+        logger.error(
+            "create_screen payload parse failed questionnaire_id=%s",
+            questionnaire_id,
+            exc_info=True,
+        )
         payload = {}
     title = str(payload.get("title") or "").strip()
     proposed_position = payload.get("proposed_position")
@@ -129,58 +143,27 @@ async def create_screen(
             content = {"title": "Unprocessable Entity", "status": 422, "detail": detail, "code": primary_code, "errors": errors}
             return JSONResponse(status_code=422, content=content, media_type="application/problem+json")
 
-    eng = get_engine()
     # Duplicate title check should not be inside a write transaction
-    with eng.connect() as conn_chk:
-        row = conn_chk.execute(
-            sql_text(
-                "SELECT 1 FROM screens WHERE questionnaire_id = :qid AND LOWER(title) = LOWER(:t) LIMIT 1"
-            ),
-            {"qid": questionnaire_id, "t": title},
-        ).fetchone()
-        if row is not None:
-            problem = {
-                "title": "Conflict",
-                "status": 409,
-                "detail": "ETag mismatch or duplicate resource",
-                "code": "duplicate_title",
-            }
-            return JSONResponse(problem, status_code=409, media_type="application/problem+json")
+    from app.logic.repository_screens import has_duplicate_title, create_screen as repo_create_screen
+    if has_duplicate_title(questionnaire_id, title):
+        problem = {
+            "title": "Conflict",
+            "status": 409,
+            "detail": "ETag mismatch or duplicate resource",
+            "code": "duplicate_title",
+        }
+        return JSONResponse(problem, status_code=409, media_type="application/problem+json")
 
     # Compute final order (may perform its own writes safely) and prepare identifiers
     final_order = reindex_screens(
         questionnaire_id, int(proposed_position) if proposed_position is not None else None
     )
-    new_sid = str(uuid.uuid4())
-    screen_key = new_sid
-
-    # First attempt: INSERT with screen_order in its own transaction
-    try:
-        with eng.begin() as conn_ins:
-            conn_ins.execute(
-                sql_text(
-                    "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title, screen_order) VALUES (:sid, :qid, :skey, :title, :ord)"
-                ),
-                {"sid": new_sid, "qid": questionnaire_id, "skey": screen_key, "title": title, "ord": int(final_order)},
-            )
-    except Exception:
-        logger.error(
-            "create_screen primary insert failed; attempting fallback sid=%s qid=%s",
-            new_sid,
-            exc_info=True,
-        )
-        # Fallback must run in a fresh transaction, not on a failed handle
-        with eng.begin() as conn_fb:
-            conn_fb.execute(
-                sql_text(
-                    "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title) VALUES (:sid, :qid, :skey, :title)"
-                ),
-                {"sid": new_sid, "qid": questionnaire_id, "skey": screen_key, "title": title},
-            )
+    created = repo_create_screen(questionnaire_id=questionnaire_id, title=title, order_value=int(final_order))
+    new_sid = created["screen_id"]
+    screen_key = created["screen_key"]
 
     # Compute ETags
-    scr_token = f"{screen_key}|{title}|{int(final_order)}".encode("utf-8")
-    scr_etag = f'W/"{hashlib.sha1(scr_token).hexdigest()}"'
+    scr_etag = compute_authoring_screen_etag(screen_key, title, int(final_order))
     q_etag = compute_questionnaire_etag_for_authoring(questionnaire_id)
 
     body = {"screen_id": screen_key, "title": title, "screen_order": int(final_order)}
@@ -237,6 +220,11 @@ async def create_question(
     try:
         payload = await request.json() if request is not None else {}
     except Exception:
+        logger.error(
+            "create_question payload parse failed questionnaire_id=%s",
+            questionnaire_id,
+            exc_info=True,
+        )
         payload = {}
     # Required fields
     screen_id = str(payload.get("screen_id") or "").strip()
@@ -251,40 +239,17 @@ async def create_question(
         }
         return JSONResponse(problem, status_code=422, media_type="application/problem+json")
 
-    eng = get_engine()
     # Determine next order via repository helper with proper error handling
     next_order = get_next_question_order(screen_id)
 
-    # Create question row in its own transaction; fallback in a fresh transaction
-    new_qid = str(uuid.uuid4())
-    try:
-        with eng.begin() as w1:
-            w1.execute(
-                sql_text(
-                    """
-                    INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory)
-                    VALUES (:qid, :sid, :ext, :ord, :qtext, NULL, FALSE)
-                    """
-                ),
-                {"qid": new_qid, "sid": screen_id, "ext": new_qid, "ord": int(next_order), "qtext": question_text},
-            )
-    except Exception:
-        with eng.begin() as w2:
-            w2.execute(
-                sql_text(
-                    """
-                    INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_text, answer_type, mandatory)
-                    VALUES (:qid, :sid, :ext, :qtext, :atype, FALSE)
-                    """
-                ),
-                {"qid": new_qid, "sid": screen_id, "ext": new_qid, "qtext": question_text, "atype": "short_string"},
-            )
+    # Create question row via repository helper to maintain separation of concerns
+    from app.logic.repository_questions import create_question as repo_create_question
+    created_q = repo_create_question(screen_id=screen_id, question_text=question_text, order_value=int(next_order))
+    new_qid = created_q.get("question_id") or ""
 
     # Compute ETags (opaque values acceptable by schema)
-    q_token = f"{new_qid}|{question_text}|{int(next_order)}".encode("utf-8")
-    q_etag = f'W/"{hashlib.sha1(q_token).hexdigest()}"'
-    s_token = f"{screen_id}|{int(next_order)}".encode("utf-8")
-    s_etag = f'W/"{hashlib.sha1(s_token).hexdigest()}"'
+    q_etag = compute_authoring_question_etag(new_qid, question_text, int(next_order))
+    s_etag = compute_authoring_screen_etag_from_order(screen_id, int(next_order))
     qn_etag = compute_questionnaire_etag_for_authoring(questionnaire_id)
 
     body = {
@@ -327,44 +292,19 @@ async def update_screen(
     if_match: Optional[str] = Header(default=None, alias="If-Match"),
     request: Request = None,  # type: ignore[assignment]
 ) -> JSONResponse:
-    # Resolve current screen and its order using a read-only connection; fallback without screen_order on failure
-    eng = get_engine()
-    db_sid = ""
-    db_skey = ""
-    cur_title = ""
-    cur_order = 0
-    with eng.connect() as r1:
-        try:
-            row = r1.execute(
-                sql_text(
-                    "SELECT screen_id, screen_key, title, COALESCE(screen_order, 0) FROM screens WHERE screen_key = :skey"
-                ),
-                {"skey": screen_id},
-            ).fetchone()
-        except Exception:
-            row = None
-    if row is None:
-        with eng.connect() as r2:
-            row2 = r2.execute(
-                sql_text("SELECT screen_id, screen_key, title FROM screens WHERE screen_key = :skey"),
-                {"skey": screen_id},
-            ).fetchone()
-            if row2 is None:
-                problem = {"title": "Not Found", "status": 404, "detail": "screen not found", "code": "screen_missing"}
-                return JSONResponse(problem, status_code=404, media_type="application/problem+json")
-            db_sid = str(row2[0])
-            db_skey = str(row2[1])
-            cur_title = str(row2[2])
-            cur_order = 0
-    else:
-        db_sid = str(row[0])
-        db_skey = str(row[1])
-        cur_title = str(row[2])
-        cur_order = int(row[3])
+    # Resolve current screen using repository helper to keep HTTP layer SQL-free
+    from app.logic.repository_screens import get_screen_row_for_update
+    meta = get_screen_row_for_update(screen_id)
+    if meta is None:
+        problem = {"title": "Not Found", "status": 404, "detail": "screen not found", "code": "screen_missing"}
+        return JSONResponse(problem, status_code=404, media_type="application/problem+json")
+    db_sid = str(meta["screen_id"]) if "screen_id" in meta else ""
+    db_skey = str(meta["screen_key"]) if "screen_key" in meta else ""
+    cur_title = str(meta["title"]) if "title" in meta else ""
+    cur_order = int(meta["screen_order"]) if "screen_order" in meta and meta["screen_order"] is not None else 0
 
     # Compute current Screen-ETag for If-Match enforcement
-    cur_token = f"{db_skey}|{cur_title}|{int(cur_order)}".encode("utf-8")
-    current_etag = f'W/"{hashlib.sha1(cur_token).hexdigest()}"'
+    current_etag = compute_authoring_screen_etag(db_skey, cur_title, int(cur_order))
     if not compare_etag(current_etag, if_match):
         problem = {
             "title": "Conflict",
@@ -378,6 +318,12 @@ async def update_screen(
     try:
         payload = await request.json() if request is not None else {}
     except Exception:
+        logger.error(
+            "update_screen payload parse failed questionnaire_id=%s screen_id=%s",
+            questionnaire_id,
+            screen_id,
+            exc_info=True,
+        )
         payload = {}
     # In practice FastAPI passes the request body through the test client; fall back to empty dict when unavailable
     if not isinstance(payload, dict):
@@ -410,8 +356,10 @@ async def update_screen(
         try:
             update_screen_title(screen_id, str(new_title).strip())
         except Exception:
-            # Preserve behavior by continuing to re-read latest values; error is logged in repo
-            pass
+            # Log at ERROR and continue with documented fallback reread
+            logger.error(
+                "update_screen_title failed in route screen_id=%s", screen_id, exc_info=True
+            )
 
     if proposed_position is not None:
         # Delegate backend-authoritative reorder to helper (contiguous, clamped)
@@ -422,30 +370,15 @@ async def update_screen(
             _final = None
 
         # Re-fetch to build response and ETags using a clean read
-    try:
-        with eng.connect() as r3:
-            row2 = r3.execute(
-                sql_text(
-                    "SELECT title, COALESCE(screen_order, 0) FROM screens WHERE questionnaire_id = :qid AND screen_key = :skey"
-                ),
-                {"qid": questionnaire_id, "skey": screen_id},
-            ).fetchone()
-    except Exception:
-        with eng.connect() as r4:
-            r = r4.execute(
-                sql_text(
-                    "SELECT title FROM screens WHERE questionnaire_id = :qid AND screen_key = :skey"
-                ),
-                {"qid": questionnaire_id, "skey": screen_id},
-            ).fetchone()
-            row2 = (r[0] if r else cur_title, None)
-    new_title_val = str(row2[0]) if row2 and row2[0] is not None else cur_title
-    new_order_val = int(row2[1]) if row2 and row2[1] is not None else cur_order
+    # Delegate read concerns to repository to preserve separation of concerns
+    from app.logic.repository_screens import get_screen_title_and_order as repo_get_title_and_order
+    new_title, new_order = repo_get_title_and_order(questionnaire_id, screen_id)
+    new_title_val = str(new_title) if new_title is not None else cur_title
+    new_order_val = int(new_order) if new_order is not None else cur_order
     # Body order must reflect persisted DB value; do not override with helper result
 
     # Compute new ETags
-    scr_token = f"{db_skey}|{new_title_val}|{int(new_order_val)}".encode("utf-8")
-    scr_etag = f'W/"{hashlib.sha1(scr_token).hexdigest()}"'
+    scr_etag = compute_authoring_screen_etag(db_skey, new_title_val, int(new_order_val))
     q_etag = compute_questionnaire_etag_for_authoring(questionnaire_id)
 
     # Clarke instrumentation: correlate proposed_position, helper final result, and reread order prior to return
@@ -468,37 +401,17 @@ async def update_question_position(
     request: Request = None,  # type: ignore[assignment]
 ) -> JSONResponse:
     # Resolve current question state using a read-only connection; fallback without question_order
-    eng = get_engine()
-    with eng.connect() as r1:
-        try:
-            row = r1.execute(
-                sql_text(
-                    "SELECT screen_key, question_text, COALESCE(question_order, 0) FROM questionnaire_question WHERE question_id = :qid"
-                ),
-                {"qid": question_id},
-            ).fetchone()
-        except Exception:
-            row = None
-    if row is None:
-        with eng.connect() as r2:
-            row2 = r2.execute(
-                sql_text("SELECT screen_key, question_text FROM questionnaire_question WHERE question_id = :qid"),
-                {"qid": question_id},
-            ).fetchone()
-            if row2 is None:
-                problem = {"title": "Not Found", "status": 404, "detail": "question not found", "code": "question_missing"}
-                return JSONResponse(problem, status_code=404, media_type="application/problem+json")
-            screen_id = str(row2[0])
-            qtext = str(row2[1])
-            cur_order = 0
-    else:
-        screen_id = str(row[0])
-        qtext = str(row[1])
-        cur_order = int(row[2])
+    from app.logic.repository_questions import get_question_metadata as repo_get_question_metadata
+    meta = repo_get_question_metadata(question_id)
+    if meta is None:
+        problem = {"title": "Not Found", "status": 404, "detail": "question not found", "code": "question_missing"}
+        return JSONResponse(problem, status_code=404, media_type="application/problem+json")
+    screen_id = str(meta.get("screen_key") or "")
+    qtext = str(meta.get("question_text") or "")
+    cur_order = int(meta.get("question_order") or 0)
 
     # Basic precondition: build current ETag and compare (wildcard supported via compare_etag in update_question)
-    cur_token = f"{question_id}|{qtext}|{int(cur_order)}".encode("utf-8")
-    current_etag = f'W/"{hashlib.sha1(cur_token).hexdigest()}"'
+    current_etag = compute_authoring_question_etag(question_id, qtext, int(cur_order))
     if not compare_etag(current_etag, if_match):
         problem = {
             "title": "Conflict",
@@ -512,6 +425,11 @@ async def update_question_position(
     try:
         payload = await request.json() if request is not None else {}
     except Exception:
+        logger.error(
+            "update_question_position payload parse failed question_id=%s",
+            question_id,
+            exc_info=True,
+        )
         payload = {}
     proposed_order = payload.get("proposed_question_order") if isinstance(payload, dict) else None
     target_screen: Optional[str] = None
@@ -539,24 +457,17 @@ async def update_question_position(
         # Validate both current and target belong to same questionnaire
         cur_qid = None
         tgt_qid = None
-        with eng.connect() as rc:
-            rcur = rc.execute(sql_text("SELECT questionnaire_id FROM screens WHERE screen_key = :sid"), {"sid": screen_id}).fetchone()
-            if rcur is not None and rcur[0] is not None:
-                cur_qid = str(rcur[0])
-            rtgt = rc.execute(sql_text("SELECT questionnaire_id FROM screens WHERE screen_key = :sid"), {"sid": target_screen}).fetchone()
-            if rtgt is not None and rtgt[0] is not None:
-                tgt_qid = str(rtgt[0])
+        from app.logic.repository_screens import get_questionnaire_id_for_screen as repo_get_qn_for_screen
+        cur_qid = repo_get_qn_for_screen(screen_id)
+        tgt_qid = repo_get_qn_for_screen(target_screen) if target_screen else None
         # Clarke instrumentation: log IDs and proposed move
-        try:
-            logger.info(
-                "update_question_position cur_qid=%s tgt_qid=%s target_screen=%s proposed_order=%s",
-                cur_qid,
-                tgt_qid,
-                target_screen,
-                proposed_order,
-            )
-        except Exception:
-            pass
+        logger.info(
+            "update_question_position cur_qid=%s tgt_qid=%s target_screen=%s proposed_order=%s",
+            cur_qid,
+            tgt_qid,
+            target_screen,
+            proposed_order,
+        )
         if tgt_qid is None or cur_qid is None or tgt_qid != cur_qid:
             errors = [{"path": "$.screen_id", "code": "outside_or_cross_questionnaire"}]
             detail = "target screen is outside current questionnaire"
@@ -567,8 +478,13 @@ async def update_question_position(
         try:
             move_question_to_screen(question_id, target_screen)
         except Exception:
-            # Error already logged in repository; continue to attempt reindex fallback
-            pass
+            # Log at ERROR per policy; continue to attempt reindex fallback
+            logger.error(
+                "move_question_to_screen failed question_id=%s target_screen=%s",
+                question_id,
+                target_screen,
+                exc_info=True,
+            )
         # Reindex source to close gaps, then switch context to target and place the question
         try:
             reindex_questions(screen_id, None, None)
@@ -579,28 +495,16 @@ async def update_question_position(
     # Perform contiguous reindex using helper in the current screen (append if None)
     final_order, _map = reindex_questions(screen_id, question_id, proposed_order)
 
-    q_token = f"{question_id}|{qtext}|{int(final_order)}".encode("utf-8")
-    q_etag = f'W/"{hashlib.sha1(q_token).hexdigest()}"'
-    s_token = f"{screen_id}|{int(final_order)}".encode("utf-8")
-    s_etag = f'W/"{hashlib.sha1(s_token).hexdigest()}"'
+    q_etag = compute_authoring_question_etag(question_id, qtext, int(final_order))
+    s_etag = compute_authoring_screen_etag_from_order(screen_id, int(final_order))
     # Compute Questionnaire-ETag using authoritative helper
-    qid_val = None
-    with eng.connect() as rc2:
-        rowq = rc2.execute(sql_text("SELECT questionnaire_id FROM screens WHERE screen_key = :sid"), {"sid": screen_id}).fetchone()
-        if rowq is not None and rowq[0] is not None:
-            qid_val = str(rowq[0])
+    from app.logic.repository_screens import get_questionnaire_id_for_screen as repo_get_qn_for_screen2
+    qid_val = repo_get_qn_for_screen2(screen_id)
     qn_etag = compute_questionnaire_etag_for_authoring(qid_val or "")
 
     # Resolve external question id token for response parity
-    try:
-        with eng.connect() as r_ext:
-            row_ext = r_ext.execute(
-                sql_text("SELECT external_qid FROM questionnaire_question WHERE question_id = :qid"),
-                {"qid": question_id},
-            ).fetchone()
-            external_qid = str(row_ext[0]) if row_ext and row_ext[0] is not None else question_id
-    except Exception:
-        external_qid = question_id
+    from app.logic.repository_questions import get_external_qid as repo_get_external_qid
+    external_qid = repo_get_external_qid(question_id) or question_id
     body = {"question_id": external_qid, "screen_id": screen_id, "question_order": int(final_order)}
     headers = {"Question-ETag": q_etag, "Screen-ETag": s_etag, "Questionnaire-ETag": qn_etag}
     return JSONResponse(content=body, status_code=200, media_type="application/json", headers=headers)
@@ -613,38 +517,17 @@ async def update_question(
     if_match: Optional[str] = Header(default=None, alias="If-Match"),
     request: Request = None,  # type: ignore[assignment]
 ) -> JSONResponse:
-    # Load current state (guard against missing question_order column) using read-only connection
-    eng = get_engine()
-    with eng.connect() as r1:
-        try:
-            row = r1.execute(
-                sql_text(
-                    "SELECT screen_key, question_text, COALESCE(question_order, 0) FROM questionnaire_question WHERE question_id = :qid"
-                ),
-                {"qid": question_id},
-            ).fetchone()
-        except Exception:
-            row = None
-    if row is None:
-        with eng.connect() as r2:
-            row2 = r2.execute(
-                sql_text("SELECT screen_key, question_text FROM questionnaire_question WHERE question_id = :qid"),
-                {"qid": question_id},
-            ).fetchone()
-            if row2 is None:
-                problem = {"title": "Not Found", "status": 404, "detail": "question not found", "code": "question_missing"}
-                return JSONResponse(problem, status_code=404, media_type="application/problem+json")
-            screen_id = str(row2[0])
-            cur_text = str(row2[1])
-            cur_order = 0
-    else:
-        screen_id = str(row[0])
-        cur_text = str(row[1])
-        cur_order = int(row[2])
+    # Load current state via repository helper
+    meta = get_question_metadata(question_id)
+    if meta is None:
+        problem = {"title": "Not Found", "status": 404, "detail": "question not found", "code": "question_missing"}
+        return JSONResponse(problem, status_code=404, media_type="application/problem+json")
+    screen_id = str(meta["screen_key"])  # variable name kept for compatibility
+    cur_text = str(meta["question_text"])
+    cur_order = int(meta["question_order"]) if meta.get("question_order") is not None else 0
 
     # If-Match precondition
-    cur_token = f"{question_id}|{cur_text}|{int(cur_order)}".encode("utf-8")
-    current_etag = f'W/"{hashlib.sha1(cur_token).hexdigest()}"'
+    current_etag = compute_authoring_question_etag(question_id, cur_text, int(cur_order))
     if not compare_etag(current_etag, if_match):
         problem = {
             "title": "Conflict",
@@ -659,6 +542,11 @@ async def update_question(
     try:
         payload = await request.json() if request is not None else {}
     except Exception:
+        logger.error(
+            "update_question payload parse failed question_id=%s",
+            question_id,
+            exc_info=True,
+        )
         payload = {}
     if isinstance(payload, dict) and "question_text" in payload:
         candidate = payload.get("question_text")
@@ -672,46 +560,24 @@ async def update_question(
                 "errors": [{"path": "$.question_text", "code": "invalid"}],
             }
             return JSONResponse(problem, status_code=422, media_type="application/problem+json")
-    # Update text (for this cycle we assume body contains question_text; integration asserts will drive)
-    with eng.begin() as conn:
-        conn.execute(
-            sql_text("UPDATE questionnaire_question SET question_text = :t WHERE question_id = :qid"),
-            {"t": new_text, "qid": question_id},
-        )
-    # Re-read result using clean read connection
-    try:
-        with eng.connect() as r3:
-            row2 = r3.execute(
-                sql_text(
-                    "SELECT question_text, COALESCE(question_order, 0) FROM questionnaire_question WHERE question_id = :qid"
-                ),
-                {"qid": question_id},
-            ).fetchone()
-            final_text = str(row2[0]) if row2 and row2[0] is not None else new_text
-            final_order = int(row2[1]) if row2 and row2[1] is not None else cur_order
-    except Exception:
-        with eng.connect() as r4:
-            row2b = r4.execute(
-                sql_text("SELECT question_text FROM questionnaire_question WHERE question_id = :qid"),
-                {"qid": question_id},
-            ).fetchone()
-            final_text = str(row2b[0]) if row2b and row2b[0] is not None else new_text
-            final_order = cur_order
+    # Update text via repository to keep route free of SQL
+    from app.logic.repository_questions import update_question_text as repo_update_question_text
+    repo_update_question_text(question_id, new_text)
+    # Re-read result via repository helper to keep route SQL-free
+    from app.logic.repository_questions import (
+        get_question_text_and_order as repo_get_q_text_and_order,
+        get_external_qid as repo_get_external_qid2,
+    )
+    final_text, final_order = repo_get_q_text_and_order(question_id) or (new_text, cur_order)
 
-    q_token = f"{question_id}|{final_text}|{int(final_order)}".encode("utf-8")
-    q_etag = f'W/"{hashlib.sha1(q_token).hexdigest()}"'
-    s_token = f"{screen_id}|{int(final_order)}".encode("utf-8")
-    s_etag = f'W/"{hashlib.sha1(s_token).hexdigest()}"'
-    # Resolve external question id and questionnaire id for headers/body
-    try:
-        with eng.connect() as r5:
-            row_ext = r5.execute(sql_text("SELECT external_qid FROM questionnaire_question WHERE question_id = :qid"), {"qid": question_id}).fetchone()
-            external_qid = str(row_ext[0]) if row_ext and row_ext[0] is not None else question_id
-            row_qn = r5.execute(sql_text("SELECT questionnaire_id FROM screens WHERE screen_key = :sid"), {"sid": screen_id}).fetchone()
-            questionnaire_id = str(row_qn[0]) if row_qn and row_qn[0] is not None else ""
-    except Exception:
-        external_qid = question_id
-        questionnaire_id = ""
+    q_etag = compute_authoring_question_etag(question_id, final_text, int(final_order))
+    s_etag = compute_authoring_screen_etag_from_order(screen_id, int(final_order))
+    # Resolve external question id and questionnaire id for headers/body via repositories
+    external_qid = repo_get_external_qid2(question_id) or question_id
+    from app.logic.repository_screens import (
+        get_questionnaire_id_for_screen as repo_get_qn_for_screen4,
+    )
+    questionnaire_id = repo_get_qn_for_screen4(screen_id) or ""
     qn_etag = compute_questionnaire_etag_for_authoring(questionnaire_id)
 
     body = {"question_id": external_qid, "question_text": final_text}
@@ -726,38 +592,17 @@ async def update_question_visibility(
     if_match: Optional[str] = Header(default=None, alias="If-Match"),
     request: Request = None,  # type: ignore[assignment]
 ) -> JSONResponse:
-    # Resolve current question state using a read-only connection; fallback without question_order
-    eng = get_engine()
-    with eng.connect() as r1:
-        try:
-            row = r1.execute(
-                sql_text(
-                    "SELECT screen_key, question_text, COALESCE(question_order, 0) FROM questionnaire_question WHERE question_id = :qid"
-                ),
-                {"qid": question_id},
-            ).fetchone()
-        except Exception:
-            row = None
-    if row is None:
-        with eng.connect() as r2:
-            row2 = r2.execute(
-                sql_text("SELECT screen_key, question_text FROM questionnaire_question WHERE question_id = :qid"),
-                {"qid": question_id},
-            ).fetchone()
-            if row2 is None:
-                problem = {"title": "Not Found", "status": 404, "detail": "question not found", "code": "question_missing"}
-                return JSONResponse(problem, status_code=404, media_type="application/problem+json")
-            screen_id = str(row2[0])
-            cur_text = str(row2[1])
-            cur_order = 0
-    else:
-        screen_id = str(row[0])
-        cur_text = str(row[1])
-        cur_order = int(row[2])
+    # Resolve current question state using repository helper
+    meta2 = get_question_metadata(question_id)
+    if meta2 is None:
+        problem = {"title": "Not Found", "status": 404, "detail": "question not found", "code": "question_missing"}
+        return JSONResponse(problem, status_code=404, media_type="application/problem+json")
+    screen_id = str(meta2["screen_key"])  # keep variable naming parity
+    cur_text = str(meta2["question_text"])  # for ETag construction
+    cur_order = int(meta2["question_order"]) if meta2.get("question_order") is not None else 0
 
     # If-Match precondition based on current entity tag
-    cur_token = f"{question_id}|{cur_text}|{int(cur_order)}".encode("utf-8")
-    current_etag = f'W/"{hashlib.sha1(cur_token).hexdigest()}"'
+    current_etag = compute_authoring_question_etag(question_id, cur_text, int(cur_order))
     if not compare_etag(current_etag, if_match):
         problem = {
             "title": "Conflict",
@@ -773,6 +618,11 @@ async def update_question_visibility(
     try:
         payload = await request.json() if request is not None else {}
     except Exception:
+        logger.error(
+            "update_question_visibility payload parse failed question_id=%s",
+            question_id,
+            exc_info=True,
+        )
         payload = {}
     if isinstance(payload, dict):
         if "parent_question_id" in payload:
@@ -780,24 +630,17 @@ async def update_question_visibility(
         if "visible_if_value" in payload:
             vis_val_raw = payload.get("visible_if_value")
 
-    # Resolve external parent token to internal UUID before validation/persist
+    # Resolve external parent token to internal UUID via repository before validation/persist
     if isinstance(parent_qid, str) and parent_qid.strip():
-        try:
-            with eng.connect() as _rp:
-                rpid = _rp.execute(
-                    sql_text(
-                        "SELECT question_id FROM questionnaire_question WHERE external_qid = :tok OR question_id = :tok LIMIT 1"
-                    ),
-                    {"tok": str(parent_qid)},
-                ).fetchone()
-            if rpid is not None and rpid[0] is not None:
-                parent_qid = str(rpid[0])
-        except Exception:
-            pass
+        from app.logic.repository_questions import resolve_question_identifier as repo_resolve_q
+        resolved = repo_resolve_q(str(parent_qid))
+        if resolved:
+            parent_qid = resolved
 
     # Two-node cycle detection
     if isinstance(parent_qid, str) and parent_qid:
-        if str(parent_qid) == str(question_id):
+        from app.logic.repository_questions import is_parent_cycle as repo_is_cycle
+        if repo_is_cycle(question_id, parent_qid):
             content = {
                 "title": "Unprocessable Entity",
                 "status": 422,
@@ -806,56 +649,11 @@ async def update_question_visibility(
                 "errors": [{"path": "$.parent_question_id", "code": "parent_cycle"}],
             }
             return JSONResponse(status_code=422, content=content, media_type="application/problem+json")
-        try:
-            with eng.connect() as _rcy:
-                prow = _rcy.execute(
-                    sql_text(
-                        "SELECT parent_question_id FROM questionnaire_question WHERE question_id = :pid"
-                    ),
-                    {"pid": parent_qid},
-                ).fetchone()
-            if prow is not None and prow[0] is not None and str(prow[0]) == str(question_id):
-                content = {
-                    "title": "Unprocessable Entity",
-                    "status": 422,
-                    "detail": "cyclic parent linkage",
-                    "code": "parent_cycle",
-                    "errors": [{"path": "$.parent_question_id", "code": "parent_cycle"}],
-                }
-                return JSONResponse(status_code=422, content=content, media_type="application/problem+json")
-        except Exception:
-            # On DB error, skip cycle detection to avoid masking primary behavior
-            pass
 
     # Validate compatibility with parent answer_kind (boolean canonicalisation)
     from app.logic.repository_answers import get_answer_kind_for_question  # local import to avoid cycles
-    from app.logic.visibility_rules import validate_visibility_compatibility
+    from app.logic.visibility_rules import validate_visibility_compatibility, canonicalize_boolean_visible_if_list
     parent_kind = get_answer_kind_for_question(str(parent_qid)) if parent_qid else None
-
-    def _canon_bool_list(value: object | None) -> Optional[list[str]]:
-        if value is None:
-            return None
-        if isinstance(value, bool):
-            return ["true" if value else "false"]
-        try:
-            s = str(value).strip().lower()
-            if s in {"true", "false"}:
-                return [s]
-        except Exception:
-            pass
-        if isinstance(value, (list, tuple)):
-            out: list[str] = []
-            for item in value:
-                if isinstance(item, bool):
-                    out.append("true" if item else "false")
-                else:
-                    st = str(item).strip().lower()
-                    if st in {"true", "false"}:
-                        out.append(st)
-                    else:
-                        return None
-            return out if out else None
-        return None
 
     vis_canon: Optional[list[str]] = None
     if vis_val_raw is not None:
@@ -869,23 +667,20 @@ async def update_question_visibility(
             content = {"title": "Unprocessable Entity", "status": 422, "detail": detail, "code": primary_code, "errors": errors}
             return JSONResponse(status_code=422, content=content, media_type="application/problem+json")
         # Boolean-compatible parent: canonicalize to ['true'|'false'] list
-        vis_canon = _canon_bool_list(vis_val_raw)
+        vis_canon = canonicalize_boolean_visible_if_list(vis_val_raw)
 
-    # Persist updates
-    with eng.begin() as conn:
-        conn.execute(
-            sql_text(
-                "UPDATE questionnaire_question SET parent_question_id = :pid, visible_if_value = :vis WHERE question_id = :qid"
-            ),
-            {"pid": parent_qid, "vis": vis_canon, "qid": question_id},
-        )
+    # Persist updates via repository helper
+    repo_update_question_visibility(question_id=question_id, parent_qid=parent_qid, visible_if_values=vis_canon)
 
     # ETags
-    q_token = f"{question_id}|{cur_text}|{int(cur_order)}".encode("utf-8")
-    q_etag = f'W/"{hashlib.sha1(q_token).hexdigest()}"'
-    s_token = f"{screen_id}|{int(cur_order)}".encode("utf-8")
-    s_etag = f'W/"{hashlib.sha1(s_token).hexdigest()}"'
-    qn_etag = f'W/"{hashlib.sha1(f"{screen_id}".encode()).hexdigest()}"'
+    q_etag = compute_authoring_question_etag(question_id, cur_text, int(cur_order))
+    s_etag = compute_authoring_screen_etag_from_order(screen_id, int(cur_order))
+    # Centralize Questionnaire-ETag via helper
+    from app.logic.repository_screens import (
+        get_questionnaire_id_for_screen as repo_get_qn_for_screen3,
+    )
+    _qid = repo_get_qn_for_screen3(screen_id)
+    qn_etag = compute_questionnaire_etag_for_authoring(_qid or "")
 
     body = {
         "question_id": question_id,

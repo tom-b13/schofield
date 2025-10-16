@@ -9,10 +9,13 @@ source of truth for final order values to satisfy Clarke's contracts.
 from __future__ import annotations
 
 from typing import Dict, Tuple, Optional
+import logging
 
 from sqlalchemy import text as sql_text
 
 from app.db.base import get_engine
+
+logger = logging.getLogger(__name__)
 
 
 def reindex_screens(questionnaire_id: str, proposed_position: Optional[int]) -> int:
@@ -41,7 +44,11 @@ def reindex_screens(questionnaire_id: str, proposed_position: Optional[int]) -> 
             max_order = int(row[0]) if row and row[0] is not None else 0
             count = int(row[1]) if row and row[1] is not None else 0
         except Exception:
-            pass
+            logger.error(
+                "reindex_screens initial aggregate failed qid=%s",
+                questionnaire_id,
+                exc_info=True,
+            )
     if count == 0 and max_order == 0:
         # Fresh connection fallback to avoid operating on an aborted connection
         with eng.connect() as conn2:
@@ -71,6 +78,12 @@ def reindex_screens(questionnaire_id: str, proposed_position: Optional[int]) -> 
                 )
             return pos
         except Exception:
+            logger.error(
+                "reindex_screens shift failed (fresh path) qid=%s pos=%s",
+                questionnaire_id,
+                pos,
+                exc_info=True,
+            )
             # If column is missing, skip shifting and just return bounded insert position
             return min(pos, count + 1)
     # Normal path when initial SELECT succeeded
@@ -90,6 +103,12 @@ def reindex_screens(questionnaire_id: str, proposed_position: Optional[int]) -> 
                 {"qid": questionnaire_id, "pos": pos},
             )
     except Exception:
+        logger.error(
+            "reindex_screens shift failed qid=%s pos=%s",
+            questionnaire_id,
+            pos,
+            exc_info=True,
+        )
         return min(pos, count + 1)
     return pos
 
@@ -169,19 +188,14 @@ def reindex_screens_move(
             {"qid": questionnaire_id},
         ).fetchall()
     _after_keys = [str(r[0]) for r in _rows1]
-    try:
-        import logging
-        logging.getLogger(__name__).info(
-            "reindex_screens_move before keys=%s po=%s insert_at=%s after keys=%s final_order=%s",
-            _before_keys,
-            po,
-            insert_at,
-            _after_keys,
-            _final_order,
-        )
-    except Exception:
-        # Logging must never fail the operation
-        pass
+    logger.info(
+        "reindex_screens_move before keys=%s po=%s insert_at=%s after keys=%s final_order=%s",
+        _before_keys,
+        po,
+        insert_at,
+        _after_keys,
+        _final_order,
+    )
     return _final_order
 
 def reindex_questions(

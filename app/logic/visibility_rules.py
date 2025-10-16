@@ -7,6 +7,9 @@ route handlers to avoid duplication and drift.
 from __future__ import annotations
 
 from typing import Iterable
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def is_child_visible(parent_value: str | None, visible_if_values: Iterable | None) -> bool:
@@ -109,3 +112,35 @@ def validate_visibility_compatibility(parent_answer_kind: str, visible_if_value:
     if visible_if_value is None:
         return None
     raise ValueError("incompatible_with_parent_answer_kind")
+
+
+def canonicalize_boolean_visible_if_list(value: object | None) -> list[str] | None:
+    """Canonicalize a boolean visible_if value into a list of 'true'/'false' strings.
+
+    - Accepts scalars or iterables.
+    - Returns None when the value cannot be canonicalized.
+    - Logs coercion errors at ERROR with context, does not raise.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return ["true" if value else "false"]
+    try:
+        s = str(value).strip().lower()
+        if s in {"true", "false"}:
+            return [s]
+    except Exception:
+        logger.error("canonicalize_boolean_visible_if_list string coercion failed value=%r", value, exc_info=True)
+    if isinstance(value, (list, tuple)):
+        out: list[str] = []
+        for item in value:
+            if isinstance(item, bool):
+                out.append("true" if item else "false")
+            else:
+                t = str(item).strip().lower()
+                if t in {"true", "false"}:
+                    out.append(t)
+                else:
+                    return None
+        return out if out else None
+    return None

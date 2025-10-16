@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 import logging
 import sys
 from uuid import UUID
+import json
 
 from sqlalchemy import text as sql_text
 from sqlalchemy.exc import ProgrammingError
@@ -17,17 +18,6 @@ from sqlalchemy.exc import ProgrammingError
 from app.db.base import get_engine
 
 logger = logging.getLogger(__name__)
-# Ensure module INFO logs are emitted to stdout during tests/integration runs
-try:
-    if not logger.handlers:
-        _handler = logging.StreamHandler(stream=sys.stdout)
-        _handler.setLevel(logging.INFO)
-        _handler.setFormatter(logging.Formatter('%(levelname)s:%(name)s:%(message)s'))
-        logger.addHandler(_handler)
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-except Exception:
-    pass
 
 
 def get_screen_metadata(screen_id: str) -> tuple[str, str] | None:
@@ -198,6 +188,56 @@ def list_questions_for_screen(screen_key: str) -> list[dict]:
     return out
 
 
+def get_screen_title_and_order(questionnaire_id: str, screen_key: str) -> tuple[str | None, int | None]:
+    """Return (title, screen_order) for a screen within a questionnaire.
+
+    Encapsulates reads needed by authoring routes and shields HTTP layer from SQL.
+    On schema or read errors, logs at ERROR and attempts a minimal fallback that
+    returns only title when available.
+    """
+    eng = get_engine()
+    try:
+        with eng.connect() as conn:
+            row = conn.execute(
+                sql_text(
+                    "SELECT title, COALESCE(screen_order, 0) FROM screens WHERE questionnaire_id = :qid AND screen_key = :skey"
+                ),
+                {"qid": questionnaire_id, "skey": screen_key},
+            ).fetchone()
+        if row is None:
+            return None, None
+        title = str(row[0]) if row[0] is not None else None
+        order_val = int(row[1]) if row[1] is not None else None
+        return title, order_val
+    except Exception:
+        logger.error(
+            "get_screen_title_and_order primary read failed qid=%s screen_key=%s",
+            questionnaire_id,
+            screen_key,
+            exc_info=True,
+        )
+        # Fallback: try selecting title only
+        try:
+            with eng.connect() as conn2:
+                row2 = conn2.execute(
+                    sql_text(
+                        "SELECT title FROM screens WHERE questionnaire_id = :qid AND screen_key = :skey"
+                    ),
+                    {"qid": questionnaire_id, "skey": screen_key},
+                ).fetchone()
+            if not row2:
+                return None, None
+            return (str(row2[0]) if row2[0] is not None else None), None
+        except Exception:
+            logger.error(
+                "get_screen_title_and_order fallback read failed qid=%s screen_key=%s",
+                questionnaire_id,
+                screen_key,
+                exc_info=True,
+            )
+            return None, None
+
+
 def question_exists_on_screen(question_id: str) -> bool:
     """Return True if the given question_id exists in questionnaire_question.
 
@@ -286,8 +326,6 @@ def get_visibility_rules_for_screen(screen_key: str) -> dict[str, tuple[str | No
             return None
         # Accept JSON array in text if present, else a single value
         try:
-            import json
-
             parsed = json.loads(s)
             if isinstance(parsed, list):
                 out: list[str] = []
@@ -308,8 +346,13 @@ def get_visibility_rules_for_screen(screen_key: str) -> dict[str, tuple[str | No
                     return ["true" if parsed else "false"]
                 ps = str(parsed)
                 return [ps.lower() if ps.lower() in {"true", "false"} else ps]
-        except Exception:
-            pass
+        except json.JSONDecodeError:
+            logger.error(
+                "visible_if JSON decode failed for screen_key=%s payload=%s",
+                screen_key,
+                s,
+                exc_info=True,
+            )
         # Single value path: canonicalize boolean-like tokens
         if s.lower() in {"true", "false"}:
             return [s.lower()]
@@ -353,20 +396,63 @@ def get_visibility_rules_for_screen(screen_key: str) -> dict[str, tuple[str | No
                         # Leave as None when not resolvable; caller will treat as base question
                         parent_qid = None
         vis_list = _to_list(row[2])
-        try:
-            if parent_qid:
-                logger.info(
-                    "rules_parse screen_key=%s qid=%s parent=%s raw_visible_if=%s parsed=%s",
-                    screen_key,
-                    qid,
-                    parent_qid,
-                    row[2],
-                    vis_list,
-                )
-        except Exception:
-            pass
+        if parent_qid:
+            logger.info(
+                "rules_parse screen_key=%s qid=%s parent=%s raw_visible_if=%s parsed=%s",
+                screen_key,
+                qid,
+                parent_qid,
+                row[2],
+                vis_list,
+            )
         out[qid] = (parent_qid, vis_list)
     return out
+
+
+def get_screen_row_for_update(screen_key: str) -> dict | None:
+    """Return screen metadata for update operations.
+
+    Attempts to fetch (screen_id, screen_key, title, screen_order). If the
+    schema lacks `screen_order`, falls back to fetching without it and returns
+    `screen_order` as 0. Returns None when the screen does not exist.
+    """
+    eng = get_engine()
+    # Preferred path including screen_order
+    try:
+        with eng.connect() as r1:
+            row = r1.execute(
+                sql_text(
+                    "SELECT screen_id, screen_key, title, COALESCE(screen_order, 0) FROM screens WHERE screen_key = :skey"
+                ),
+                {"skey": screen_key},
+            ).fetchone()
+        if row:
+            return {
+                "screen_id": str(row[0]),
+                "screen_key": str(row[1]),
+                "title": str(row[2]),
+                "screen_order": int(row[3]) if row[3] is not None else 0,
+            }
+    except Exception:
+        logger.error(
+            "get_screen_row_for_update primary select failed screen_key=%s",
+            screen_key,
+            exc_info=True,
+        )
+    # Fallback without screen_order
+    with eng.connect() as r2:
+        row2 = r2.execute(
+            sql_text("SELECT screen_id, screen_key, title FROM screens WHERE screen_key = :skey"),
+            {"skey": screen_key},
+        ).fetchone()
+    if not row2:
+        return None
+    return {
+        "screen_id": str(row2[0]),
+        "screen_key": str(row2[1]),
+        "title": str(row2[2]),
+        "screen_order": 0,
+    }
 
 
 def count_responses_for_screen(response_set_id: str, screen_key: str) -> int:
@@ -408,3 +494,72 @@ def update_screen_title(screen_key: str, title: str) -> None:
         )
         # Preserve previous behavior by propagating so route can decide handling
         raise
+
+
+def has_duplicate_title(questionnaire_id: str, title: str) -> bool:
+    """Return True when a screen with the same title exists for the questionnaire.
+
+    Performs a case-insensitive comparison in the database. No silent failures.
+    """
+    eng = get_engine()
+    with eng.connect() as conn:
+        row = conn.execute(
+            sql_text(
+                "SELECT 1 FROM screens WHERE questionnaire_id = :qid AND LOWER(title) = LOWER(:t) LIMIT 1"
+            ),
+            {"qid": questionnaire_id, "t": title},
+        ).fetchone()
+    return row is not None
+
+
+def create_screen(*, questionnaire_id: str, title: str, order_value: int) -> dict:
+    """Insert a screen row and return identifiers.
+
+    Attempts primary insert including `screen_order`; on failure, logs at
+    ERROR and retries a fallback insert without `screen_order`. Returns a
+    mapping containing `screen_id` and `screen_key`.
+    """
+    import uuid
+
+    eng = get_engine()
+    new_sid = str(uuid.uuid4())
+    screen_key = new_sid
+    try:
+        with eng.begin() as conn_ins:
+            conn_ins.execute(
+                sql_text(
+                    "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title, screen_order) VALUES (:sid, :qid, :skey, :title, :ord)"
+                ),
+                {"sid": new_sid, "qid": questionnaire_id, "skey": screen_key, "title": title, "ord": int(order_value)},
+            )
+    except Exception:
+        logger.error(
+            "create_screen primary insert failed; attempting fallback sid=%s qid=%s",
+            new_sid,
+            questionnaire_id,
+            exc_info=True,
+        )
+        with eng.begin() as conn_fb:
+            conn_fb.execute(
+                sql_text(
+                    "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title) VALUES (:sid, :qid, :skey, :title)"
+                ),
+                {"sid": new_sid, "qid": questionnaire_id, "skey": screen_key, "title": title},
+            )
+    return {"screen_id": new_sid, "screen_key": screen_key}
+
+
+def get_questionnaire_id_for_screen(screen_key: str) -> str | None:
+    """Return the questionnaire_id that owns the given screen_key, or None.
+
+    Keeps route layer free of SQL by centralizing this lookup.
+    """
+    eng = get_engine()
+    with eng.connect() as conn:
+        row = conn.execute(
+            sql_text("SELECT questionnaire_id FROM screens WHERE screen_key = :sid"),
+            {"sid": screen_key},
+        ).fetchone()
+    if row and row[0] is not None:
+        return str(row[0])
+    return None
