@@ -1,4 +1,4 @@
-# Epic K - API Contract and Versioning
+# epic name
 
 etag optimistic concurrency control (epic k, phase 0)
 
@@ -8,169 +8,209 @@ Centralise how etags are enforced and emitted so the front end can read a single
 
 # glossary
 
-* etag: opaque version token for a resource
-* if-match: precondition header that must match the current etag to allow a write
-* domain header: a resource‑specific etag header alias, e.g. Screen-ETag, Question-ETag, Questionnaire-ETag, Document-ETag
+- etag: opaque version token for a resource
+- if-match: precondition header that must match the current etag to allow a write
+- domain header: a resource‑specific etag header alias, e.g. Screen-ETag, Question-ETag, Questionnaire-ETag, Document-ETag
 
 # actors
 
-* end user in the authoring ui (screens/questions)
-* end user in the runtime ui (answers/screens)
-* http clients consuming document or csv endpoints (downloads)
+- end user in the authoring ui (screens/questions)
+- end user in the runtime ui (answers/screens)
+- http clients consuming document or csv endpoints (downloads)
 
 # guiding principles
 
-* do not change token algorithms or values in phase 0
-* enforce preconditions early on routes that already do so today (answers/documents); preserve existing status codes and problem shapes; do not add enforcement to authoring routes in phase 0
-* emit domain headers on all in-scope responses; emit ETag alongside the domain header only on routes that already return ETag (runtime/answers/documents). Do not add ETag to authoring routes in phase 0
-* keep existing body mirrors as‑is (e.g. screen_view.etag); do not add outputs.etags
-* on successful mutation, always echo fresh tags
+- do not change token algorithms or values in phase 0
+- enforce preconditions early on routes that already do so today (answers/documents); preserve existing status codes and problem shapes; do not add enforcement to authoring routes in phase 0
+- emit domain headers on all in-scope responses; emit ETag alongside the domain header only on routes that already return ETag (runtime/answers/documents). Do not add ETag to authoring routes in phase 0
+- keep existing body mirrors as‑is (e.g. screen_view.etag); do not add outputs.etags
+- on successful mutation, always echo fresh tags
+
+### Append to guiding principles — Post‑Review Additions (Phase‑0)
+- Mount a **central precondition guard** on all in‑scope **write** routes (answers/documents) via dependency injection; **do not** mount on authoring or read (GET) routes.
+- Keep handlers **free of inline If‑Match logic**. Parsing/normalisation/comparison and problem responses belong **only** in the guard.
+- The guard must be **DB‑free**: do not import or touch repositories/DB drivers (e.g., psycopg2); call only public `app.logic.etag` helpers and import them **inside** guard functions.
+- Declare `If-Match` as a **required header parameter** on in‑scope write routes for contract visibility (enforcement remains in the guard).
+- UI/event sequencing is **out of scope** for Epic K; no requirements on event order are introduced here.
 
 # contract overview
 
 read responses
 
-* runtime JSON resources (answers/screens/documents): include both ETag and the domain header with the same legacy value
-* authoring JSON resources (Epic G): include domain header(s) only (no generic ETag added in phase 0)
-* screens continue to include screen_view.etag in the body (unchanged)
-* csv or other non‑json downloads: include both ETag and the domain header where feasible; bodies are unchanged
+- runtime JSON resources (answers/screens/documents): include both ETag and the domain header with the same legacy value
+- authoring JSON resources (Epic G): include domain header(s) only (no generic ETag added in phase 0)
+- screens continue to include screen_view.etag in the body (unchanged)
+- csv or other non‑json downloads: include both ETag and the domain header where feasible; bodies are unchanged
 
 write requests (patch/post/delete)
 
-* if-match is normalised and checked before mutation
-* on mismatch, return the route’s existing status code and problem shape (unchanged)
-* on success, return domain header(s) with the fresh legacy value. Also return ETag where the route already returns it today (runtime/answers/documents). Do not add generic ETag to authoring routes in phase 0; bodies remain unchanged except where they already include an etag field
+- if-match is normalised and checked before mutation
+- on mismatch, return the route’s existing status code and problem shape (unchanged)
+- on success, return domain header(s) with the fresh legacy value. Also return ETag where the route already returns it today (runtime/answers/documents). Do not add generic ETag to authoring routes in phase 0; bodies remain unchanged except where they already include an etag field
+
+### Append to contract overview — Post‑Review Additions (Phase‑0)
+- **Problem+json mapping (unchanged shapes):**
+  - Missing `If-Match` → **428 Precondition Required**, `code=PRE_IF_MATCH_MISSING`.
+  - Mismatched `If-Match` → existing route status (**409** or **412**) with `code=PRE_IF_MATCH_ETAG_MISMATCH`.
+- On **document reorder** precondition failures, emit diagnostic headers **`X-List-ETag`** and, when applicable, **`X-If-Match-Normalized`** alongside the problem body.
 
 # per‑resource behaviour
 
 screens
 
-* get: set Screen-ETag and ETag to the same legacy value; ensure screen_view.etag remains populated
-* patch/post/delete: enforce if-match early; keep current conflict status; on success, set both headers with the fresh value
-* authoring screen routes (Epic G): domain headers only; do not introduce generic ETag in phase 0
+- get: set Screen-ETag and ETag to the same legacy value; ensure screen_view.etag remains populated
+- patch/post/delete: enforce if-match early; keep current conflict status; on success, set both headers with the fresh value
+- authoring screen routes (Epic G): domain headers only; do not introduce generic ETag in phase 0
 
 answers
 
-* patch/post/delete: enforce if-match early; return 409 on mismatch and 428 when missing If-Match; on success, set Screen-ETag and ETag with the fresh value
+- patch/post/delete: enforce if-match early; return 409 on mismatch and 428 when missing If-Match; on success, set Screen-ETag and ETag with the fresh value
 
 questions
 
-* phase 0: no change (headers as currently emitted); the front end reads `Question-ETag` if present, else `ETag`
+- phase 0: no change (headers as currently emitted); the front end reads `Question-ETag` if present, else `ETag`
 
 documents
 
-* get and any write endpoints that already exist: keep current behaviour and status codes; additionally emit Document-ETag alongside ETag; no body mirror added
-* preserve diagnostic headers already emitted by reorder (e.g., X-List-ETag and X-If-Match-Normalized) during Phase 0
+- get and any write endpoints that already exist: keep current behaviour and status codes; additionally emit Document-ETag alongside ETag; no body mirror added
+- preserve diagnostic headers already emitted by reorder (e.g., X-List-ETag and X-If-Match-Normalized) during Phase 0
 
 questionnaires (csv export)
 
-* get csv: keep legacy ETag behaviour; additionally emit Questionnaire-ETag with the same legacy value
-* header names are case-insensitive; some clients (e.g., fetch) lowercase to `questionnaire-etag`
+- get csv: keep legacy ETag behaviour; additionally emit Questionnaire-ETag with the same legacy value
+- header names are case-insensitive; some clients (e.g., fetch) lowercase to `questionnaire-etag`
 
 placeholders
 
-* post /placeholders/bind and /placeholders/unbind: preserve current 412 behaviour on mismatch and include ETag header in the response as today; no additional domain headers in phase 0
-* get /questions/{id}/placeholders: preserve existing body "etag" field and set ETag header to the same value
+- post /placeholders/bind and /placeholders/unbind: preserve current 412 behaviour on mismatch and include ETag header in the response as today; no additional domain headers in phase 0
+- get /questions/{id}/placeholders: preserve existing body "etag" field and set ETag header to the same value
 
 response sets
 
-* no change in phase 0
+- no change in phase 0
+
+### Append to per‑resource behaviour — Post‑Review Additions (Phase‑0)
+- **Guard scope**: apply guard to **answers** and **documents** writes only; **exclude** authoring and all **GET** endpoints.
+- **Documents reorder failures**: must include **`X-List-ETag`** and **`X-If-Match-Normalized`** where normalisation occurred.
 
 # request handling pipeline (phase 0)
 
 1. normalise if-match
 
-   * preserve "*" semantics: treat "*" as unconditional write (resource-exists precondition) where routes already accept it; do not change route status codes.
-   * support comma-separated lists: split on commas outside quotes; match succeeds if ANY tag matches the current token.
-   * accept weak/strong forms: treat W/"abc" and "abc" as equivalent in phase 0.
-   * quote handling: strip surrounding quotes, unescape " inside, and trim whitespace.
-   * case handling: compare token bytes case-sensitively; ignore case only for the W/ prefix.
-   * multiple headers: join multiple If-Match header instances with "," before parsing.
-   * empty/invalid tokens: ignore invalid entries; if nothing valid remains, treat as mismatch (preserve each route’s existing status on mismatch).
-   * parity basis: compare against the current legacy token normalised with the same rules; do not alter the stored/emitted value.
-   * note: comma-separated If-Match support is provided by the normaliser for forward-compatibility; current endpoints do not require it.
+   - preserve "*" semantics: treat "*" as unconditional write (resource-exists precondition) where routes already accept it; do not change route status codes.
+   - support comma-separated lists: split on commas outside quotes; match succeeds if ANY tag matches the current token.
+   - accept weak/strong forms: treat W/"abc" and "abc" as equivalent in phase 0.
+   - quote handling: strip surrounding quotes, unescape " inside, and trim whitespace.
+   - case handling: compare token bytes case-sensitively; ignore case only for the W/ prefix.
+   - multiple headers: join multiple If-Match header instances with "," before parsing.
+   - empty/invalid tokens: ignore invalid entries; if nothing valid remains, treat as mismatch (preserve each route’s existing status on mismatch).
+   - parity basis: compare against the current legacy token normalised with the same rules; do not alter the stored/emitted value.
+   - note: comma-separated If-Match support is provided by the normaliser for forward-compatibility; current endpoints do not require it.
 
 2. precondition enforcement
 
-   * perform the check before mutation
-   * on mismatch: return the existing status code and problem body used by the route
+   - perform the check before mutation
+   - on mismatch: return the existing status code and problem body used by the route
 
 3. mutation and tag retrieval
 
-   * perform the mutation as today
-   * retrieve the current legacy tag value using the existing algorithm
+   - perform the mutation as today
+   - retrieve the current legacy tag value using the existing algorithm
 
 4. header emission
 
-   * set ETag to the legacy value
-   * set the domain header (Screen-ETag, Question-ETag, Questionnaire-ETag, Document-ETag) to the same value (placeholders: ETag only in phase 0)
+   - set ETag to the legacy value
+   - set the domain header (Screen-ETag, Question-ETag, Questionnaire-ETag, Document-ETag) to the same value (placeholders: ETag only in phase 0)
 
 5. body mirrors
 
-   * do not add new mirrors; continue to include screen_view.etag where it already exists
+   - do not add new mirrors; continue to include screen_view.etag where it already exists
+
+### Append to request handling pipeline — Post‑Review Additions (Phase‑0)
+- **Guard placement**: steps **1–2** execute inside `precondition_guard`; handlers must enter at step **3** only after guard success.
+- **DB isolation**: the guard must not import DB drivers or repositories; it must rely solely on public ETag helpers, imported **inside** the guard function scope.
+- **Diagnostics on failure** (documents reorder): on step **2** failure, emit **`X-List-ETag`** and optional **`X-If-Match-Normalized`**.
 
 # caching and conditional gets
 
-* no behavioural change mandated in phase 0
-* endpoints may accept If-None-Match as they do today; validators and 304s remain as currently implemented
+- no behavioural change mandated in phase 0
+- endpoints may accept If-None-Match as they do today; validators and 304s remain as currently implemented
 
 # logging and observability
 
-* log an etag.enforce event when preconditions are checked, including route name and a redacted indicator of match/mismatch (not the raw token); log only `matched: true|false` and a route id; never log token substrings
-* log an etag.emit event when headers are written, including route name and domain header used
+- log an etag.enforce event when preconditions are checked, including route name and a redacted indicator of match/mismatch (not the raw token); log only `matched: true|false` and a route id; never log token substrings
+- log an etag.emit event when headers are written, including route name and domain header used
+
+### Append to logging and observability — Post‑Review Additions (Phase‑0)
+- Emit minimal telemetry for guard outcomes: `etag.enforce` (pre‑mutation), `etag.emit` (post‑success headers). No UI/event sequencing logs are required by this epic.
 
 # openapi updates (non‑breaking)
 
-* annotate affected endpoints to declare the additional domain headers in 2xx and error responses where applicable
-* ensure `Access-Control-Expose-Headers` exposes the added domain headers (Screen-ETag, Question-ETag, Document-ETag, Questionnaire-ETag)
-* bodies remain unchanged
+- annotate affected endpoints to declare the additional domain headers in 2xx and error responses where applicable
+- ensure `Access-Control-Expose-Headers` exposes the added domain headers (Screen-ETag, Question-ETag, Document-ETag, Questionnaire-ETag)
+- bodies remain unchanged
+
+### Append to openapi updates — Post‑Review Additions (Phase‑0)
+- Declare `If-Match` as a **required header parameter** on in‑scope write routes (visibility only; enforcement remains in the guard).
+- Document error responses for **428** and **409/412** with invariant problem shapes and codes (`PRE_IF_MATCH_MISSING`, `PRE_IF_MATCH_ETAG_MISMATCH`).
 
 # compatibility constraints
 
-* legacy token values must not change in phase 0
+- legacy token values must not change in phase 0
+  - tests: capture a baseline tag from the current build; after refactor, the same request must return **exactly the same** header token string (including `W/` prefix and quotes). No whitespace/quoting/strength changes.
+- existing status codes and problem bodies must not change (e.g., answers: 409 on mismatch; 428 when missing; documents: 412 on mismatch)
+  - tests: trigger each route’s mismatch/missing-precondition and assert the same status. Assert problem JSON has identical keys/shape and invariant error codes/messages; no additional/renamed fields.
+- authoring routes must not add If-Match enforcement in phase 0; keep current success flows (tests assume success without precondition checks)
+  - tests: authoring writes should succeed without asserting If-Match; adding enforcement would fail existing features.
+- no new body fields are introduced; preserve existing body mirrors (e.g., `screen_view.etag`, placeholders `etag`)
+  - tests: assert `outputs.etags` is **absent**. For screens, assert `screen_view.etag` exists and equals the domain header value. For placeholders, assert body `etag` exists and equals response `ETag`.
+- csv and other binary formats remain unchanged aside from additional response headers
+  - tests: assert `Content-Type` unchanged; payload bytes equal baseline (or checksum match). Assert presence of `Questionnaire-ETag` and/or `ETag`; no wrapper/format changes.
+- preserve existing diagnostic headers on document reorder (X-List-ETag, X-If-Match-Normalized)
+  - tests: assert both headers are present and non-empty; values follow the same legacy format/rules as before; no rename or removal.
 
-  * tests: capture a baseline tag from the current build; after refactor, the same request must return **exactly the same** header token string (including `W/` prefix and quotes). No whitespace/quoting/strength changes.
-* existing status codes and problem bodies must not change (e.g., answers: 409 on mismatch; 428 when missing; documents: 412 on mismatch)
+### Append to compatibility constraints — Post‑Review Additions (Phase‑0)
+- **Handler isolation**: confirm handlers contain **no** If‑Match parsing/validation or precondition problem construction.
+- **Guard isolation**: confirm guard contains **no** imports of private ETag internals and **no** DB/repository imports at module scope; any allowed helper imports occur inside the guard function.
+- **CORS**: confirm `Access-Control-Expose-Headers` includes all domain headers in both success and error responses for in‑scope routes.
 
-  * tests: trigger each route’s mismatch/missing-precondition and assert the same status. Assert problem JSON has identical keys/shape and invariant error codes/messages; no additional/renamed fields.
-* authoring routes must not add If-Match enforcement in phase 0; keep current success flows (tests assume success without precondition checks)
+1. Scope
+1.1 Purpose
 
-  * tests: authoring writes should succeed without asserting If-Match; adding enforcement would fail existing features.
-* no new body fields are introduced; preserve existing body mirrors (e.g., `screen_view.etag`, placeholders `etag`)
-
-  * tests: assert `outputs.etags` is **absent**. For screens, assert `screen_view.etag` exists and equals the domain header value. For placeholders, assert body `etag` exists and equals response `ETag`.
-* csv and other binary formats remain unchanged aside from additional response headers
-
-  * tests: assert `Content-Type` unchanged; payload bytes equal baseline (or checksum match). Assert presence of `Questionnaire-ETag` and/or `ETag`; no wrapper/format changes.
-* preserve existing diagnostic headers on document reorder (X-List-ETag, X-If-Match-Normalized)
-
-  * tests: assert both headers are present and non-empty; values follow the same legacy format/rules as before; no rename or removal.
-
-# 1. Scope
-
-## 1.1 Purpose
 Establish a uniform, non-destructive ETag contract so clients can rely on consistent request preconditions and response headers across resources, reducing UI complexity and test flakiness in Phase 0.
 
-## 1.2 Inclusions
-- Centralised normalisation of `If-Match` for routes that already enforce preconditions (answers, documents).
-- Consistent header exposure: emit domain ETag headers (Screen-/Question-/Questionnaire-/Document-ETag) on in-scope responses; also emit generic `ETag` only where it exists today (runtime/answers/documents).
-- Preserve existing body mirrors where present (e.g., `screen_view.etag`); ensure successful writes echo fresh tags in headers.
-- Per resource behaviour: runtime JSON returns domain header + `ETag`; authoring JSON returns domain header only; CSV/binary returns domain header (and existing `ETag`) without changing payloads.
-- Non-breaking documentation/ops updates: declare headers in OpenAPI and expose them via CORS so browsers can read them.
-- Lightweight observability: log precondition checks and header emission events (redacted).
+1.2 Inclusions
 
-## 1.3 Exclusions
-- No changes to token algorithms/values, response bodies, or status codes/problem shapes.
-- No new body fields (e.g., no `outputs.etags`) and no database/schema changes.
-- No addition of `If-Match` enforcement to authoring routes in Phase 0.
-- No caching/idempotency redesign or front-end UI rewrites.
+Centralised normalisation of If-Match for routes that already enforce preconditions (answers, documents).
 
-## 1.4 Context
+Consistent header exposure: emit domain ETag headers (Screen-/Question-/Questionnaire-/Document-ETag) on in-scope responses; also emit generic ETag only where it exists today (runtime/answers/documents).
+
+Preserve existing body mirrors where present (e.g., screen_view.etag); ensure successful writes echo fresh tags in headers.
+
+Per resource behaviour: runtime JSON returns domain header + ETag; authoring JSON returns domain header only; CSV/binary returns domain header (and existing ETag) without changing payloads.
+
+Non-breaking documentation/ops updates: declare headers in OpenAPI and expose them via CORS so browsers can read them.
+
+Lightweight observability: log precondition checks and header emission events (redacted).
+
+1.3 Exclusions
+
+No changes to token algorithms/values, response bodies, or status codes/problem shapes.
+
+No new body fields (e.g., no outputs.etags) and no database/schema changes.
+
+No addition of If-Match enforcement to authoring routes in Phase 0.
+
+No caching/idempotency redesign or front-end UI rewrites.
+
+1.4 Context
+
 This story is part of Epic K (Phase 0) and underpins Epic H’s frontend shim by providing a stable concurrency and header contract. It aligns with Epic G authoring flows without altering their success paths. The work touches server HTTP interfaces only, interacting with existing REST endpoints and standard HTTP semantics (ETag/If-Match) plus CORS for header exposure.
 
 # 2.2. EARS Functionality
 
 ## 2.2.1 Ubiquitous requirements
+
 * **U1** The system will join multiple If-Match header instances into a single comma-separated string prior to parsing.
 * **U2** The system will trim whitespace around each If-Match token during normalisation.
 * **U3** The system will strip surrounding quotes from each If-Match token during normalisation.
@@ -188,8 +228,12 @@ This story is part of Epic K (Phase 0) and underpins Epic H’s frontend shim by
 * **U15** The system will record an etag.emit log event for each response where ETag headers are set.
 * **U16** The system will associate each emitted domain ETag header with its corresponding resource scope.
 * **U17** The system will retrieve the current legacy tag value after mutation using the existing algorithm.
+* **U18** The system will evaluate If-Match preconditions exclusively within a precondition guard before handler execution.
+* **U19** The system will evaluate preconditions without accessing repositories or database drivers during guard execution.
+* **U20** The system will declare If-Match as a required header parameter on in-scope write routes for interface visibility.
 
 ## 2.2.2 Event-driven requirements
+
 * **E1** When a write request with If-Match is received on answers routes, the system will check the precondition before performing any mutation.
 * **E2** When a write request with If-Match is received on document routes, the system will check the precondition before performing any mutation.
 * **E3** When a write operation completes successfully, the system will emit updated domain ETag header(s) in the response.
@@ -197,19 +241,26 @@ This story is part of Epic K (Phase 0) and underpins Epic H’s frontend shim by
 * **E5** When an authoring JSON GET is processed, the system will include domain ETag header(s) only.
 * **E6** When exporting questionnaire CSV, the system will include Questionnaire-ETag in the response without changing the payload.
 * **E7** When returning a screen GET, the system will include screen_view.etag in the body.
+* **E8** When If-Match is missing on an in-scope write route, the system will return 428 Precondition Required with problem code PRE_IF_MATCH_MISSING.
+* **E9** When If-Match does not match on an in-scope write route, the system will return the route’s existing conflict status (409 or 412) with problem code PRE_IF_MATCH_ETAG_MISMATCH.
 
 ## 2.2.3 State-driven requirements
+
 * **S1** While authoring routes are in Phase 0, the system will not enforce If-Match preconditions.
 * **S2** While processing placeholders endpoints in Phase 0, the system will emit only the generic ETag header in responses.
 * **S3** While If-None-Match validators are supported on an endpoint, the system will maintain the current 304 behaviour unchanged.
+* **S4** While processing read (GET) endpoints, the system will bypass the precondition guard.
 
 ## 2.2.4 Optional-feature requirements
+
 * **O1** Where wildcard If-Match "*" is accepted by a route, the system will treat it as a resource-exists precondition.
 * **O2** Where multiple resource scopes are affected by a mutation, the system will emit domain ETag headers for each affected scope present in the response.
 * **O3** Where both a domain ETag header and a body mirror are present for screens, the system will treat the header value as authoritative.
 * **O4** Where document reorder diagnostics are supported, the system will include existing diagnostic headers unchanged in corresponding responses.
+* **O5** Where token normalisation occurs on document reorder failures, the system will include X-If-Match-Normalized alongside diagnostic headers.
 
 ## 2.2.5 Unwanted-behaviour requirements
+
 * **N1** If all provided If-Match tokens are invalid after normalisation, the system will treat the request as a precondition mismatch.
 * **N2** If a non-matching If-Match token is supplied on answers routes, the system will respond 409 without mutating state.
 * **N3** If a non-matching If-Match token is supplied on document routes, the system will respond 412 without mutating state.
@@ -217,42 +268,45 @@ This story is part of Epic K (Phase 0) and underpins Epic H’s frontend shim by
 * **N5** If both a domain ETag header and a generic ETag header are present and differ, the system will prefer the domain header value when exposing tags.
 * **N6** If header and body ETag values for a screen differ, the system will prefer the header value without failing the request.
 * **N7** If a document reorder precondition fails, the system will include X-List-ETag and X-If-Match-Normalized in the response.
+* **N8** If If-Match is missing on document write routes, the system will respond 428 without mutating state.
+* **N9** If a precondition failure response is returned, the system will include a stable problem code of PRE_IF_MATCH_MISSING or PRE_IF_MATCH_ETAG_MISMATCH.
 
 ## 2.2.6 Step Index
+
 * **STEP-1** normalise if-match → U1, U2, U3, U4, U5, U6, U7, O1, N1
-* **STEP-2** precondition enforcement → E1, E2, U14
+* **STEP-2** precondition enforcement (guard) → U18, U19, E1, E2, U14, E8, E9, N2, N3, N4, N8, O5, N7, N9
 * **STEP-3** mutation and tag retrieval → U17, U8
 * **STEP-4** header emission → U9, U10, U11, U13, U15, U16, E3, E4, E5, E6
 * **STEP-5** body mirrors → U12, E7, O3, N6
 
-Field | Description | Type | Schema / Reference | Notes | Pre-Conditions | Origin
---|--|--|--|--|--|--
-request.headers.If-Match | Precondition header carrying one or more ETag tokens for optimistic concurrency on writes | string | schemas/IfMatchHeader.schema.json | Provisional schema for header syntax and examples | Header is required and must be provided for guarded routes; Value must be a non-empty string; Value must parse as one or more tokens per normaliser rules; Multiple header instances are concatenated before parsing | provided
-request.path.response_set_id | Identifier of the active response set used to scope screen/answer operations | string | schemas/ResponseSetId.schema.json | None | Field is required and must be provided; Value must conform to the referenced schema; Value must be a non-empty string | provided
-request.path.screen_key | Stable screen slug used in REST paths to address a screen | string | schemas/ScreenKey.schema.json | Provisional schema to reflect slug form distinct from ScreenId | Field is required and must be provided; Value must match the allowed slug pattern; Value must be a non-empty string | provided
-request.path.question_id | Identifier of a question targeted by an operation | string | schemas/QuestionId.schema.json | None | Field is required and must be provided; Value must conform to the referenced schema; Value must be a non-empty string | provided
-request.path.document_id | Identifier of a document targeted by an operation | string | schemas/DocumentId.schema.json | None | Field is required and must be provided; Value must conform to the referenced schema; Value must be a non-empty string | provided
-request.path.questionnaire_id | Identifier of a questionnaire targeted by an operation (including CSV export) | string | schemas/QuestionnaireId.schema.json | None | Field is required and must be provided; Value must conform to the referenced schema; Value must be a non-empty string | provided
-acquired.current_etag.screen | Current legacy ETag token for the addressed screen | string | schemas/EtagToken.schema.json | Provisional schema for opaque token string | Token must be retrievable for the addressed screen; Token must be a string; Token must represent the current persisted version | acquired
-acquired.current_etag.document | Current legacy ETag token for the addressed document | string | schemas/EtagToken.schema.json | Provisional schema for opaque token string | Token must be retrievable for the addressed document; Token must be a string; Token must represent the current persisted version | acquired
-acquired.current_etag.questionnaire | Current legacy ETag token for the addressed questionnaire | string | schemas/EtagToken.schema.json | Provisional schema for opaque token string | Token must be retrievable for the addressed questionnaire; Token must be a string; Token must represent the current persisted version | acquired
-returned.screen_view.etag | Body mirror of the active screen’s token used for parity verification | string | docs/schemas/ScreenView.schema.json#/properties/etag | Provider: GET /api/v1/response-sets/{response_set_id}/screens/{screen_key} | Call must complete without error; Return value must match the declared schema; Returned etag must be treated as advisory for parity checks only | returned
-returned.placeholders_response.etag | Collection-level token for question placeholders used for parity verification | string | schemas/PlaceholdersResponse.schema.json#/properties/etag | Provider: GET /api/v1/questions/{id}/placeholders | Call must complete without error; Return value must match the declared schema; Returned etag must be treated as advisory for parity checks only | returned
+| Field                               | Description                                                                               | Type   | Schema / Reference                                        | Notes                                                                      | Pre-Conditions                                                                                                                                                                                                       | Origin   |
+| ----------------------------------- | ----------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| request.headers.If-Match            | Precondition header carrying one or more ETag tokens for optimistic concurrency on writes | string | schemas/IfMatchHeader.schema.json                         | Provisional schema for header syntax and examples                          | Header is required and must be provided for guarded routes; Value must be a non-empty string; Value must parse as one or more tokens per normaliser rules; Multiple header instances are concatenated before parsing | provided |
+| request.path.response_set_id        | Identifier of the active response set used to scope screen/answer operations              | string | schemas/ResponseSetId.schema.json                         | None                                                                       | Field is required and must be provided; Value must conform to the referenced schema; Value must be a non-empty string                                                                                                | provided |
+| request.path.screen_key             | Stable screen slug used in REST paths to address a screen                                 | string | schemas/ScreenKey.schema.json                             | Provisional schema to reflect slug form distinct from ScreenId             | Field is required and must be provided; Value must match the allowed slug pattern; Value must be a non-empty string                                                                                                  | provided |
+| request.path.question_id            | Identifier of a question targeted by an operation                                         | string | schemas/QuestionId.schema.json                            | None                                                                       | Field is required and must be provided; Value must conform to the referenced schema; Value must be a non-empty string                                                                                                | provided |
+| request.path.document_id            | Identifier of a document targeted by an operation                                         | string | schemas/DocumentId.schema.json                            | None                                                                       | Field is required and must be provided; Value must conform to the referenced schema; Value must be a non-empty string                                                                                                | provided |
+| request.path.questionnaire_id       | Identifier of a questionnaire targeted by an operation (including CSV export)             | string | schemas/QuestionnaireId.schema.json                       | None                                                                       | Field is required and must be provided; Value must conform to the referenced schema; Value must be a non-empty string                                                                                                | provided |
+| acquired.current_etag.screen        | Current legacy ETag token for the addressed screen                                        | string | schemas/EtagToken.schema.json                             | Provisional schema for opaque token string                                 | Token must be retrievable for the addressed screen; Token must be a string; Token must represent the current persisted version                                                                                       | acquired |
+| acquired.current_etag.document      | Current legacy ETag token for the addressed document                                      | string | schemas/EtagToken.schema.json                             | Provisional schema for opaque token string                                 | Token must be retrievable for the addressed document; Token must be a string; Token must represent the current persisted version                                                                                     | acquired |
+| acquired.current_etag.questionnaire | Current legacy ETag token for the addressed questionnaire                                 | string | schemas/EtagToken.schema.json                             | Provisional schema for opaque token string                                 | Token must be retrievable for the addressed questionnaire; Token must be a string; Token must represent the current persisted version                                                                                | acquired |
+| returned.screen_view.etag           | Body mirror of the active screen’s token used for parity verification                     | string | schemas/ScreenView.schema.json#/properties/etag           | Provider: GET /api/v1/response-sets/{response_set_id}/screens/{screen_key} | Call must complete without error; Return value must match the declared schema; Returned etag must be treated as advisory for parity checks only                                                                      | returned |
+| returned.placeholders_response.etag | Collection-level token for question placeholders used for parity verification             | string | schemas/PlaceholdersResponse.schema.json#/properties/etag | Provider: GET /api/v1/questions/{id}/placeholders                          | Call must complete without error; Return value must match the declared schema; Returned etag must be treated as advisory for parity checks only                                                                      | returned |
 
-Field | Description | Type | Schema / Reference | Notes | Post-Conditions
---|--|--|--|--|--
-outputs | Canonical container for all fields returned, persisted, or displayed by this feature | object | schemas/Outputs.schema.json | Single source of truth for Phase‑0 ETag contract outputs | Object validates against the referenced schema; Object contains keys `headers` and `body`; Object is immutable within this step after emission; Key set is deterministic for identical inputs
-outputs.headers | HTTP response headers carrying ETag information and diagnostics | mapping[string→string] | schemas/Outputs.schema.json#/properties/headers | Includes domain headers and legacy `ETag`; diagnostic headers appear on specific error responses only | Mapping validates against the referenced fragment; Keys are case-insensitive by protocol but represented once each here; Mapping may be empty on routes out of scope; Mapping order is not significant
-outputs.headers.ETag | Legacy ETag header value mirrored for applicable routes | string | schemas/Outputs.schema.json#/properties/headers/properties/ETag | Present on runtime reads and on routes that already emitted `ETag` prior to Phase‑0 | Field is required on in‑scope success responses that historically emitted `ETag`; Value validates against schemas/EtagToken.schema.json; Value equals the current legacy token string for the addressed resource
-outputs.headers.Screen-ETag | Domain header for the screen scope | string | schemas/Outputs.schema.json#/properties/headers/properties/Screen-ETag | Present on screen GET and on successful screen/answer mutations | Field is required on screen‑scope responses; Value validates against schemas/EtagToken.schema.json; Value equals the current legacy token string for the screen
-outputs.headers.Question-ETag | Domain header for the question scope | string | schemas/Outputs.schema.json#/properties/headers/properties/Question-ETag | Present on authoring question routes that already emit it | Field is required on question‑scope responses that historically emitted it; Value validates against schemas/EtagToken.schema.json; Value equals the current legacy token string for the question
-outputs.headers.Questionnaire-ETag | Domain header for the questionnaire scope | string | schemas/Outputs.schema.json#/properties/headers/properties/Questionnaire-ETag | Present on questionnaire CSV export and other questionnaire‑scope endpoints as applicable | Field is required on questionnaire‑scope responses; Value validates against schemas/EtagToken.schema.json; Value equals the current legacy token string for the questionnaire
-outputs.headers.Document-ETag | Domain header for the document scope | string | schemas/Outputs.schema.json#/properties/headers/properties/Document-ETag | Present on document GET and on successful document writes where applicable | Field is required on document‑scope responses; Value validates against schemas/EtagToken.schema.json; Value equals the current legacy token string for the document
-outputs.headers.X-List-ETag | Diagnostic header exposing list collection token for document reorder flows | string | schemas/Outputs.schema.json#/properties/headers/properties/X-List-ETag | Emitted on document reorder precondition errors | Field is optional; Value validates against schemas/EtagToken.schema.json; Field appears only on reorder‑related error responses; Value equals the legacy list token string
-outputs.headers.X-If-Match-Normalized | Diagnostic header echoing the normalized If‑Match used for decisioning | string | schemas/Outputs.schema.json#/properties/headers/properties/X-If-Match-Normalized | Emitted on document reorder precondition errors to aid troubleshooting | Field is optional; Value validates against schemas/IfMatchHeader.schema.json; Field appears only on reorder‑related error responses; Value reflects the normalized token list string used for evaluation
-outputs.body | Response body fields that mirror ETag values for parity where applicable | object | schemas/Outputs.schema.json#/properties/body | Mirrors are informational only and unchanged in Phase‑0 | Object validates against the referenced fragment; Object may be empty when no mirrors exist for the route; Object is immutable within this step after emission
-outputs.body.screen_view.etag | Body mirror of the active screen’s token on screen GET responses | string | schemas/Outputs.schema.json#/properties/body/properties/screen_view/properties/etag | Header remains authoritative where both appear | Field is required on screen GET responses that include `screen_view`; Value validates against schemas/EtagToken.schema.json; Value equals outputs.headers.Screen-ETag; Value is consistent across header and body within the same response
-outputs.body.placeholders.etag | Body mirror of the placeholders collection token on placeholders GET responses | string | schemas/Outputs.schema.json#/properties/body/properties/placeholders/properties/etag | Present only on placeholders reads that already include it | Field is required on placeholders reads that include a body `etag`; Value validates against schemas/EtagToken.schema.json; Value equals outputs.headers.ETag within the same response
+| Field                                 | Description                                                                          | Type                   | Schema / Reference                                                                   | Notes                                                                                                 | Post-Conditions                                                                                                                                                                                                                            |
+| ------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| outputs                               | Canonical container for all fields returned, persisted, or displayed by this feature | object                 | schemas/Outputs.schema.json                                                          | Single source of truth for Phase-0 ETag contract outputs                                              | Object validates against the referenced schema; Object contains keys `headers` and `body`; Object is immutable within this step after emission; Key set is deterministic for identical inputs                                              |
+| outputs.headers                       | HTTP response headers carrying ETag information and diagnostics                      | mapping[string→string] | schemas/Outputs.schema.json#/properties/headers                                      | Includes domain headers and legacy `ETag`; diagnostic headers appear on specific error responses only | Mapping validates against the referenced fragment; Keys are case-insensitive by protocol but represented once each here; Mapping may be empty on routes out of scope; Mapping order is not significant                                     |
+| outputs.headers.ETag                  | Legacy ETag header value mirrored for applicable routes                              | string                 | schemas/Outputs.schema.json#/properties/headers/properties/ETag                      | Present on runtime reads and on routes that already emitted `ETag` prior to Phase-0                   | Field is required on in-scope success responses that historically emitted `ETag`; Value validates against schemas/EtagToken.schema.json; Value equals the current legacy token string for the addressed resource                           |
+| outputs.headers.Screen-ETag           | Domain header for the screen scope                                                   | string                 | schemas/Outputs.schema.json#/properties/headers/properties/Screen-ETag               | Present on screen GET and on successful screen/answer mutations                                       | Field is required on screen-scope responses; Value validates against schemas/EtagToken.schema.json; Value equals the current legacy token string for the screen                                                                            |
+| outputs.headers.Question-ETag         | Domain header for the question scope                                                 | string                 | schemas/Outputs.schema.json#/properties/headers/properties/Question-ETag             | Present on authoring question routes that already emit it                                             | Field is required on question-scope responses that historically emitted it; Value validates against schemas/EtagToken.schema.json; Value equals the current legacy token string for the question                                           |
+| outputs.headers.Questionnaire-ETag    | Domain header for the questionnaire scope                                            | string                 | schemas/Outputs.schema.json#/properties/headers/properties/Questionnaire-ETag        | Present on questionnaire CSV export and other questionnaire-scope endpoints as applicable             | Field is required on questionnaire-scope responses; Value validates against schemas/EtagToken.schema.json; Value equals the current legacy token string for the questionnaire                                                              |
+| outputs.headers.Document-ETag         | Domain header for the document scope                                                 | string                 | schemas/Outputs.schema.json#/properties/headers/properties/Document-ETag             | Present on document GET and on successful document writes where applicable                            | Field is required on document-scope responses; Value validates against schemas/EtagToken.schema.json; Value equals the current legacy token string for the document                                                                        |
+| outputs.headers.X-List-ETag           | Diagnostic header exposing list collection token for document reorder flows          | string                 | schemas/Outputs.schema.json#/properties/headers/properties/X-List-ETag               | Emitted on document reorder precondition errors                                                       | Field is optional; Value validates against schemas/EtagToken.schema.json; Field appears only on reorder-related error responses; Value equals the legacy list token string                                                                 |
+| outputs.headers.X-If-Match-Normalized | Diagnostic header echoing the normalized If-Match used for decisioning               | string                 | schemas/Outputs.schema.json#/properties/headers/properties/X-If-Match-Normalized     | Emitted on document reorder precondition errors to aid troubleshooting                                | Field is optional; Value validates against schemas/IfMatchHeader.schema.json; Field appears only on reorder-related error responses; Value reflects the normalized token list string used for evaluation                                   |
+| outputs.body                          | Response body fields that mirror ETag values for parity where applicable             | object                 | schemas/Outputs.schema.json#/properties/body                                         | Mirrors are informational only and unchanged in Phase-0                                               | Object validates against the referenced fragment; Object may be empty when no mirrors exist for the route; Object is immutable within this step after emission                                                                             |
+| outputs.body.screen_view.etag         | Body mirror of the active screen’s token on screen GET responses                     | string                 | schemas/Outputs.schema.json#/properties/body/properties/screen_view/properties/etag  | Header remains authoritative where both appear                                                        | Field is required on screen GET responses that include `screen_view`; Value validates against schemas/EtagToken.schema.json; Value equals outputs.headers.Screen-ETag; Value is consistent across header and body within the same response |
+| outputs.body.placeholders.etag        | Body mirror of the placeholders collection token on placeholders GET responses       | string                 | schemas/Outputs.schema.json#/properties/body/properties/placeholders/properties/etag | Present only on placeholders reads that already include it                                            | Field is required on placeholders reads that include a body `etag`; Value validates against schemas/EtagToken.schema.json; Value equals outputs.headers.ETag within the same response                                                      |
 
 | Error Code | Field Reference | Description | Likely Cause | Flow Impact | Behavioural AC Required |
 |---|---|---|---|---|---|
@@ -284,6 +338,13 @@ outputs.body.placeholders.etag | Body mirror of the placeholders collection toke
 | PRE_ACQUIRED_CURRENT_ETAG_QUESTIONNAIRE_RETRIEVAL_FAILED | acquired.current_etag.questionnaire | Current questionnaire token cannot be retrieved for the addressed questionnaire. | Reference not resolvable | halt_pipeline | Yes |
 | PRE_ACQUIRED_CURRENT_ETAG_QUESTIONNAIRE_NOT_STRING | acquired.current_etag.questionnaire | Current questionnaire token is not a string. | Type mismatch | halt_pipeline | Yes |
 | PRE_ACQUIRED_CURRENT_ETAG_QUESTIONNAIRE_STALE_VERSION | acquired.current_etag.questionnaire | Current questionnaire token does not represent the persisted version. | Stale or mismatched token | halt_pipeline | Yes |
+| PRE_RETURNED_SCREEN_VIEW_ETAG_PROVIDER_CALL_FAILED | returned.screen_view.etag | Screen view provider call did not complete without error. | Upstream provider error | skip_downstream_step:etag_parity | Yes |
+| PRE_RETURNED_SCREEN_VIEW_ETAG_SCHEMA_MISMATCH | returned.screen_view.etag | Returned screen_view.etag does not match the declared schema. | Contract mismatch | skip_downstream_step:etag_parity | Yes |
+| PRE_RETURNED_SCREEN_VIEW_ETAG_MISUSED_AS_AUTHORITATIVE | returned.screen_view.etag | Returned screen_view.etag was treated as authoritative rather than advisory for parity checks only. | Incorrect downstream usage | block_finalization | Yes |
+| PRE_RETURNED_PLACEHOLDERS_RESPONSE_ETAG_PROVIDER_CALL_FAILED | returned.placeholders_response.etag | Placeholders provider call did not complete without error. | Upstream provider error | skip_downstream_step:etag_parity | Yes |
+| PRE_RETURNED_PLACEHOLDERS_RESPONSE_ETAG_SCHEMA_MISMATCH | returned.placeholders_response.etag | Returned placeholders_response.etag does not match the declared schema. | Contract mismatch | skip_downstream_step:etag_parity | Yes |
+| PRE_RETURNED_PLACEHOLDERS_RESPONSE_ETAG_MISUSED_AS_AUTHORITATIVE | returned.placeholders_response.etag | Returned placeholders_response.etag was treated as authoritative rather than advisory for parity checks only. | Incorrect downstream usage | block_finalization | Yes |
+| PRE_REQUEST_HEADERS_IF_MATCH_MULTI_HEADERS_NOT_JOINED | request.headers.If-Match | Multiple If-Match header instances were provided but not concatenated before parsing. | Multiple headers not joined | halt_pipeline | Yes |
 | PRE_RETURNED_SCREEN_VIEW_ETAG_PROVIDER_CALL_FAILED | returned.screen_view.etag | Screen view provider call did not complete without error. | Upstream provider error | skip_downstream_step:etag_parity | Yes |
 | PRE_RETURNED_SCREEN_VIEW_ETAG_SCHEMA_MISMATCH | returned.screen_view.etag | Returned screen_view.etag does not match the declared schema. | Contract mismatch | skip_downstream_step:etag_parity | Yes |
 | PRE_RETURNED_SCREEN_VIEW_ETAG_MISUSED_AS_AUTHORITATIVE | returned.screen_view.etag | Returned screen_view.etag was treated as authoritative rather than advisory for parity checks only. | Incorrect downstream usage | block_finalization | Yes |
@@ -330,12 +391,19 @@ outputs.body.placeholders.etag | Body mirror of the placeholders collection toke
 | POST_OUTPUTS_BODY_PLACEHOLDERS_ETAG_MISSING              | outputs.body.placeholders.etag        | Placeholders body etag is missing on a placeholders read that includes a body etag.            | Missing field                  | block_finalization | Yes                     |
 | POST_OUTPUTS_BODY_PLACEHOLDERS_ETAG_INVALID_FORMAT       | outputs.body.placeholders.etag        | Placeholders body etag does not validate against the token schema.                             | Invalid format                 | block_finalization | Yes                     |
 | POST_OUTPUTS_BODY_PLACEHOLDERS_ETAG_MISMATCH_HEADER      | outputs.body.placeholders.etag        | Placeholders body etag does not equal outputs.headers.ETag within the same response.           | Token parity mismatch          | block_finalization | Yes                     |
+| POST_OUTPUTS_HEADERS_UNDECLARED_KEY_PRESENT | outputs.headers  | Headers mapping contains a key not declared in the outputs schema fragment. | Unexpected header key                        | block_finalization | Yes                     |
+| POST_OUTPUTS_HEADERS_VALUE_NOT_STRING       | outputs.headers  | Headers mapping contains a value that is not a string.                      | Type mismatch against mapping[string→string] | block_finalization | Yes                     |
+| POST_OUTPUTS_BODY_UNDECLARED_KEY_PRESENT    | outputs.body     | Body object contains a key not declared in the outputs schema fragment.     | Unexpected field in body                     | block_finalization | Yes                     |
 
 | Error Code                            | Description                                                                                           | Likely Cause                                          | Impacted Steps | EARS Refs           | Flow Impact        | Behavioural AC Required |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------------- | ------------------- | ------------------ | ----------------------- |
 | ENV_CORS_EXPOSE_HEADERS_MISCONFIGURED | CORS Access-Control-Expose-Headers does not include required domain ETag headers readable by browsers | Misconfigured CORS or API gateway policy              | STEP-4         | U13, E3, E4, E5, E6 | block_finalization | Yes                     |
 | ENV_LOGGING_SINK_UNAVAILABLE_ENFORCE  | etag.enforce log event cannot be written to the logging sink                                          | Log collector unreachable or sink credentials invalid | STEP-2         | U14                 | no_flow_effect     | No                      |
 | ENV_LOGGING_SINK_UNAVAILABLE_EMIT     | etag.emit log event cannot be written to the logging sink                                             | Log collector unreachable or sink credentials invalid | STEP-4         | U15                 | no_flow_effect     | No                      |
+| ENV_PROXY_STRIPS_DOMAIN_ETAG_HEADERS    | Upstream proxy/gateway strips domain ETag headers from responses, preventing clients from reading them. | Header whitelist excludes custom headers or response header sanitisation enabled | STEP-4         | U9, U16, E3, E4, E5, E6 | block_finalization | Yes                     |
+| ENV_CORS_ALLOW_HEADERS_MISSING_IF_MATCH | CORS Access-Control-Allow-Headers does not permit If-Match, so browsers block sending it on writes.     | Misconfigured CORS allow-list for request headers                                | STEP-2         | E1, E2                  | halt_pipeline      | Yes                     |
+| ENV_PROXY_STRIPS_IF_MATCH               | Reverse proxy/API gateway drops or renames the incoming If-Match request header.                        | Security policy or header normalisation stripping hop-by-hop/custom headers      | STEP-2         | E1, E2                  | halt_pipeline      | Yes                     |
+| ENV_GUARD_MISAPPLIED_TO_READ_ENDPOINTS  | Precondition guard is mounted on GET/read routes contrary to Phase-0 scope.                             | Router/dependency configuration error                                            | STEP-2         | S1, E5                  | halt_pipeline      | Yes                     |
 
 # 6.1 Architectural Acceptance Criteria
 
@@ -403,6 +471,46 @@ The header-emission utility is usable from non-JSON response paths (e.g., CSV ex
 A logging interface declares the two event types `etag.enforce` and `etag.emit` for use at precondition check and header emission points.
 **Refs:** STEP-2, STEP-4; U14, U15
 
+6.1.17 Guard not mounted on any GET/read endpoints
+The precondition guard must be excluded from all GET/read routes across resources (runtime and authoring).
+Refs: STEP-2; S4
+
+6.1.18 Guard is DB-free and import-safe
+The guard module must import no repositories or DB drivers at module scope; importing the guard must succeed with no DB driver installed. Any allowed ETag helper imports occur lazily inside guard functions.
+Refs: STEP-2; U19
+
+6.1.19 Handlers contain no inline precondition logic
+Mutation handlers must not parse/normalise/compare If-Match, nor construct precondition problem responses; those concerns live only in the guard.
+Refs: STEP-2; U18
+
+6.1.20 Stable problem+json mapping for preconditions
+The guard centralises error mapping: missing If-Match → 428 with code PRE_IF_MATCH_MISSING; mismatched If-Match → existing route status (409 or 412) with code PRE_IF_MATCH_ETAG_MISMATCH. Shapes remain invariant.
+Refs: STEP-2; E8, E9
+
+6.1.21 OpenAPI declares If-Match as a required request header on write routes
+All in-scope write endpoints declare If-Match as a required header parameter (e.g., FastAPI Header(..., alias="If-Match", convert_underscores=False)), with enforcement still in the guard.
+Refs: OpenAPI; STEP-2
+
+6.1.22 Guard uses only public ETag APIs
+The guard may only call documented, public app.logic.etag helpers; no private/import-path internals are allowed.
+Refs: STEP-1, STEP-2; U19
+
+6.1.23 Diagnostic headers emitted via the central emitter
+On document reorder precondition failures, X-List-ETag and (when applicable) X-If-Match-Normalized are attached by the shared header-emission/diagnostics utility, not handcrafted in handlers.
+Refs: STEP-4; O4; N7
+
+6.1.24 CORS request header allow-list includes If-Match
+CORS configuration must allow the If-Match request header so browsers can send it on writes (e.g., Access-Control-Allow-Headers: If-Match).
+Refs: STEP-2; E1, E2
+
+6.1.25 Guard responses participate in CORS
+Early guard failures (e.g., 428/409/412) must still include the CORS headers configured for the API so browsers can read diagnostic headers and problem bodies.
+Refs: STEP-2; U13
+
+6.1.26 No repository calls before guard success
+Route pipelines must be ordered such that repository/DB access occurs only after guard success (short-circuit on failure).
+Refs: STEP-2; U18, U19
+
 # 6.2.1.1 Runtime screen GET returns domain + generic tags (parity)
 
 **Given** a runtime JSON GET for a screen, **when** the request succeeds, **then** the response includes both headers and they carry the same value.
@@ -460,8 +568,20 @@ A logging interface declares the two event types `etag.enforce` and `etag.emit` 
 
 # 6.2.1.12 Domain header matches resource scope on success
 
-**Given** any successful response, **when** the resource scope is screen, question, questionnaire, or document, **then** the response uses the corresponding domain header name for that scope.
+# 6.2.1.13 **Given** any successful response, **when** the resource scope is screen, question, questionnaire, or document, **then** the response uses the corresponding domain header name for that scope.
 **Reference:** EARS: U16; Outputs: outputs.headers.Screen-ETag, outputs.headers.Question-ETag, outputs.headers.Questionnaire-ETag, outputs.headers.Document-ETag
+
+6.2.1.14 CORS exposes domain headers on authoring reads
+Given an authoring JSON GET (Epic G routes), when the request succeeds, then the response must include Access-Control-Expose-Headers that lists the emitted domain header(s) (and not require generic ETag) so browsers can read them.
+Reference: EARS: U13, E5 • Outputs: meta.Access-Control-Expose-Headers, headers.Screen-ETag (and/or headers.Question-ETag as applicable)
+
+6.2.1.15 CORS exposes Questionnaire-ETag on CSV export
+Given a questionnaire CSV export GET, when the request succeeds, then the response must include Access-Control-Expose-Headers that lists Questionnaire-ETag (and ETag if emitted) so browser clients can access the tag.
+Reference: EARS: U13, E6 • Outputs: meta.Access-Control-Expose-Headers, headers.Questionnaire-ETag, headers.ETag
+
+6.2.1.16 Preflight allows If-Match on write routes
+Given an OPTIONS CORS preflight to an in-scope write endpoint (answers/documents), when the preflight succeeds, then the response must include Access-Control-Allow-Headers containing If-Match so browser writes can supply the precondition header.
+Reference: EARS: E1, E2 • Outputs: meta.Access-Control-Allow-Headers
 
 6.2.2.1 If-Match header missing (guarded route)
 **Criterion:** Given a guarded write route requiring If-Match, when `request.headers.If-Match` is not provided, then the response status is a client error and the operation is not performed.
@@ -818,6 +938,46 @@ A logging interface declares the two event types `etag.enforce` and `etag.emit` 
 **Error Mode:** POST_OUTPUTS_BODY_PLACEHOLDERS_ETAG_MISMATCH_HEADER
 **Reference:** outputs.body.placeholders.etag, outputs.headers.ETag, status
 
+6.2.2.72 Headers mapping contains undeclared key
+Criterion: Given any response, when outputs.headers contains a key not declared in the outputs schema fragment, then the response is invalid and cannot be finalised.
+Error Mode: POST_OUTPUTS_HEADERS_UNDECLARED_KEY_PRESENT
+Reference: outputs.headers, status
+
+6.2.2.73 Header value not a string
+Criterion: Given any response, when any value in outputs.headers is not a string, then the response is invalid and cannot be finalised.
+Error Mode: POST_OUTPUTS_HEADERS_VALUE_NOT_STRING
+Reference: outputs.headers, status
+
+6.2.2.74 Body contains undeclared key
+Criterion: Given any response, when outputs.body contains a key not declared in the outputs schema fragment, then the response is invalid and cannot be finalised.
+Error Mode: POST_OUTPUTS_BODY_UNDECLARED_KEY_PRESENT
+Reference: outputs.body, status
+
+6.2.2.75 CORS expose-headers misconfigured
+Criterion: Given a response that should expose domain ETag headers, when Access-Control-Expose-Headers omits any required domain header (or ETag where applicable), then the response cannot be finalised for browser clients.
+Error Mode: ENV_CORS_EXPOSE_HEADERS_MISCONFIGURED
+Reference: response.headers.Access-Control-Expose-Headers, outputs.headers, status
+
+6.2.2.76 CORS allow-headers missing If-Match (preflight)
+Criterion: Given an OPTIONS preflight to an in-scope write endpoint, when Access-Control-Allow-Headers does not include If-Match, then the browser write is blocked and no mutation occurs.
+Error Mode: ENV_CORS_ALLOW_HEADERS_MISSING_IF_MATCH
+Reference: response.headers.Access-Control-Allow-Headers, request.headers.If-Match, status
+
+6.2.2.77 Upstream proxy strips If-Match
+Criterion: Given a client write that includes If-Match, when an upstream proxy/gateway strips or renames the header so the guard observes it as missing, then the route responds as a missing-precondition error and no mutation occurs.
+Error Mode: ENV_PROXY_STRIPS_IF_MATCH
+Reference: request.headers.If-Match (as received by application), status
+
+6.2.2.78 Upstream proxy strips domain ETag headers
+Criterion: Given a response that includes domain ETag headers, when an upstream proxy removes those headers before the client receives them, then finalisation is blocked for contract compliance.
+Error Mode: ENV_PROXY_STRIPS_DOMAIN_ETAG_HEADERS
+Reference: outputs.headers, response pipeline, status
+
+6.2.2.79 Guard mounted on read endpoints (Phase-0)
+Criterion: Given any GET/read endpoint in Phase-0, when the precondition guard is invoked (e.g., requiring If-Match), then this is treated as a configuration error; the request is rejected with a server error and no guard enforcement occurs.
+Error Mode: ENV_GUARD_MISAPPLIED_TO_READ_ENDPOINTS
+Reference: route configuration, request.method=GET, status
+
 # 6.2 Happy Path Contractual Acceptance Criteria
 
 ## 6.2.1.1 Runtime screen GET returns domain + generic tags (parity)
@@ -868,11 +1028,103 @@ A logging interface declares the two event types `etag.enforce` and `etag.emit` 
 **Given** any successful response, **when** the resource scope is screen, question, questionnaire, or document, **then** the response uses the corresponding domain header name for that scope.  
 **Reference:** EARS: U16; Outputs: meta.Screen-ETag, meta.Question-ETag, meta.Questionnaire-ETag, meta.Document-ETag
 
+6.2.1.13 Answers POST with valid If-Match emits fresh tags (screen scope)
+
+Given an answers POST with a valid If-Match matching the current tag, when the mutation succeeds, then the response includes Screen-ETag and ETag with the current legacy value.
+Reference: EARS: E1, E3, U11, U9, U10 • Outputs: status, meta.Screen-ETag, meta.ETag
+
+6.2.1.14 Answers DELETE with valid If-Match emits fresh tags (screen scope)
+
+Given an answers DELETE with a valid If-Match, when the mutation succeeds, then the response includes Screen-ETag and ETag with the current legacy value (post-mutation).
+Reference: EARS: E1, E3, U11, U9, U10 • Outputs: status, meta.Screen-ETag, meta.ETag
+
+6.2.1.15 Document reorder success emits tags and omits diagnostics
+
+Given a successful document reorder, when the response is returned, then it includes Document-ETag and ETag with identical values and does not include X-List-ETag nor X-If-Match-Normalized.
+Reference: EARS: E2, E3, U11, U9, U10, O4 • Outputs: status, meta.Document-ETag, meta.ETag
+
+6.2.1.16 Any-match semantics for multi-token If-Match (success path)
+
+Given a write with If-Match containing multiple tokens, when at least one token equals the current tag, then the mutation succeeds and fresh tags are emitted per resource scope.
+Reference: EARS: U1, U2, U3, U4, U5, U6, U7, E1/E2, U11 • Outputs: status, meta.*
+
+6.2.1.17 Wildcard If-Match: * honoured where supported
+
+Given a write to a route that accepts If-Match: *, when the resource-exists precondition passes, then the mutation succeeds and headers emit the current legacy tag(s).
+Reference: EARS: O1, E1/E2, U11 • Outputs: status, meta.*
+
+6.2.1.18 Runtime JSON responses expose emitted ETag headers via CORS
+
+Given any successful in-scope runtime JSON response that emits domain and/or generic ETags, when read by a browser, then Access-Control-Expose-Headers lists those headers so they are readable.
+Reference: EARS: U13, E4 • Outputs: meta.Access-Control-Expose-Headers, meta.*
+
+6.2.1.19 Authoring JSON responses expose domain headers via CORS
+
+Given any successful authoring JSON response, when it emits a domain header (no generic ETag in Phase-0), then Access-Control-Expose-Headers lists that domain header.
+Reference: EARS: U13, E5 • Outputs: meta.Access-Control-Expose-Headers, meta.Screen-ETag or meta.Question-ETag
+
+6.2.1.20 Non-JSON downloads emit tags; payload unchanged
+
+Given a successful in-scope non-JSON download (e.g., CSV or other binary), when the response is returned, then the response includes the resource’s domain header and ETag with identical values (where applicable) and the payload bytes/Content-Type remain unchanged.
+Reference: EARS: E6, U9, U10 • Outputs: status, meta.Questionnaire-ETag (or meta.Document-ETag), meta.ETag
+
+6.2.1.21 Successful precondition check & emission are logged
+
+Given any successful guarded write, when the request passes the guard and headers are emitted, then an etag.enforce event with matched:true and an etag.emit event are recorded.
+Reference: EARS: U14, U15, E1/E2/E3 • Outputs: (telemetry) events.etag.enforce, events.etag.emit
+
+6.2.1.22 Legacy token string preserved on success (parity)
+
+Given an unchanged resource and request across builds, when a successful read returns tags, then the emitted legacy token string (including quoting and W/ strength) is exactly the same as before the refactor.
+Reference: EARS: U8 • Outputs: meta.* (token value parity)
+
 ## 6.3.2.1
 **Title:** CORS expose-headers misconfiguration blocks ETag visibility  
 **Criterion:** Given a response ready for header emission (STEP-4 Header emission), when the CORS Access-Control-Expose-Headers configuration omits required ETag headers, then halt STEP-4 Header emission and stop propagation to response finalisation for client-visible meta headers, as required by the error mode’s Flow Impact.  
 **Error Mode:** ENV_CORS_EXPOSE_HEADERS_MISCONFIGURED  
 **Reference:** Dependency: CORS/expose headers; Steps: STEP-4
+
+6.3.2.2
+
+Title: Logging sink unavailable during precondition check does not affect flow
+Criterion: Given STEP-2 Precondition enforcement attempts to record an etag.enforce event, when the logging sink is unavailable, then the system proceeds without altering the response, mutation, or headers; only telemetry is degraded, as required by the error mode’s Flow Impact.
+Error Mode: ENV_LOGGING_SINK_UNAVAILABLE_ENFORCE
+Reference: Dependency: logging sink; Steps: STEP-2; EARS: U14
+
+6.3.2.3
+
+Title: Logging sink unavailable during header emission does not affect flow
+Criterion: Given STEP-4 Header emission attempts to record an etag.emit event, when the logging sink is unavailable, then the system proceeds to finalisation with headers intact; only telemetry is degraded, as required by the error mode’s Flow Impact.
+Error Mode: ENV_LOGGING_SINK_UNAVAILABLE_EMIT
+Reference: Dependency: logging sink; Steps: STEP-4; EARS: U15
+
+6.3.2.4
+
+Title: Upstream proxy strips domain ETag headers (egress)
+Criterion: Given STEP-4 Header emission has assembled domain ETag headers (and ETag where applicable), when the deployment environment or gateway policy is detected to strip those headers, then block finalisation for the response and surface an operational error per the error mode’s Flow Impact.
+Error Mode: ENV_PROXY_STRIPS_DOMAIN_ETAG_HEADERS
+Reference: Dependency: API gateway/proxy egress policy; Steps: STEP-4; EARS: U9, U16, E3, E4, E5, E6
+
+6.3.2.5
+
+Title: CORS allow-headers does not permit If-Match on preflight
+Criterion: Given an OPTIONS CORS preflight to an in-scope write endpoint (answers/documents), when Access-Control-Allow-Headers does not include If-Match, then treat the write as blocked for browser clients and halt the pipeline before STEP-2 (no guard, no mutation), as required by the error mode’s Flow Impact.
+Error Mode: ENV_CORS_ALLOW_HEADERS_MISSING_IF_MATCH
+Reference: Dependency: CORS/allow headers; Steps: STEP-2; EARS: E1, E2
+
+6.3.2.6
+
+Title: Upstream proxy strips If-Match (ingress)
+Criterion: Given a write request sent with If-Match, when an upstream proxy removes or renames the header so the application receives no If-Match, then the guard responds with the contractually defined missing-precondition error (e.g., 428 with PRE_IF_MATCH_MISSING), no mutation occurs, and the pipeline halts at STEP-2, per the error mode’s Flow Impact.
+Error Mode: ENV_PROXY_STRIPS_IF_MATCH
+Reference: Dependency: API gateway/proxy ingress policy; Steps: STEP-2; EARS: E1, E2, U18
+
+6.3.2.7
+
+Title: Guard misapplied to read endpoints (Phase-0 scope breach)
+Criterion: Given any GET/read endpoint during Phase-0, when the precondition guard is invoked (e.g., attempts to enforce If-Match), then treat this as a configuration error: halt the pipeline with a server error and do not emit domain or generic ETag headers, as required by the error mode’s Flow Impact.
+Error Mode: ENV_GUARD_MISAPPLIED_TO_READ_ENDPOINTS
+Reference: Dependency: router/middleware wiring; Steps: STEP-2; EARS: S1, S4, E5
 
 7.1.1 Shared If-Match normaliser exists and is single-source
 Purpose: Verify that a single reusable normalisation utility is the only mechanism used to parse/normalise If-Match across in-scope routes.
@@ -985,6 +1237,76 @@ Test Data: Logging interface/module and usages in guard and emitter.
 Mocking: Dynamic test with spy/fake logger to assert calls with event names etag.enforce and etag.emit.
 Assertions: (1) Logger defines both event types; (2) Guard logs etag.enforce with matched:true|false; (3) Emitter logs etag.emit with route/scope context.
 AC-Ref: 6.1.16
+
+7.1.17 Guard not mounted on any GET/read endpoints
+Purpose: Prove guard is excluded from all GET/read routes (runtime + authoring).
+Test Data: Router wiring for every GET route.
+Mocking: None; static inspection.
+Assertions: (1) No GET pipeline references the guard; (2) Supplying If-Match on a GET does not invoke guard code paths (trace/log check).
+AC-Ref: 6.1.17; EARS: S4, E5.
+
+7.1.18 Guard is DB-free and import-safe
+Purpose: Ensure the guard imports no repositories/DB drivers at module scope and can load without DB installed.
+Test Data: Guard module; run import under env with DB libs removed.
+Mocking: None.
+Assertions: (1) No repo/driver imports at module scope; (2) Import succeeds; (3) Allowed ETag helpers imported lazily inside guard functions.
+AC-Ref: 6.1.18; EARS: U19.
+
+7.1.19 Handlers contain no inline precondition logic
+Purpose: Enforce separation of concerns.
+Test Data: All mutation handlers’ source.
+Mocking: None.
+Assertions: (1) No parsing/normalising/comparing If-Match; (2) No construction of precondition problem bodies.
+AC-Ref: 6.1.19; EARS: U18.
+
+7.1.20 Stable problem+json mapping for preconditions
+Purpose: Centralised mapping from guard.
+Test Data: Guard error mapping + one answers route (409/428) and one documents route (412/428).
+Mocking: None.
+Assertions: (1) Missing If-Match → 428 with code=PRE_IF_MATCH_MISSING; (2) Mismatch → route’s historic status (409 answers / 412 documents) with code=PRE_IF_MATCH_ETAG_MISMATCH; (3) Shapes invariant.
+AC-Ref: 6.1.20; EARS: E8, E9.
+
+7.1.21 OpenAPI declares If-Match as required on write routes
+Purpose: Contract visibility in spec.
+Test Data: OpenAPI document.
+Mocking: None.
+Assertions: (1) All in-scope writes declare If-Match as required header; (2) Error responses for 428 and 409/412 documented with stable codes.
+AC-Ref: 6.1.21; EARS: U20.
+
+7.1.22 Guard uses only public ETag APIs
+Purpose: No coupling to internals.
+Test Data: Guard imports + call sites.
+Mocking: None.
+Assertions: (1) Only app.logic.etag public helpers are referenced; (2) No private/import-path internals.
+AC-Ref: 6.1.22.
+
+7.1.23 Diagnostics emitted via central emitter
+Purpose: Reorder diagnostics come from the shared header utility.
+Test Data: Reorder failure path + emitter module.
+Mocking: Spy on emitter; trigger reorder precondition fail.
+Assertions: (1) Emitter invoked once; (2) X-List-ETag and optional X-If-Match-Normalized set by emitter, not handler.
+AC-Ref: 6.1.23; EARS: O4, N7.
+
+7.1.24 CORS allow-list includes If-Match
+Purpose: Browsers can send If-Match.
+Test Data: CORS config.
+Mocking: None.
+Assertions: Access-Control-Allow-Headers contains If-Match for in-scope writes.
+AC-Ref: 6.1.24; EARS: E1, E2.
+
+7.1.25 Guard failures include CORS headers
+Purpose: Clients can read failure diagnostics.
+Test Data: 428 + 409/412 responses from guard.
+Mocking: None.
+Assertions: CORS headers present on guard failures, including Access-Control-Expose-Headers (so diagnostics are visible).
+AC-Ref: 6.1.25; EARS: U13.
+
+7.1.26 No repository access before guard success
+Purpose: Short-circuit ordering.
+Test Data: Route pipelines + tracing.
+Mocking: Repo spy to assert zero calls when guard fails 428/409/412.
+Assertions: (1) No repo/DB access on guard failure; (2) Access only after guard success.
+AC-Ref: 6.1.26; EARS: U18, U19.
 
 7.2.1.1 Runtime screen GET returns domain + generic tags (parity)
 Purpose: Verify that a runtime screen GET includes both Screen-ETag and ETag headers with identical values.
@@ -1137,6 +1459,68 @@ Assertions:
 - Document GET: header "Document-ETag" present; headers "Screen-ETag", "Question-ETag", "Questionnaire-ETag" absent.
 AC-Ref: 6.2.1.12
 EARS-Refs: U16
+
+7.2.1.13 CORS exposes domain headers on authoring reads
+
+Purpose: Verify an authoring JSON GET exposes its domain header(s) via CORS in Access-Control-Expose-Headers (no generic ETag).
+Test data: GET /api/v1/authoring/screens/welcome (Epic G path), no special headers.
+Mocking: None — exercise the live authoring endpoint.
+Assertions:
+
+Status is 200.
+
+Header Screen-ETag (or Question-ETag, depending on resource) exists and is a non-empty string.
+
+Header ETag is absent.
+
+Header Access-Control-Expose-Headers exists and (case-insensitively) includes the emitted domain header name (e.g., contains screen-etag when Screen-ETag is present).
+AC-Ref: 6.2.1.14
+EARS-Refs: U13, E5
+
+7.2.1.14 CORS exposes Questionnaire-ETag on CSV export
+
+Purpose: Verify questionnaire CSV export exposes Questionnaire-ETag (and ETag if emitted) via Access-Control-Expose-Headers.
+Test data: GET /api/v1/questionnaires/qq_001/export.csv.
+Mocking: None — exercise the live CSV export endpoint.
+Assertions:
+
+Status is 200.
+
+Content-Type starts with text/csv.
+
+Headers Questionnaire-ETag and ETag exist and are non-empty strings, and are equal.
+
+Header Access-Control-Expose-Headers exists and (case-insensitively) includes questionnaire-etag and etag.
+AC-Ref: 6.2.1.15
+EARS-Refs: U13, E6, U9, U10
+
+7.2.1.15 Preflight allows If-Match on write routes
+
+Purpose: Verify CORS preflight for in-scope write endpoints allows the If-Match request header.
+Test data:
+Preflight request to answers write endpoint (e.g., /api/v1/response-sets/rs_001/answers):
+
+Method: OPTIONS
+
+Headers:
+
+Origin: https://app.example.test
+
+Access-Control-Request-Method: PATCH
+
+Access-Control-Request-Headers: If-Match, Content-Type
+Mocking: None — send a real preflight request.
+Assertions:
+
+Status is 204 (or the route’s preflight success status).
+
+Header Access-Control-Allow-Methods includes PATCH.
+
+Header Access-Control-Allow-Headers (case-insensitive parsing) includes if-match and content-type.
+
+(Negative control in same test): preflight to an authoring GET route should still succeed but need not include if-match.
+AC-Ref: 6.2.1.16
+EARS-Refs: E1, E2, U13
 
 # 7.2.2 Sad Path Contractual Tests (Complete)
 
@@ -2700,6 +3084,179 @@ EARS-Refs: U16
 **AC-Ref**: 6.2.2.71
 **Error Mode**: POST_BINARY_CONTENT_TYPE_CHANGED
 
+---
+
+**ID**: 7.2.2.72
+**Title**: Outputs.headers contains an undeclared key (screen GET)
+**Purpose**: Verify the response is rejected when `outputs.headers` includes a key not declared by the headers fragment schema.
+**Test Data**:
+
+* HTTP method: GET
+* URL: `/api/v1/screens/scr_001`
+* Request headers: `Authorization: Bearer dev-token`
+  **Mocking**:
+* Mock the **response finalisation layer** at the boundary (header composer) to add an extra header key `X-Random-Header: "foo"` that is **not** declared in the outputs schema fragment.
+* Do **not** mock controller/handler logic; exercise real code through public HTTP entrypoint.
+* Assert the header composer mock was invoked exactly once and injected `X-Random-Header` with value `"foo"`.
+  **Assertions**:
+* Status code: **500 Internal Server Error**.
+* Problem JSON: `code = "POST_OUTPUTS_HEADERS_UNDECLARED_KEY_PRESENT"` with a message mentioning `outputs.headers` and the offending key name.
+* No mutation/persistence calls made (it’s a GET).
+  **AC-Ref**: 6.2.2.72
+  **Error Mode**: POST_OUTPUTS_HEADERS_UNDECLARED_KEY_PRESENT
+
+---
+
+**ID**: 7.2.2.73
+**Title**: Header value not a string (Screen-ETag numeric)
+**Purpose**: Verify the response is rejected when any value in `outputs.headers` is not a string.
+**Test Data**:
+
+* HTTP method: GET
+* URL: `/api/v1/screens/scr_002`
+* Request headers: `Authorization: Bearer dev-token`
+  **Mocking**:
+* Mock the **header composer** to set `Screen-ETag: 12345` (number, not string) and a valid `ETag: "W/\"abc\""` string.
+* Assert the mock was called with `Screen-ETag` value **as a number**.
+  **Assertions**:
+* Status code: **500 Internal Server Error**.
+* Problem JSON: `code = "POST_OUTPUTS_HEADERS_VALUE_NOT_STRING"` and message indicating `Screen-ETag` is not a string.
+* No persistence calls (GET).
+  **AC-Ref**: 6.2.2.73
+  **Error Mode**: POST_OUTPUTS_HEADERS_VALUE_NOT_STRING
+
+---
+
+**ID**: 7.2.2.74
+**Title**: outputs.body contains undeclared key (spurious `etags` field)
+**Purpose**: Ensure responses are rejected when `outputs.body` contains an undeclared property.
+**Test Data**:
+
+* HTTP method: GET
+* URL: `/api/v1/screens/scr_003`
+* Request headers: `Authorization: Bearer dev-token`
+  **Mocking**:
+* Mock the **body serializer** at the boundary to inject `outputs.body.etags = { "Screen-ETag": "W/\"abc\"" }` (undeclared).
+* Assert serializer mock was called and produced the extra key.
+  **Assertions**:
+* Status code: **500 Internal Server Error**.
+* Problem JSON: `code = "POST_OUTPUTS_BODY_UNDECLARED_KEY_PRESENT"` and message naming `body.etags`.
+* No persistence calls (GET).
+  **AC-Ref**: 6.2.2.74
+  **Error Mode**: POST_OUTPUTS_BODY_UNDECLARED_KEY_PRESENT
+
+---
+
+**ID**: 7.2.2.75
+**Title**: CORS expose-headers omits required domain headers
+**Purpose**: Block finalisation when `Access-Control-Expose-Headers` does not expose required ETag/domain headers.
+**Test Data**:
+
+* HTTP method: GET
+* URL: `/api/v1/screens/scr_004`
+* Request headers: `Authorization: Bearer dev-token`, `Origin: https://example.app`
+  **Mocking**:
+* Mock the **CORS middleware config provider** to return `Access-Control-Expose-Headers: ETag` (omits `Screen-ETag`).
+* Do not mock handler; allow normal header emission (handler sets `ETag` and `Screen-ETag`).
+* Assert CORS provider mock used exactly once for this response.
+  **Assertions**:
+* Status code: **500 Internal Server Error** (response not finalised for browser clients).
+* Problem JSON: `code = "ENV_CORS_EXPOSE_HEADERS_MISCONFIGURED"`.
+* Response must **not** be a 2xx; verify that no cacheable output is sent.
+  **AC-Ref**: 6.2.2.75
+  **Error Mode**: ENV_CORS_EXPOSE_HEADERS_MISCONFIGURED
+
+---
+
+**ID**: 7.2.2.76
+**Title**: CORS preflight missing `If-Match` in `Access-Control-Allow-Headers`
+**Purpose**: Ensure misconfigured preflight blocks browser writes (no mutation).
+**Test Data**:
+
+* Step A — Preflight
+
+  * HTTP method: OPTIONS
+  * URL: `/api/v1/response-sets/resp_123/answers/q_456`
+  * Request headers:
+
+    * `Origin: https://example.app`
+    * `Access-Control-Request-Method: PATCH`
+    * `Access-Control-Request-Headers: if-match, authorization, content-type`
+* Step B — (No actual browser PATCH occurs due to failed preflight; test harness does not send it.)
+  **Mocking**:
+* Mock the **CORS middleware config provider** to produce `Access-Control-Allow-Headers: authorization, content-type` (omits `If-Match`).
+* Assert provider mock invoked once for OPTIONS.
+* Spy the **answers repository** to ensure it is never called (no mutation).
+  **Assertions**:
+* OPTIONS response status: **500 Internal Server Error** (preflight cannot be satisfied).
+* Problem JSON: `code = "ENV_CORS_ALLOW_HEADERS_MISSING_IF_MATCH"`.
+* Verify the answers repository spy recorded **zero calls**.
+  **AC-Ref**: 6.2.2.76
+  **Error Mode**: ENV_CORS_ALLOW_HEADERS_MISSING_IF_MATCH
+
+---
+
+**ID**: 7.2.2.77
+**Title**: Upstream proxy strips `If-Match` en route to app
+**Purpose**: Treat a stripped `If-Match` as a missing-precondition scenario caused by the environment; no mutation allowed.
+**Test Data**:
+
+* Client-intended request (for traceability only): PATCH `/api/v1/response-sets/resp_123/answers/q_456` with `If-Match: W/"fresh-tag"` and body `{ "value": "X" }`.
+* **Actual app-received** request (after proxy): same URL and body, but **no** `If-Match` header.
+  **Mocking**:
+* Mock the **edge gateway adapter** (boundary) to drop `If-Match` from the inbound headers before they reach the app.
+* Assert adapter saw the client header and removed it (record original vs forwarded headers).
+* Spy the **answers repository** to prove no mutation occurs.
+  **Assertions**:
+* App response status: **428 Precondition Required**.
+* Problem JSON: `code = "PRE_REQUEST_HEADERS_IF_MATCH_MISSING"` (proxied cause), and **an environment diagnostic log/metric** tagged with `ENV_PROXY_STRIPS_IF_MATCH`.
+* Repository spy: **zero calls**.
+  **AC-Ref**: 6.2.2.77
+  **Error Mode**: ENV_PROXY_STRIPS_IF_MATCH
+
+---
+
+**ID**: 7.2.2.78
+**Title**: Upstream proxy strips domain ETag headers from success response
+**Purpose**: Block finalisation when required domain headers are removed by a proxy.
+**Test Data**:
+
+* HTTP method: PATCH
+* URL: `/api/v1/screens/scr_789`
+* Request headers: `Authorization: Bearer dev-token; If-Match: W/"fresh-tag"`
+* Body: `{ "title": "New Title" }`
+  **Mocking**:
+* Allow normal mutation and header emission in the app (it sets both `ETag` and `Screen-ETag`).
+* Mock the **edge gateway response filter** to remove `Screen-ETag` (and optionally `ETag`) from the outgoing response.
+* Assert the filter was invoked and stripped those headers.
+  **Assertions**:
+* Finalised response status observed by the client is **500 Internal Server Error** (contract cannot be satisfied).
+* Problem JSON: `code = "ENV_PROXY_STRIPS_DOMAIN_ETAG_HEADERS"`.
+* Verify the app attempted to emit both headers prior to gateway filtering (via server-side log/spy).
+  **AC-Ref**: 6.2.2.78
+  **Error Mode**: ENV_PROXY_STRIPS_DOMAIN_ETAG_HEADERS
+
+---
+
+**ID**: 7.2.2.79
+**Title**: Guard misapplied to a read (GET) endpoint
+**Purpose**: Misconfiguration: precondition guard mounted on a GET route must be treated as an environment/config error.
+**Test Data**:
+
+* HTTP method: GET
+* URL: `/api/v1/screens/scr_555`
+* Request headers: `Authorization: Bearer dev-token` (no `If-Match`, as reads don’t require it).
+  **Mocking**:
+* Mock **route wiring** (dependency injection) to mount `precondition_guard` on this GET route.
+* Assert the guard was called on this GET request.
+* Do **not** mock handler; it should not run due to misconfiguration failure.
+  **Assertions**:
+* Status code: **500 Internal Server Error** (guard misapplied).
+* Problem JSON: `code = "ENV_GUARD_MISAPPLIED_TO_READ_ENDPOINTS"`.
+* Assert the real GET handler was **not** invoked and no persistence calls were made.
+  **AC-Ref**: 6.2.2.79
+  **Error Mode**: ENV_GUARD_MISAPPLIED_TO_READ_ENDPOINTS
+
 7.3.1.1 — Load screen view after run start
 **Title:** Response set creation triggers initial screen load
 **Purpose:** Verify that, after a run is created, the system initiates a fetch of the initial screen view.
@@ -2796,6 +3353,86 @@ Mocking: Mock light GET/HEAD to return 304 with ETag: W/"abf"; polling timer is 
 Assertions: Assert invoked once immediately after light refresh handling completes, and not before.
 AC-Ref: 6.3.1.12
 
+7.3.1.13 — Answers POST success triggers screen apply
+Title: POST success triggers application of returned/updated screen view
+Purpose: Verify that, after a successful answers POST, the adapter initiates the step that applies the (returned or refreshed) screen view.
+Test Data: response_set_id: rs_123; question_id: q2; value: "Acme Corp".
+Mocking: Mock POST /api/v1/response-sets/rs_123/answers/q2 to return a dummy success response sufficient to allow sequencing to continue.
+Assertions: Assert invoked once immediately after POST success completes, and not before.
+AC-Ref: 6.3.1.13
+
+7.3.1.14 — Answers DELETE success triggers screen apply
+Title: DELETE success triggers application of refreshed screen view
+Purpose: Verify that, after a successful answers DELETE, the next step applies the current screen view.
+Test Data: response_set_id: rs_123; question_id: q1.
+Mocking: Mock DELETE /api/v1/response-sets/rs_123/answers/q1 to return a dummy success response sufficient to allow sequencing to continue.
+Assertions: Assert invoked once immediately after DELETE success completes, and not before.
+AC-Ref: 6.3.1.14
+
+7.3.1.15 — Document reorder success triggers list refresh
+Title: Reorder success triggers document list refresh/apply
+Purpose: Verify that, after a successful document reorder, the list refresh/application step runs.
+Test Data: items: [ {document_id: "doc_1", order: 1}, {document_id: "doc_2", order: 2}, {document_id: "doc_3", order: 3} ].
+Mocking: Mock PUT /api/v1/documents/order to return a dummy success response sufficient to allow sequencing to continue.
+Assertions: Assert invoked once immediately after reorder success completes, and not before.
+AC-Ref: 6.3.1.15
+
+7.3.1.16 — Any-match precondition success triggers mutation
+Title: Multi-token If-Match (any-match) success triggers write execution
+Purpose: Verify that, when the precondition guard resolves an any-match success for a write, the mutation step is invoked.
+Test Data: write attempt to answers with an If-Match list (e.g., tokens t_old, t_current, t_extra).
+Mocking: Mock the write endpoint to return a dummy success response as if one token matched, sufficient to allow sequencing to continue.
+Assertions: Assert invoked once immediately after precondition guard success completes, and not before.
+AC-Ref: 6.3.1.16
+
+7.3.1.17 — Wildcard precondition success triggers mutation
+Title: If-Match * (where supported) triggers write execution
+Purpose: Verify that, when a route accepts wildcard preconditions and the resource-exists check passes, the mutation step is invoked.
+Test Data: write attempt to a supported route with wildcard precondition.
+Mocking: Mock the write endpoint to return a dummy success response sufficient to allow sequencing to continue.
+Assertions: Assert invoked once immediately after precondition guard success completes, and not before.
+AC-Ref: 6.3.1.17
+
+7.3.1.18 — Runtime JSON success triggers header-read step
+Title: Runtime success triggers client header-read and tag handling
+Purpose: Verify that, after a successful runtime JSON fetch (e.g., screen GET or answers write), the client invokes the header-read/tag-handling step.
+Test Data: response_set_id: rs_123; screen_key: details.
+Mocking: Mock the runtime request to return a dummy success response sufficient to allow sequencing to continue.
+Assertions: Assert invoked once immediately after runtime fetch success completes, and not before.
+AC-Ref: 6.3.1.18
+
+7.3.1.19 — Authoring JSON success triggers header-read step
+Title: Authoring success triggers client header-read and tag handling
+Purpose: Verify that, after a successful authoring JSON operation, the client invokes the header-read/tag-handling step.
+Test Data: authoring route of choice (e.g., update screen title).
+Mocking: Mock the authoring request to return a dummy success response sufficient to allow sequencing to continue.
+Assertions: Assert invoked once immediately after authoring fetch success completes, and not before.
+AC-Ref: 6.3.1.19
+
+7.3.1.20 — Non-JSON download completion triggers tag handling (no UI apply)
+Title: Download success triggers tag handling and resumes flow without view apply
+Purpose: Verify that, after a successful non-JSON download (e.g., CSV), the tag-handling step runs and the pipeline proceeds without invoking a screen or list apply.
+Test Data: questionnaire_id: q_001 (CSV export).
+Mocking: Mock the download request to return a dummy success response sufficient to allow sequencing to continue.
+Assertions: Assert invoked once immediately after download success handling completes, and not before.
+AC-Ref: 6.3.1.20
+
+7.3.1.21 — Successful guarded write logs in order
+Title: Guarded write success triggers emit-logging after mutation
+Purpose: Verify that, once a guarded write succeeds, the logging step that records header emission is invoked after mutation completes.
+Test Data: any guarded write (answers/documents).
+Mocking: Mock the write endpoint and the telemetry sink to return dummy success responses sufficient to allow sequencing to continue.
+Assertions: Assert invoked once immediately after write success completes, and not before.
+AC-Ref: 6.3.1.21
+
+7.3.1.22 — Legacy token parity does not trigger extra refresh
+Title: Unchanged legacy token triggers no spurious refresh/rotation
+Purpose: Verify that, when a successful read returns the same legacy token as the baseline, the tag-change detector runs and proceeds without triggering an additional refresh step.
+Test Data: runtime screen GET for intro; baseline captured from pre-refactor build.
+Mocking: Mock the runtime GET to return a dummy success response sufficient to allow sequencing to continue.
+Assertions: Assert invoked once immediately after screen GET completes (tag-change detection), and not before.
+AC-Ref: 6.3.1.22
+
 7.3.2.1
 Title: CORS expose-headers misconfiguration halts header emission (STEP-4) and prevents body mirrors (STEP-5)
 Purpose: Verify that when required domain ETag headers are not exposed by CORS, the pipeline halts at header emission and does not proceed to body-mirror handling.
@@ -2824,3 +3461,155 @@ Assert no unintended side-effects: no retries of STEP-4, no partial header write
 Assert one error telemetry event is emitted for ENV_CORS_EXPOSE_HEADERS_MISCONFIGURED.
 AC-Ref: 6.3.2.1
 Error Mode: ENV_CORS_EXPOSE_HEADERS_MISCONFIGURED
+
+7.3.2.2
+
+Title: Logging sink unavailable during precondition check (STEP-2) does not alter flow
+Purpose: Verify that a telemetry failure while recording etag.enforce does not change sequencing; the pipeline continues through mutation and header emission.
+Test Data:
+
+Request: PATCH /api/v1/response-sets/rs_001/answers/q_123
+
+Headers: If-Match: W/"abc" (valid current tag)
+Mocking:
+
+Mock telemetry/logging sink at the boundary: the call to record etag.enforce fails (e.g., raises Unavailable/Timeout).
+
+Mock mutation layer to return a dummy success sufficient to allow sequencing to continue.
+
+No other components mocked (normaliser/guard execute real logic).
+Assertions:
+
+Assert STEP-3 Mutation and tag retrieval is invoked once immediately after STEP-2 Precondition enforcement completes, and not before.
+
+Assert STEP-4 Header emission is invoked once immediately after STEP-3 completes, and not before.
+
+Assert STEP-5 Body mirrors (when applicable) is invoked once immediately after STEP-4 completes, and not before.
+
+Assert exactly one failed attempt to write etag.enforce was made to the logging sink and no retries occurred.
+
+Assert the condition is classified as ENV_LOGGING_SINK_UNAVAILABLE_ENFORCE in internal diagnostics (telemetry degraded only).
+AC-Ref: 6.3.2.2
+Error Mode: ENV_LOGGING_SINK_UNAVAILABLE_ENFORCE
+
+7.3.2.3
+
+Title: Logging sink unavailable during header emission (STEP-4) does not alter flow
+Purpose: Verify that a telemetry failure while recording etag.emit does not block response finalisation; the pipeline proceeds to completion.
+Test Data:
+
+Request: GET /api/v1/response-sets/rs_001/screens/details (runtime JSON GET)
+Mocking:
+
+Mock telemetry/logging sink so the call to record etag.emit fails (Unavailable/Timeout).
+
+Response generation runs normally (no other mocks required).
+Assertions:
+
+Assert STEP-4 Header emission completes once and immediately triggers response finalisation, and not before.
+
+Assert STEP-5 Body mirrors (when applicable) is invoked once immediately after STEP-4 completes, and not before.
+
+Assert exactly one failed attempt to write etag.emit was made and no retries occurred.
+
+Assert the condition is classified as ENV_LOGGING_SINK_UNAVAILABLE_EMIT in internal diagnostics (telemetry degraded only).
+AC-Ref: 6.3.2.3
+Error Mode: ENV_LOGGING_SINK_UNAVAILABLE_EMIT
+
+7.3.2.4
+
+Title: Upstream proxy strips domain ETag headers at egress → halt at STEP-4
+Purpose: Verify that detecting an egress policy that strips domain ETag headers halts finalisation at STEP-4 and prevents downstream completion.
+Test Data:
+
+Request: PATCH /api/v1/response-sets/rs_001/answers/q_123 with valid If-Match
+Mocking:
+
+Mock API gateway/proxy egress policy probe to report header stripping for domain ETag headers (and generic ETag where applicable).
+
+Mutation returns dummy success (to reach STEP-4).
+Assertions:
+
+Assert STEP-4 Header emission detection halts once immediately when the egress-strip policy is observed, and not before.
+
+Assert STEP-5 Body mirrors is prevented (no invocation recorded).
+
+Assert response finalisation is prevented (stop propagation beyond STEP-4).
+
+Assert no retries of STEP-4 and no partial emission attempts after the halt.
+
+Assert the condition is classified as ENV_PROXY_STRIPS_DOMAIN_ETAG_HEADERS.
+AC-Ref: 6.3.2.4
+Error Mode: ENV_PROXY_STRIPS_DOMAIN_ETAG_HEADERS
+
+7.3.2.5
+
+Title: CORS preflight missing If-Match → halt before STEP-2 (no guard, no mutation)
+Purpose: Verify that an OPTIONS preflight for a write endpoint that omits If-Match in Access-Control-Allow-Headers blocks the write path before STEP-2.
+Test Data:
+
+Request: OPTIONS /api/v1/response-sets/rs_001/answers/q_123
+
+Preflight headers: Access-Control-Request-Method: PATCH; Access-Control-Request-Headers: content-type, authorization (no if-match)
+Mocking:
+
+Mock CORS/allow-headers provider to omit If-Match from Access-Control-Allow-Headers.
+Assertions:
+
+Assert the pipeline halts once during preflight handling before STEP-2 Precondition enforcement, and not before.
+
+Assert STEP-2/STEP-3/STEP-4/STEP-5 are all prevented (no guard, no mutation, no header emission, no mirrors).
+
+Assert the condition is classified as ENV_CORS_ALLOW_HEADERS_MISSING_IF_MATCH.
+AC-Ref: 6.3.2.5
+Error Mode: ENV_CORS_ALLOW_HEADERS_MISSING_IF_MATCH
+
+7.3.2.6
+
+Title: Upstream proxy strips If-Match on ingress → halt at STEP-2 (missing-precondition branch)
+Purpose: Verify that when a proxy removes If-Match before the app, the guard engages the missing-precondition branch and prevents mutation.
+Test Data:
+
+Client-intended headers (for trace only): If-Match: W/"abc"
+
+Application-received headers: no If-Match
+
+Request: PATCH /api/v1/response-sets/rs_001/answers/q_123
+Mocking:
+
+Mock ingress/proxy layer to strip If-Match so the application receives the request without it.
+
+No mutation/DB mocks (should not be reached).
+Assertions:
+
+Assert STEP-2 Precondition enforcement is invoked once and halts immediately on the missing-precondition branch, and not before.
+
+Assert STEP-3 Mutation and tag retrieval is prevented (no invocation).
+
+Assert STEP-4/STEP-5 are prevented (no header emission, no mirrors).
+
+Assert the condition is classified as ENV_PROXY_STRIPS_IF_MATCH (environmental cause), with the guard taking its missing-precondition path.
+AC-Ref: 6.3.2.6
+Error Mode: ENV_PROXY_STRIPS_IF_MATCH
+
+7.3.2.7
+
+Title: Guard misapplied to read (GET) endpoints → halt at STEP-2 with server-side configuration error
+Purpose: Verify that invoking the guard on a Phase-0 read route is treated as a configuration error that halts the pipeline and prevents header emission.
+Test Data:
+
+Request: GET /api/v1/response-sets/rs_001/screens/welcome (Phase-0 read)
+Mocking:
+
+Mock router/middleware wiring to invoke the precondition guard on this GET route.
+
+No backend data mocks (should halt before handler).
+Assertions:
+
+Assert STEP-2 Precondition enforcement is invoked once (misapplied) and halts the pipeline immediately, and not before.
+
+Assert STEP-3/STEP-4/STEP-5 are prevented (no handler execution, no header emission, no mirrors).
+
+Assert the condition is classified as ENV_GUARD_MISAPPLIED_TO_READ_ENDPOINTS.
+AC-Ref: 6.3.2.7
+Error Mode: ENV_GUARD_MISAPPLIED_TO_READ_ENDPOINTS
