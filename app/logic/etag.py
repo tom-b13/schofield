@@ -16,6 +16,18 @@ from app.logic.repository_answers import get_existing_answer, get_screen_version
 from app.logic.answer_canonical import canonicalize_answer_value
 from app.logic.visibility_rules import compute_visible_set
 
+# Lock the public API surface for Phase-0 baseline
+__all__ = [
+    "compute_screen_etag",
+    "compute_authoring_screen_etag",
+    "compute_authoring_screen_etag_from_order",
+    "compute_authoring_question_etag",
+    "compute_questionnaire_etag_for_authoring",
+    "doc_etag",
+    "compute_document_list_etag",
+    "compare_etag",
+]
+
 logger = logging.getLogger(__name__)
  
 def compute_authoring_screen_etag(screen_key: str, title: str, order: int) -> str:
@@ -202,6 +214,10 @@ def _normalize_etag_token(value: str | None) -> str:
         v = v[1:-1].strip()
     # Case-insensitive hex comparison: normalize to lowercase
     return v.lower()
+
+# Public alias for shared If-Match/ETag normalisation (architectural single source)
+# Clarke: expose a single normaliser across app/ for diagnostics and comparison
+normalize_if_match = _normalize_etag_token
 
 
 def compare_etag(current: str | None, if_match: str | None) -> bool:

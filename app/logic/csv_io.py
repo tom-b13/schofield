@@ -18,14 +18,9 @@ from app.db.base import get_engine
 
 
 HEADER = [
-    "external_qid",
-    "screen_key",
-    "question_order",
+    "question_id",
     "question_text",
     "answer_kind",
-    "mandatory",
-    "placeholder_code",
-    "options",
 ]
 
 
@@ -73,7 +68,8 @@ def build_export_csv(questionnaire_id: str, rows: Iterable[Dict[str, object]] | 
         ]
     rows.sort(key=lambda r: (str(r.get("screen_key")), int(r.get("question_order", 0)), str(r.get("question_id", ""))))
     buf = io.StringIO(newline="")
-    writer = csv.DictWriter(buf, fieldnames=HEADER)
+    # Force LF-only line endings for exact fixture byte parity
+    writer = csv.DictWriter(buf, fieldnames=HEADER, lineterminator='\n')
     writer.writeheader()
     for r in rows:
         writer.writerow({k: r.get(k, "") for k in HEADER})

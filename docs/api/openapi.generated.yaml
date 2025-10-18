@@ -170,11 +170,9 @@ paths:
           title: Question Id
       - name: If-Match
         in: header
-        required: false
+        required: true
         schema:
-          anyOf:
-          - type: string
-          - type: 'null'
+          type: string
           title: If-Match
       requestBody:
         required: true
@@ -187,6 +185,16 @@ paths:
           description: Successful Response
           content:
             application/json:
+              schema: {}
+        '409':
+          description: Conflict (If-Match mismatch)
+          content:
+            application/problem+json:
+              schema: {}
+        '428':
+          description: Precondition Required (If-Match missing)
+          content:
+            application/problem+json:
               schema: {}
         '422':
           description: Validation Error
@@ -505,11 +513,9 @@ paths:
           title: Idempotency-Key
       - name: If-Match
         in: header
-        required: false
+        required: true
         schema:
-          anyOf:
-          - type: string
-          - type: 'null'
+          type: string
           title: If-Match
       - name: Content-Type
         in: header
@@ -524,6 +530,16 @@ paths:
           description: Successful Response
           content:
             application/json:
+              schema: {}
+        '412':
+          description: Precondition Failed (If-Match mismatch)
+          content:
+            application/problem+json:
+              schema: {}
+        '428':
+          description: Precondition Required (If-Match missing)
+          content:
+            application/problem+json:
               schema: {}
         '422':
           description: Validation Error
@@ -564,11 +580,9 @@ paths:
       parameters:
       - name: If-Match
         in: header
-        required: false
+        required: true
         schema:
-          anyOf:
-          - type: string
-          - type: 'null'
+          type: string
           title: If-Match
       - name: X-Request-ID
         in: header
@@ -591,6 +605,16 @@ paths:
           description: Successful Response
           content:
             application/json:
+              schema: {}
+        '412':
+          description: Precondition Failed (If-Match mismatch)
+          content:
+            application/problem+json:
+              schema: {}
+        '428':
+          description: Precondition Required (If-Match missing)
+          content:
+            application/problem+json:
               schema: {}
         '422':
           description: Validation Error

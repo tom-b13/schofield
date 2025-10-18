@@ -9,6 +9,8 @@ info:
     '
 servers:
 - url: /api/v1
+security:
+  - bearerAuth: []
 paths:
   /questionnaires/{id}:
     get:
@@ -80,6 +82,10 @@ paths:
           headers:
             ETag:
               $ref: '#/components/headers/ETag'
+            Screen-ETag:
+              description: Domain ETag for screen resources.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -161,6 +167,12 @@ paths:
                           $ref: '#/components/schemas/QuestionId'
         '409':
           $ref: '#/components/responses/Conflict'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -285,6 +297,38 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+  /authoring/screens/{screen_id}:
+    get:
+      summary: Get authoring screen metadata
+      tags: [Authoring]
+      parameters:
+      - name: screen_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Authoring screen metadata
+          headers:
+            Screen-ETag:
+              description: Domain ETag for screen resources in authoring context.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  screen_id: { type: string, format: uuid }
+                  title: { type: string }
+        '404':
+          $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /questionnaires/import:
     post:
       summary: Import questionnaire CSV (v1.0)
@@ -329,6 +373,10 @@ paths:
             ETag:
               $ref: '#/components/headers/ETag'
               description: Strong validator computed from payload (e.g., SHA-256 over rowset).
+            Questionnaire-ETag:
+              description: Domain ETag for questionnaire resources.
+              schema:
+                type: string
           content:
             text/csv; charset=utf-8:
               schema:

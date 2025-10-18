@@ -5,7 +5,7 @@
   "type": "object",
   "properties": {
     "question_id": {
-      "$ref": "https://example.com/schemas/QuestionId.schema.json"
+      "$ref": "question_id.schema.json"
     },
     "answer_kind": {
       "type": "string",

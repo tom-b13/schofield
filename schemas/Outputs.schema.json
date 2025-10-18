@@ -3,79 +3,35 @@
   "$id": "schemas/Outputs.schema.json",
   "title": "Outputs",
   "type": "object",
-  "description": "Canonical authoring operation outputs container.",
+  "description": "Canonical outputs envelope with headers and body.",
   "properties": {
-    "screen": {
+    "headers": {
       "type": "object",
-      "description": "Projection of the affected screen for screen operations.",
+      "description": "Response headers exposed to clients.",
       "properties": {
-        "screen_id": {
-          "$ref": "./ScreenId.schema.json"
-        },
-        "title": {
-          "$ref": "./ScreenTitle.schema.json"
-        },
-        "screen_order": {
-          "$ref": "./ScreenOrder.schema.json"
-        }
+        "Screen-ETag": { "$ref": "./ETag.schema.json" },
+        "Question-ETag": { "$ref": "./ETag.schema.json" },
+        "Questionnaire-ETag": { "$ref": "./ETag.schema.json" },
+        "Document-ETag": { "$ref": "./ETag.schema.json" },
+        "ETag": { "$ref": "./EtagToken.schema.json" }
       },
-      "required": [
-        "screen_id",
-        "title",
-        "screen_order"
-      ],
-      "additionalProperties": false
+      "additionalProperties": true
     },
-    "question": {
+    "body": {
       "type": "object",
-      "description": "Projection of the affected question for question operations.",
+      "description": "Response body payload.",
       "properties": {
-        "question_id": {
-          "$ref": "./question_id.schema.json"
-        },
-        "screen_id": {
-          "$ref": "./ScreenId.schema.json"
-        },
-        "question_text": {
-          "$ref": "./QuestionText.schema.json"
-        },
-        "answer_kind": {
-          "$ref": "./AnswerKind.json"
-        },
-        "question_order": {
-          "$ref": "./QuestionOrder.schema.json"
-        },
-        "parent_question_id": {
-          "$ref": "./question_id.schema.json"
-        },
-        "visible_if_value": {
-          "$ref": "./VisibleIfValue.schema.json"
+        "screen_view": {
+          "type": "object",
+          "properties": {
+            "etag": { "$ref": "./ETag.schema.json" }
+          },
+          "additionalProperties": true
         }
       },
-      "required": [
-        "question_id",
-        "screen_id",
-        "question_text",
-        "question_order"
-      ],
-      "additionalProperties": false
-    },
-    "etags": {
-      "type": "object",
-      "description": "Entity tag projection for optimistic concurrency.",
-      "properties": {
-        "question": {
-          "$ref": "./ETag.schema.json"
-        },
-        "screen": {
-          "$ref": "./ETag.schema.json"
-        },
-        "questionnaire": {
-          "$ref": "./ETag.schema.json"
-        }
-      },
-      "additionalProperties": false
+      "additionalProperties": true
     }
   },
+  "required": ["headers", "body"],
   "additionalProperties": false
 }

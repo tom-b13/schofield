@@ -832,15 +832,21 @@ def test_single_reusable_type_for_now_visible_items() -> None:
 
 # 7.1.23
 def test_screen_etag_header_projected_wherever_screen_view_returned() -> None:
-    """7.1.23 — Handlers returning screen_view also set Screen-ETag header from screen_view.etag."""
+    """7.1.23 — Handlers returning screen_view also emit Screen-ETag via central emitter and use screen_view.etag."""
     get_pm = _find_handler_module_for("get", "/response-sets/{response_set_id}/screens/{screen_key}")
     patch_pm = _find_handler_module_for("patch", "/response-sets/{response_set_id}/answers/{question_id}")
     if not (get_pm and patch_pm):
         pytest.fail("Expected GET screen and PATCH save handlers not found for Screen-ETag header checks")
 
     def sets_screen_etag(pm: ParsedModule) -> bool:
+        # Accept centralised header emission: module must import and call emit_etag_headers,
+        # and reference screen_view.etag within the module.
+        if not module_imports_symbol(pm, "app.logic.header_emitter", "emit_etag_headers"):
+            return False
+        if not module_calls_symbol(pm, lambda n: n == "emit_etag_headers"):
+            return False
         src = pm.path.read_text(encoding="utf-8")
-        return ("Screen-ETag" in src) and ("screen_view.etag" in src)
+        return "screen_view.etag" in src
 
     assert sets_screen_etag(get_pm), "GET screen handler must set Screen-ETag from screen_view.etag"
     assert sets_screen_etag(patch_pm), "PATCH save handler must set Screen-ETag from screen_view.etag"

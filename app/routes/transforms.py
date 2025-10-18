@@ -7,7 +7,7 @@ HTTP responses.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request, Response, Header
 from fastapi.responses import JSONResponse
 import json
 import anyio
@@ -41,8 +41,12 @@ def _not_implemented(detail: str = "") -> JSONResponse:
     description=(
         f"accepts {SCHEMA_PLACEHOLDER_PROBE}; returns {SCHEMA_SUGGEST_RESPONSE}"
     ),
+    responses={428: {"content": {"application/problem+json": {}}}},
 )
-def post_transforms_suggest(request: Request) -> Response:  # noqa: D401
+def post_transforms_suggest(
+    request: Request,
+    if_match: str | None = Header(None, alias="If-Match"),
+) -> Response:  # noqa: D401
     """POST /transforms/suggest.
 
     Implements simple pattern detection per Clarke's contract:
@@ -62,6 +66,17 @@ def post_transforms_suggest(request: Request) -> Response:  # noqa: D401
     raw_text = str((body or {}).get("raw_text", ""))
     context = (body or {}).get("context") or {}
     span = (context or {}).get("span") or {}
+    # Input instrumentation to diagnose 422 causes without changing behavior
+    try:
+        logger.info(
+            "transforms_suggest:inputs raw_text=%s span_start=%s span_end=%s ctx_keys=%s",
+            raw_text,
+            (span or {}).get("start"),
+            (span or {}).get("end"),
+            sorted(list((context or {}).keys())),
+        )
+    except Exception:
+        logger.error("transforms_suggest:log_inputs_failed", exc_info=True)
     # Basic malformed check: unbalanced brackets
     if raw_text.startswith("[[") or raw_text.count("[") != raw_text.count("]"):
         problem = {
@@ -86,9 +101,26 @@ def post_transforms_suggest(request: Request) -> Response:  # noqa: D401
             "detail": "unrecognised pattern in raw_text",
             "errors": [{"path": "$.raw_text", "code": "unrecognised_pattern"}],
         }
-        logger.error("transforms_suggest:unrecognised_pattern")
+        try:
+            logger.error(
+                "transforms_suggest:unrecognised_pattern raw_text=%s ctx_keys=%s",
+                raw_text,
+                sorted(list((context or {}).keys())),
+            )
+        except Exception:
+            logger.error("transforms_suggest:unrec_log_failed", exc_info=True)
         return JSONResponse(problem, status_code=422, media_type="application/problem+json")
-    logger.info("transforms_suggest:complete")
+    try:
+        ak = suggestion.get("answer_kind") if isinstance(suggestion, dict) else None
+        opts = suggestion.get("options") if isinstance(suggestion, dict) else None
+        logger.info(
+            "transforms_suggest:complete answer_kind=%s options_cnt=%s option_values=%s",
+            ak,
+            (len(opts) if isinstance(opts, list) else 0),
+            ([o.get("value") for o in opts] if isinstance(opts, list) else None),
+        )
+    except Exception:
+        logger.error("transforms_suggest:complete_log_failed", exc_info=True)
     return JSONResponse(suggestion, status_code=200, media_type="application/json")
 
 
@@ -96,8 +128,12 @@ def post_transforms_suggest(request: Request) -> Response:  # noqa: D401
     "/transforms/preview",
     summary="Preview transforms",
     description=f"returns {SCHEMA_PREVIEW_RESPONSE}",
+    responses={428: {"content": {"application/problem+json": {}}}},
 )
-def post_transforms_preview(request: Request) -> Response:  # noqa: D401
+def post_transforms_preview(
+    request: Request,
+    if_match: str | None = Header(None, alias="If-Match"),
+) -> Response:  # noqa: D401
     """POST /transforms/preview returning canonical enum options.
 
     Accepts {literals:[..]} or {raw_text:".."} and returns
@@ -110,12 +146,27 @@ def post_transforms_preview(request: Request) -> Response:  # noqa: D401
         logger.error("transforms_preview:invalid_json")
         problem = {"title": "invalid json", "status": 422, "detail": "request body is not valid JSON"}
         return JSONResponse(problem, status_code=422, media_type="application/problem+json")
+    # Input keys for preview requests
+    try:
+        logger.info(
+            "transforms_preview:inputs keys=%s",
+            sorted(list((body or {}).keys())) if isinstance(body, dict) else None,
+        )
+    except Exception:
+        logger.error("transforms_preview:log_inputs_failed", exc_info=True)
     canonical = list(transform_engine.preview_transforms(body or {}))
     options = [{"value": v} for v in canonical]
     # Maintain canonical input order; include a no-op sorted for determinism
     options = sorted(options, key=lambda _: 0)
     payload = {"answer_kind": "enum_single", "options": options}
-    logger.info("transforms_preview:complete options=%s", len(options))
+    try:
+        logger.info(
+            "transforms_preview:complete options_cnt=%s values=%s",
+            len(options),
+            [o.get("value") for o in options],
+        )
+    except Exception:
+        logger.error("transforms_preview:complete_log_failed", exc_info=True)
     return JSONResponse(payload, status_code=200, media_type="application/json")
 
 

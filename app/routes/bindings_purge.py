@@ -7,7 +7,7 @@ document is unknown and there are no placeholders to purge.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Response, Header
 from fastapi.responses import JSONResponse
 import logging
 from app.logic.placeholders import purge_bindings

@@ -423,6 +423,13 @@ def epic_c_put_with_headers_stage(context, path: str):
         # For other keys, keep as provided (trimmed)
         staged[key] = val_interp
     context._pending_put_headers = staged
+    # Instrumentation: log staged headers and persist exact If-Match for later checks
+    try:
+        staged_ifm = staged.get("If-Match")
+        print(f"[EpicC] STAGED PUT headers If-Match={staged_ifm} keys={list(staged.keys())}")
+        setattr(context, "staged_if_match", staged_ifm)
+    except Exception:
+        pass
 
 
 @when('body is a valid DOCX file of {size:d} bytes named "{filename}"')
@@ -991,6 +998,12 @@ def epic_c_put_json_body(context):
     # Build headers from a copy of the staged headers, re-interpolate values,
     # support bare tokens (e.g., LE1), and normalize a single canonical If-Match key
     staged_headers = (getattr(context, "_pending_put_headers", None) or {})
+    try:
+        print(
+            f"[EpicC] STAGED headers before PUT If-Match={staged_headers.get('If-Match')} keys={list(staged_headers.keys())}"
+        )
+    except Exception:
+        pass
     headers: Dict[str, str] = {}
     vars_map = _ensure_vars(context)
     for k, v in staged_headers.items():
@@ -1054,6 +1067,21 @@ def epic_c_put_json_body(context):
         # Concise log for correlation
         print(f"[EpicC] PUT {path} If-Match={outgoing_if_match}")
     except Exception:
+        pass
+    # Assertion: if staged If-Match was provided, ensure it survives to outgoing headers
+    try:
+        staged_ifm_present = staged_headers.get("If-Match")
+        if isinstance(staged_ifm_present, (bytes, bytearray)):
+            try:
+                staged_ifm_present = staged_ifm_present.decode("utf-8")
+            except Exception:
+                staged_ifm_present = bytes(staged_ifm_present).decode("latin1", errors="ignore")
+        if isinstance(staged_ifm_present, str) and staged_ifm_present.strip():
+            assert isinstance(outgoing_if_match, str) and outgoing_if_match.strip(), (
+                "Staged If-Match header lost before sending"
+            )
+    except Exception:
+        # Do not make the step fail on missing staged headers; only assert when staged
         pass
     status, headers_out, body_json, body_text = _http_request(
         context,

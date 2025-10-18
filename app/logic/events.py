@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 RESPONSE_SAVED = "response.saved"
 RESPONSE_SET_DELETED = "response_set.deleted"
+ETAG_ENFORCE = "etag.enforce"
+ETAG_EMIT = "etag.emit"
 
 
 def publish(event_type: str, payload: Dict[str, Any]) -> None:  # pragma: no cover - side-effect only
@@ -39,6 +41,8 @@ def get_buffered_events(clear: bool = True) -> List[Dict[str, Any]]:
 __all__ = [
     "RESPONSE_SAVED",
     "RESPONSE_SET_DELETED",
+    "ETAG_ENFORCE",
+    "ETAG_EMIT",
     "publish",
     "get_buffered_events",
     "EVENT_BUFFER",

@@ -12,6 +12,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from app.logic.events import publish, RESPONSE_SET_DELETED
+from app.logic.header_emitter import emit_etag_headers
 from app.models.response_types import Events
 from app.logic.repository_response_sets import (
     register_response_set_id,
@@ -27,7 +28,11 @@ logger = logging.getLogger(__name__)
 _EVENTS_TYPE_REF: type = Events
 
 
-@router.post("/response-sets", summary="Create a response set (skeleton)")
+@router.post(
+    "/response-sets",
+    summary="Create a response set (skeleton)",
+    responses={428: {"content": {"application/problem+json": {}}}},
+)
 def create_response_set(payload: dict):
     """Create a response set and return its identifier and metadata.
 
@@ -40,12 +45,9 @@ def create_response_set(payload: dict):
     name = (payload or {}).get("name")
     company_id = (payload or {}).get("company_id")
     rs_id = str(uuid.uuid4())
-    created_at = (
-        datetime.now(timezone.utc)
-        .isoformat(timespec="seconds")
-        .replace("+00:00", "Z")
-    )
-    etag = f'W/"rs-{rs_id}"'
+    from app.logic.response_sets_write import format_created_at, make_etag
+    created_at = format_created_at()
+    etag = make_etag(rs_id)
     # Persist a response_set row so subsequent PATCH/GET flows operate on a valid id
     # Guard persistence to avoid unit-test failures when DB schema is absent
     try:
@@ -74,7 +76,7 @@ def create_response_set(payload: dict):
         "etag": etag,
     }
     resp = JSONResponse(body, status_code=201, media_type="application/json")
-    resp.headers["ETag"] = etag
+    emit_etag_headers(resp, scope="screen", token=etag, include_generic=True)
     # Seed in-memory existence registry so GET screen can resolve the id
     try:
         register_response_set_id(rs_id)
@@ -87,6 +89,7 @@ def create_response_set(payload: dict):
 @router.delete(
     "/response-sets/{response_set_id}",
     summary="Delete a response set (skeleton)",
+    responses={428: {"content": {"application/problem+json": {}}}},
 )
 def delete_response_set(response_set_id: str, if_match: str = Header(..., alias="If-Match")):
     """Skeleton delete endpoint returning 204 with a placeholder ETag.
@@ -94,8 +97,8 @@ def delete_response_set(response_set_id: str, if_match: str = Header(..., alias=
     No concurrency enforcement or cascading logic; anchor only.
     """
     resp = Response(status_code=204)
-    # Provide a placeholder strong ETag value to satisfy header-based assertions
-    resp.headers["ETag"] = '"skeleton-etag"'
+    # Provide a placeholder strong ETag via central emitter
+    emit_etag_headers(resp, scope="screen", token='"skeleton-etag"', include_generic=True)
     publish(RESPONSE_SET_DELETED, {"response_set_id": response_set_id})
     # Remove from in-memory registry so subsequent GET returns 404
     try:

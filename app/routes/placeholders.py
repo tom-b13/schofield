@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request, Response, Header
 from fastapi.responses import JSONResponse
 from app.logic.etag import doc_etag
+from app.logic.header_emitter import emit_etag_headers
 import json
 from typing import Any, Dict
 import logging
@@ -58,8 +59,13 @@ def verify_probe_receipt(probe: dict) -> None:
         f"headers_validator: {SCHEMA_HTTP_HEADERS}; Idempotency-Key; If-Match; "
         f"uses {SCHEMA_PLACEHOLDER_PROBE} -> {SCHEMA_PROBE_RECEIPT}; returns {SCHEMA_BIND_RESULT}"
     ),
+    responses={428: {"content": {"application/problem+json": {}}}},
 )
-async def post_placeholders_bind(request: Request, probe: dict | None = None) -> Response:  # noqa: D401
+async def post_placeholders_bind(
+    request: Request,
+    probe: dict | None = None,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
+) -> Response:  # noqa: D401
     """Bind a placeholder per Clarke's contract using in-memory state.
 
     - Enforce If-Match precondition (412 on mismatch, include ETag header)
@@ -74,12 +80,33 @@ async def post_placeholders_bind(request: Request, probe: dict | None = None) ->
         logger.error("bind_placeholder:invalid_json")
         problem = {"title": "invalid json", "status": 422, "detail": "request body is not valid JSON"}
         return JSONResponse(problem, status_code=422, media_type="application/problem+json")
+    # Log request headers/body keys to diagnose 412/409/422 without altering behavior
+    try:
+        logger.info(
+            "bind_placeholder:inputs idem=%s if_match=%s keys=%s",
+            request.headers.get("Idempotency-Key"),
+            request.headers.get("If-Match"),
+            sorted(list((body or {}).keys())) if isinstance(body, dict) else None,
+        )
+    except Exception:
+        logger.error("bind_placeholder:log_inputs_failed", exc_info=True)
     # Non-mutating probe verification hook for architectural guard
     verify_probe_receipt(probe)
     result, etag, status = bind_placeholder(dict(request.headers), body or {})
-    logger.info("bind_placeholder:complete status=%s", status)
+    try:
+        logger.info(
+            "bind_placeholder:complete status=%s code=%s detail=%s",
+            status,
+            (result or {}).get("code") if isinstance(result, dict) else None,
+            (result or {}).get("detail") if isinstance(result, dict) else None,
+        )
+    except Exception:
+        logger.error("bind_placeholder:complete_log_failed", exc_info=True)
     media = "application/problem+json" if status != 200 else "application/json"
-    return JSONResponse(result, status_code=status, headers={"ETag": etag}, media_type=media)
+    resp = JSONResponse(result, status_code=status, media_type=media)
+    # Emit only generic ETag on all responses per Clarke's contract (no domain headers for bind)
+    emit_etag_headers(resp, scope="generic", token=etag, include_generic=True)
+    return resp
 
 
 @router.post(
@@ -88,8 +115,12 @@ async def post_placeholders_bind(request: Request, probe: dict | None = None) ->
     description=(
         f"headers_validator: {SCHEMA_HTTP_HEADERS}; Idempotency-Key; If-Match; returns {SCHEMA_UNBIND_RESPONSE}"
     ),
+    responses={428: {"content": {"application/problem+json": {}}}},
 )
-async def post_placeholders_unbind(request: Request) -> Response:  # noqa: D401
+async def post_placeholders_unbind(
+    request: Request,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
+) -> Response:  # noqa: D401
     """Unbind a placeholder by id; 404 if unknown; returns new ETag."""
     logger.info("unbind_placeholder:start")
     try:
@@ -98,10 +129,30 @@ async def post_placeholders_unbind(request: Request) -> Response:  # noqa: D401
         logger.error("unbind_placeholder:invalid_json")
         problem = {"title": "invalid json", "status": 422, "detail": "request body is not valid JSON"}
         return JSONResponse(problem, status_code=422, media_type="application/problem+json")
+    # Input instrumentation for unbind
+    try:
+        logger.info(
+            "unbind_placeholder:inputs if_match=%s keys=%s",
+            request.headers.get("If-Match"),
+            sorted(list((body or {}).keys())) if isinstance(body, dict) else None,
+        )
+    except Exception:
+        logger.error("unbind_placeholder:log_inputs_failed", exc_info=True)
     result, etag, status = unbind_placeholder(dict(request.headers), body or {})
-    logger.info("unbind_placeholder:complete status=%s", status)
+    try:
+        logger.info(
+            "unbind_placeholder:complete status=%s code=%s detail=%s",
+            status,
+            (result or {}).get("code") if isinstance(result, dict) else None,
+            (result or {}).get("detail") if isinstance(result, dict) else None,
+        )
+    except Exception:
+        logger.error("unbind_placeholder:complete_log_failed", exc_info=True)
     media = "application/problem+json" if status != 200 else "application/json"
-    return JSONResponse(result, status_code=status, headers={"ETag": etag}, media_type=media)
+    resp = JSONResponse(result, status_code=status, media_type=media)
+    # Emit only generic ETag to avoid domain headers on unbind per contract
+    emit_etag_headers(resp, scope="generic", token=etag, include_generic=True)
+    return resp
 
 
 @router.get(
@@ -133,7 +184,9 @@ async def get_question_placeholders(
     # Keep output stable: order by created_at ascending when available
     items.sort(key=lambda r: r.get("created_at") or "")
     etag = QUESTION_ETAGS.get(str(id)) or doc_etag(1)
-    return JSONResponse({"items": items, "etag": etag}, status_code=200, headers={"ETag": etag})
+    resp = JSONResponse({"items": items, "etag": etag}, status_code=200)
+    emit_etag_headers(resp, scope="document", token=etag, include_generic=True)
+    return resp
 
 
 __all__ = [

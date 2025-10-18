@@ -579,6 +579,9 @@ def _rewrite_path(context, path: str) -> str:
             # /api/v1/authoring/questions/{ext}[/*]
             if parts[ai + 1] == "questions" and len(parts) > ai + 2:
                 q_ext = parts[ai + 2]
+                # Do not rewrite when already a UUID; preserve intact
+                if _is_uuid(q_ext):
+                    return "/" + "/".join(parts)
                 q_id = _resolve_id(q_ext, q_map, prefix="q:")
                 parts[ai + 2] = q_id
                 return "/" + "/".join(parts)
@@ -707,6 +710,25 @@ def _http_request(
     url = base + str(effective_path)
     hdrs = (headers or {}).copy()
     hdrs.setdefault("Accept", "*/*")
+    # Clarke directive: For PUT /api/v1/documents/order, ensure If-Match is sent.
+    # If the header is missing or blank, default from context.vars['current_list_etag']
+    # then fallback to context.vars['list_etag'] before dispatch.
+    try:
+        if method.upper() == "PUT" and str(effective_path) == "/api/v1/documents/order":
+            ifm = next((v for k, v in hdrs.items() if str(k).lower() == "if-match"), None)
+            if not (isinstance(ifm, str) and ifm.strip()):
+                vmap = getattr(context, "vars", {}) or {}
+                fallback = vmap.get("current_list_etag") or vmap.get("list_etag")
+                if isinstance(fallback, (bytes, bytearray)):
+                    try:
+                        fallback = fallback.decode("utf-8")
+                    except Exception:
+                        fallback = bytes(fallback).decode("latin1", errors="ignore")
+                if isinstance(fallback, str) and fallback.strip():
+                    hdrs["If-Match"] = fallback.strip()
+    except Exception:
+        # Never fail the request due to header defaulting
+        pass
     # Clarke: ensure Content-Type for authoring JSON requests and log pre-dispatch preview
     try:
         if str(effective_path).startswith("/api/v1/authoring") and json_body is not None:
@@ -720,6 +742,15 @@ def _http_request(
     except Exception:
         # Pre-dispatch logging must never break the call
         pass
+    # Clarke instrumentation (pre-dispatch): capture If-Match for specific PUT route
+    try:
+        if_match_raw = next((v for k, v in hdrs.items() if str(k).lower() == "if-match"), None)
+        if method.upper() == "PUT" and str(effective_path) == "/api/v1/documents/order" and json_body is not None:
+            json_keys = ",".join(sorted(json_body.keys())) if isinstance(json_body, dict) else "-"
+            print(f"[HTTP-REQ] PUT {effective_path} if_match_raw={if_match_raw or '-'} json_keys={json_keys}")
+    except Exception:
+        pass
+
     with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
         resp = client.request(
             method.upper(),
@@ -771,7 +802,16 @@ def _http_request(
                 setattr(context, "last_request_id", xrid)
             except Exception:
                 pass
-            log_line = f"[HTTP] {ts} {method.upper()} {effective_path} -> {resp.status_code} ct={ctype or '-'} xrid={xrid or '-'}"
+            # Echo If-Match for disambiguation on specific Epic C reorder route
+            try:
+                if_echo = (
+                    f" if_match_raw={if_match_raw or '-'}"
+                    if method.upper() == "PUT" and str(effective_path) == "/api/v1/documents/order"
+                    else ""
+                )
+            except Exception:
+                if_echo = ""
+            log_line = f"[HTTP] {ts} {method.upper()} {effective_path} -> {resp.status_code} ct={ctype or '-'} xrid={xrid or '-'}{if_echo}"
             print(log_line)
             # Clarke addition: for successful JSON responses on /api/v1/*, emit a compact body preview
             try:
@@ -1275,6 +1315,47 @@ def step_given_get_and_capture(context, path: str, var_name: str):
 def step_when_get(context, path: str):
     # Interpolate {alias} variables in the incoming path before rewrite
     ipath = _interpolate(path, context)
+    # Sanitize stray trailing quotes and whitespace from accidental feature literals
+    try:
+        ipath = ipath.strip().rstrip("\"'")
+    except Exception:
+        pass
+    # Clarke Phase-0: Some feature lines accidentally embed a trailing
+    # "with path vars ..." literal inside the quoted {path}. Strip and
+    # capture any key="value" tokens to avoid sending the literal to the server.
+    try:
+        m = re.match(r"^(?P<base>.+?)\s+with\s+path\s+vars\s+(?P<vars>.+)$", ipath)
+        if m:
+            base = m.group("base").strip()
+            assigns = m.group("vars")
+            # Extract key="value" pairs; tolerate spaces and commas between pairs
+            for k, v in re.findall(r"([A-Za-z_][A-Za-z0-9_]*)=\"([^\"]*)\"", assigns):
+                try:
+                    # Normalize underscores in keys for consistent storage
+                    k_norm = k.replace("\\_", "_")
+                except Exception:
+                    k_norm = k
+                _vars = getattr(context, "vars", None)
+                if _vars is None:
+                    try:
+                        context.vars = {}
+                    except Exception:
+                        pass
+                try:
+                    context.vars[k_norm] = _interpolate(v, context)
+                except Exception:
+                    # Best-effort capture only
+                    context.vars[k_norm] = v
+            ipath = base
+            # Re-sanitize base: strip any trailing raw or URL-encoded quotes
+            try:
+                ipath = ipath.strip().rstrip('\"\'')
+                ipath = re.sub(r"(%22|%27)+$", "", ipath)
+            except Exception:
+                pass
+    except Exception:
+        # If parsing fails, continue with the original ipath
+        pass
     # Clarke: Validate QuestionnaireId for export path before issuing request
     if "/questionnaires/" in ipath and ipath.endswith("/export"):
         try:
@@ -1400,6 +1481,72 @@ def step_any_body(context):
 
 @when('I POST "{path}"')
 def step_when_post(context, path: str):
+    # Harden generic POST step to handle extended phrases like:
+    #   "/api/v1/placeholders/bind" with headers If-Match="W/\"...\"" and body from file "tests/.../file.json"
+    # by parsing out the true path, unescaping the If-Match token, loading the JSON file,
+    # and dispatching the POST with headers/body instead of treating the entire phrase as the URL.
+    try:
+        # Tolerate stray encoded quotes and whitespace in the captured path
+        candidate = path.replace("%22", '"').strip()
+        m = re.match(
+            r'^(?P<base>/[^\"]+)"\s+with\s+headers\s+If-Match=\"(?P<token>.+?)\"\s+and\s+body\s+from\s+file\s+\"(?P<file>[^\"]+)\"$',
+            candidate,
+        )
+        if not m and " with headers If-Match=" in candidate:
+            # Fallback split parser when regex fails due to unusual quoting
+            try:
+                base_part, tail = candidate.split(" with headers If-Match=\"", 1)
+                token_part, file_tail = tail.split("\" and body from file \"", 1)
+                file_part = file_tail.rsplit("\"", 1)[0]
+                m = type("_M", (), {  # simple namespace to emulate groups
+                    "group": lambda self, k: {
+                        "base": base_part,
+                        "token": token_part,
+                        "file": file_part,
+                    }[k]
+                })()
+            except Exception:
+                m = None
+        if m:
+            base_path = m.group("base").rstrip('"').rstrip()
+            raw_token = m.group("token")
+            file_path = m.group("file")
+            # Unescape nested quoting and wildcard/underscore escapes used in feature literals
+            try:
+                token = str(raw_token).replace('\\"', '"').replace('\\*', '*').replace('\\_', '_')
+            except Exception:
+                token = raw_token
+            try:
+                with open(file_path, "r", encoding="utf-8") as fh:
+                    body = json.load(fh)
+            except Exception:
+                body = {}
+            # Merge staged headers (e.g., Authorization) and set If-Match
+            hdrs: Dict[str, str] = {"If-Match": token}
+            try:
+                staged = getattr(context, "_pending_headers", {}) or {}
+                for k, v in staged.items():
+                    hdrs[str(k)] = str(v)
+            except Exception:
+                pass
+            status, headers, body_json, body_text = _http_request(
+                context, "POST", base_path, headers=hdrs, json_body=body
+            )
+            context.last_response = {
+                "status": status,
+                "headers": headers,
+                "json": body_json,
+                "text": body_text,
+                "path": base_path,
+                "method": "POST",
+            }
+            # Clarke: All JSON responses must include X-Request-Id (200/4xx)
+            if context.last_response.get("json") is not None:
+                _assert_x_request_id(context)
+            return
+    except Exception:
+        # Fall through to existing behaviours on parse failure
+        pass
     # Clarke: for regenerate-check, ensure Q_CO_NAME exists after Background via JIT seed
     if path.endswith("/regenerate-check"):
         try:
@@ -2143,6 +2290,62 @@ def epic_i_patch_with_body_first(context, path: str):
     except Exception:
         pass
     context._pending_body = body
+    # Clarke: If no headers are staged and this is not a response-set answers endpoint
+    # (or it targets /api/v1/authoring/ routes), dispatch the PATCH immediately
+    try:
+        pending_headers = getattr(context, "_pending_headers", None)
+        pending_path = getattr(context, "_pending_path", None)
+        if not pending_headers and pending_path:
+            path = pending_path
+            try:
+                is_answer_endpoint = (str(path).startswith("/response-sets/") or ("/answers/" in str(path)))
+            except Exception:
+                is_answer_endpoint = False
+            # Clarke: Allow auto-dispatch for authoring questions; defer for other authoring routes
+            try:
+                _p = str(path)
+                is_authoring = _p.startswith("/api/v1/authoring/")
+                is_authoring_questions = _p.startswith("/api/v1/authoring/questions")
+                # Clarke: treat as authoring when context.api_prefix contains '/api/v1/authoring'
+                # even if the incoming path lacks the prefix. This prevents premature auto-dispatch
+                # so that subsequent steps (e.g., setting If-Match) can attach headers before send.
+                api_prefix = str(getattr(context, "api_prefix", ""))
+                is_authoring_by_prefix = "/api/v1/authoring" in api_prefix
+                is_authoring_effective = is_authoring or is_authoring_by_prefix
+            except Exception:
+                is_authoring = False
+                is_authoring_questions = False
+                is_authoring_effective = False
+            # Auto-dispatch when:
+            # - not an answers endpoint AND (not an authoring route OR specifically authoring/questions)
+            # - authoring evaluation must consider api_prefix when path lacks explicit prefix
+            if (not is_answer_endpoint) and ((not is_authoring_effective) or is_authoring_questions):
+                status, headers_out, body_json, body_text = _http_request(
+                    context, "PATCH", path, headers={}, json_body=body
+                )
+                context.last_response = {
+                    "status": status,
+                    "headers": headers_out,
+                    "json": body_json,
+                    "text": body_text,
+                    "path": path,
+                    "method": "PATCH",
+                }
+                # Persist canonicalized artifacts for idempotency checks
+                context._last_patch_path = path
+                context._last_patch_headers = {}
+                context._last_patch_body = body
+                if not hasattr(context, "first_response") or context.first_response is None:
+                    context.first_response = context.last_response
+                # Clear pending staged data now that the request has been dispatched
+                context._pending_path = None
+                context._pending_body = None
+                context._pending_headers = None
+                # Early return; request already sent
+                return
+    except Exception:
+        # Non-blocking: fall through to staged-headers flow
+        pass
     # Clarke: If headers were staged before body, send the PATCH now
     try:
         pending_headers = getattr(context, "_pending_headers", None)
