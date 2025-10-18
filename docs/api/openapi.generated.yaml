@@ -170,9 +170,11 @@ paths:
           title: Question Id
       - name: If-Match
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: If-Match
       requestBody:
         required: true
@@ -187,15 +189,13 @@ paths:
             application/json:
               schema: {}
         '409':
-          description: Conflict (If-Match mismatch)
           content:
-            application/problem+json:
-              schema: {}
+            application/problem+json: {}
+          description: Conflict
         '428':
-          description: Precondition Required (If-Match missing)
           content:
-            application/problem+json:
-              schema: {}
+            application/problem+json: {}
+          description: Precondition Required
         '422':
           description: Validation Error
           content:
@@ -206,7 +206,14 @@ paths:
       tags:
       - Autosave
       summary: Delete an answer (skeleton)
-      description: Delete a persisted answer row and emit updated ETag headers (204).
+      description: 'Delete a persisted answer row and emit updated ETag headers (204).
+
+
+        Clarke Phase-0: If-Match enforcement is intentionally skipped for DELETE.
+
+        Always perform the delete (best-effort) and emit fresh Screen-ETag and
+
+        generic ETag on success.'
       operationId: delete_answer_api_v1_response_sets__response_set_id__answers__question_id__delete
       parameters:
       - name: response_set_id
@@ -233,6 +240,14 @@ paths:
           content:
             application/json:
               schema: {}
+        '409':
+          content:
+            application/problem+json: {}
+          description: Conflict
+        '428':
+          content:
+            application/problem+json: {}
+          description: Precondition Required
         '422':
           description: Validation Error
           content:
@@ -258,6 +273,14 @@ paths:
         schema:
           type: string
           title: Response Set Id
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
       requestBody:
         required: true
         content:
@@ -272,6 +295,14 @@ paths:
           content:
             application/json:
               schema: {}
+        '409':
+          content:
+            application/problem+json: {}
+          description: Conflict
+        '428':
+          content:
+            application/problem+json: {}
+          description: Precondition Required
         '422':
           description: Validation Error
           content:
@@ -310,6 +341,10 @@ paths:
           content:
             application/json:
               schema: {}
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json: {}
         '422':
           description: Validation Error
           content:
@@ -345,6 +380,10 @@ paths:
           content:
             application/json:
               schema: {}
+        '428':
+          content:
+            application/problem+json: {}
+          description: Precondition Required
         '422':
           description: Validation Error
           content:
@@ -478,12 +517,28 @@ paths:
         schema:
           type: string
           title: Document Id
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
+        '428':
+          content:
+            application/problem+json: {}
+          description: Precondition Required
+        '412':
+          content:
+            application/problem+json: {}
+          description: Precondition Failed
         '422':
           description: Validation Error
           content:
@@ -511,12 +566,6 @@ paths:
           - type: string
           - type: 'null'
           title: Idempotency-Key
-      - name: If-Match
-        in: header
-        required: true
-        schema:
-          type: string
-          title: If-Match
       - name: Content-Type
         in: header
         required: false
@@ -525,22 +574,28 @@ paths:
           - type: string
           - type: 'null'
           title: Content-Type
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
-        '412':
-          description: Precondition Failed (If-Match mismatch)
-          content:
-            application/problem+json:
-              schema: {}
         '428':
-          description: Precondition Required (If-Match missing)
           content:
-            application/problem+json:
-              schema: {}
+            application/problem+json: {}
+          description: Precondition Required
+        '412':
+          content:
+            application/problem+json: {}
+          description: Precondition Failed
         '422':
           description: Validation Error
           content:
@@ -578,12 +633,6 @@ paths:
       summary: Reorder documents
       operationId: put_documents_order_api_v1_documents_order_put
       parameters:
-      - name: If-Match
-        in: header
-        required: true
-        schema:
-          type: string
-          title: If-Match
       - name: X-Request-ID
         in: header
         required: false
@@ -592,6 +641,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Request-Id
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
       requestBody:
         required: true
         content:
@@ -606,16 +663,14 @@ paths:
           content:
             application/json:
               schema: {}
-        '412':
-          description: Precondition Failed (If-Match mismatch)
-          content:
-            application/problem+json:
-              schema: {}
         '428':
-          description: Precondition Required (If-Match missing)
           content:
-            application/problem+json:
-              schema: {}
+            application/problem+json: {}
+          description: Precondition Required
+        '412':
+          content:
+            application/problem+json: {}
+          description: Precondition Failed
         '422':
           description: Validation Error
           content:
@@ -629,12 +684,31 @@ paths:
       summary: Suggest transforms
       description: accepts schemas/placeholder_probe.schema.json; returns schemas/suggest_response.schema.json
       operationId: post_transforms_suggest_api_v1_transforms_suggest_post
+      parameters:
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
+        '428':
+          content:
+            application/problem+json: {}
+          description: Precondition Required
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/transforms/preview:
     post:
       tags:
@@ -642,12 +716,31 @@ paths:
       summary: Preview transforms
       description: returns schemas/transforms_preview_response.schema.json
       operationId: post_transforms_preview_api_v1_transforms_preview_post
+      parameters:
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
+        '428':
+          content:
+            application/problem+json: {}
+          description: Precondition Required
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/transforms/catalog:
     get:
       tags:
@@ -671,13 +764,22 @@ paths:
         If-Match; uses schemas/placeholder_probe.schema.json -> schemas/probe_receipt.schema.json;
         returns schemas/bind_result.schema.json'
       operationId: post_placeholders_bind_api_v1_placeholders_bind_post
+      parameters:
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
       requestBody:
         content:
           application/json:
             schema:
               anyOf:
-              - additionalProperties: true
-                type: object
+              - type: object
+                additionalProperties: true
               - type: 'null'
               title: Probe
       responses:
@@ -686,6 +788,10 @@ paths:
           content:
             application/json:
               schema: {}
+        '428':
+          content:
+            application/problem+json: {}
+          description: Precondition Required
         '422':
           description: Validation Error
           content:
@@ -701,12 +807,31 @@ paths:
       description: 'headers_validator: schemas/http_headers.schema.json; Idempotency-Key;
         If-Match; returns schemas/unbind_response.schema.json'
       operationId: post_placeholders_unbind_api_v1_placeholders_unbind_post
+      parameters:
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
+        '428':
+          content:
+            application/problem+json: {}
+          description: Precondition Required
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/questions/{id}/placeholders:
     get:
       tags:
@@ -757,6 +882,229 @@ paths:
         schema:
           type: string
           title: Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/authoring/screens:
+    post:
+      tags:
+      - Authoring
+      summary: Create Screen Simple
+      description: 'Create a screen using a simple JSON payload.
+
+
+        Expects JSON with keys: questionnaire_id, title (screen_key optional/ignored).
+
+        Emits Screen-ETag and Questionnaire-ETag headers; does not include generic
+        ETag.'
+      operationId: create_screen_simple_api_v1_authoring_screens_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/authoring/questionnaires/{questionnaire_id}/screens:
+    post:
+      tags:
+      - Authoring
+      summary: Create Screen
+      operationId: create_screen_api_v1_authoring_questionnaires__questionnaire_id__screens_post
+      parameters:
+      - name: questionnaire_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Questionnaire Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/authoring/questionnaires/{questionnaire_id}/questions:
+    post:
+      tags:
+      - Authoring
+      summary: Create Question
+      operationId: create_question_api_v1_authoring_questionnaires__questionnaire_id__questions_post
+      parameters:
+      - name: questionnaire_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Questionnaire Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/authoring/questionnaires/{questionnaire_id}/screens/{screen_id}:
+    patch:
+      tags:
+      - Authoring
+      summary: Update Screen
+      operationId: update_screen_api_v1_authoring_questionnaires__questionnaire_id__screens__screen_id__patch
+      parameters:
+      - name: questionnaire_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Questionnaire Id
+      - name: screen_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Screen Id
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/authoring/questions/{question_id}/position:
+    patch:
+      tags:
+      - Authoring
+      summary: Update Question Position
+      operationId: update_question_position_api_v1_authoring_questions__question_id__position_patch
+      parameters:
+      - name: question_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Question Id
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/authoring/questions/{question_id}:
+    patch:
+      tags:
+      - Authoring
+      summary: Update Question
+      operationId: update_question_api_v1_authoring_questions__question_id__patch
+      parameters:
+      - name: question_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Question Id
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/authoring/questions/{question_id}/visibility:
+    patch:
+      tags:
+      - Authoring
+      summary: Update Question Visibility
+      operationId: update_question_visibility_api_v1_authoring_questions__question_id__visibility_patch
+      parameters:
+      - name: question_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Question Id
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
       responses:
         '200':
           description: Successful Response
