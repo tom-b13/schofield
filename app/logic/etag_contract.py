@@ -28,10 +28,12 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
     try:
         _norm = normalise_if_match(if_match_header)
     except Exception:  # pragma: no cover
+        logger.error("etag_normalise_failed_entry", exc_info=True)
         _norm = str(if_match_header)
     try:
         _current = str(current_etag)
     except Exception:  # pragma: no cover
+        logger.error("etag_current_str_cast_failed", exc_info=True)
         _current = None  # type: ignore[assignment]
     logger.info(
         "etag.enforce route=%s matched=%s if_match_norm=%s current=%s",
@@ -56,11 +58,14 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
     try:
         matched = compare_etag(current_etag, if_match_header)
     except Exception:
+        # Log comparison failures as errors before treating as mismatch
+        logger.error("etag_compare_failed", exc_info=True)
         matched = False
     # Debug: log outcome once computed
     try:
         _norm2 = normalise_if_match(if_match_header)
     except Exception:  # pragma: no cover
+        logger.error("etag_normalise_failed_outcome", exc_info=True)
         _norm2 = str(if_match_header)
     logger.info(
         "etag.enforce route=%s matched=%s if_match_norm=%s current=%s",

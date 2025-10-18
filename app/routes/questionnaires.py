@@ -93,8 +93,8 @@ def export_questionnaire(id: str):
     try:
         emit_etag_headers(resp, scope="questionnaire", token=q_etag, include_generic=True)
     except Exception:
-        # Do not bypass central emitter with direct header assignment
-        pass
+        # Do not bypass central emitter with direct header assignment; log the fault
+        logger.error("emit_etag_headers_failed", exc_info=True)
     try:
         logger.info(
             "export_questionnaire",

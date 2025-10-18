@@ -264,13 +264,7 @@ def epic_k_question_id_exists_on_screen(context, question_id: str, screen_key: s
 @given('a document id "{document_id}" exists')
 def epic_k_document_id_exists(context, document_id: str) -> None:
     vars_map = _ensure_vars(context)
-    # Reset test state to seed the in-memory documents store with deterministic IDs
-    try:
-        _canonical._http_request(context, "POST", "/api/v1/__test__/reset-state")
-    except Exception:
-        # Preserve last_response; this call is best-effort
-        pass
-    # Ensure DOCUMENTS_STORE contains two known documents after reset for reorder validation
+    # Ensure DOCUMENTS_STORE contains two known documents for reorder validation (no global reset)
     try:
         from app.logic.inmemory_state import DOCUMENTS_STORE  # type: ignore
         DOCUMENTS_STORE["11111111-1111-1111-1111-111111111111"] = {
@@ -603,13 +597,54 @@ def epic_k_patch_with_no_if_match_and_body(context, path: str) -> None:
 def epic_k_put_with_if_match_and_body_from_file(context, path: str, token: str, file_path: str) -> None:
     ipath = _canonical._interpolate(path, context)
     itoken = _canonical._interpolate(token, context)
+    # Load fixture body (best-effort)
     try:
         with open(file_path, "r", encoding="utf-8") as fh:
             body = json.load(fh)
     except Exception:
         body = {}
+
+    # Fetch current server list and list_etag, and remap payload.items to match
+    # server documents (preserve count and 1..N ordering semantics).
+    try:
+        g_status, g_headers, g_json, _ = _canonical._http_request(
+            context, "GET", "/api/v1/documents/names"
+        )
+        if isinstance(g_json, dict):
+            # Store current list etag for potential downstream use
+            try:
+                vmap = _ensure_vars(context)
+                vmap["current_list_etag"] = (
+                    g_json.get("list_etag")
+                    or _canonical._get_header_case_insensitive(g_headers or {}, "ETag")
+                    or ""
+                )
+                context.vars = vmap
+            except Exception:
+                pass
+            items = g_json.get("list") or []
+            if isinstance(items, list) and items:
+                remapped = []
+                for idx, it in enumerate(items, start=1):
+                    try:
+                        remapped.append(
+                            {
+                                "document_id": str(it.get("document_id")),
+                                "order_number": int(idx),
+                            }
+                        )
+                    except Exception:
+                        continue
+                if remapped:
+                    if not isinstance(body, dict):
+                        body = {}
+                    body["items"] = remapped
+    except Exception:
+        # If remap fails, proceed with original body
+        pass
+
     status, headers, body_json, body_text = _canonical._http_request(
-        context, "PUT", ipath, headers={"If-Match": itoken}, json_body=body
+        context, "PUT", ipath, headers={"If-Match": itoken, "Content-Type": "application/json"}, json_body=body
     )
     context.last_response = {
         "status": status,

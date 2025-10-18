@@ -36,7 +36,7 @@ def _expose_diag(resp: JSONResponse) -> None:
         ]
         resp.headers["Access-Control-Expose-Headers"] = ", ".join(names)
     except Exception:
-        pass
+        logger.error("expose_diag_failed", exc_info=True)
 
 
 def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONResponse]:
@@ -85,7 +85,7 @@ def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONR
             try:
                 resp.headers["X-If-Match-Normalized"] = _norm_token(if_match)
             except Exception:
-                pass
+                logger.error("set_if_match_normalized_failed", exc_info=True)
             _expose_diag(resp)
             return resp
         problem = {
@@ -101,7 +101,7 @@ def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONR
         try:
             resp.headers["X-If-Match-Normalized"] = _norm_token(if_match)
         except Exception:
-            pass
+            logger.error("set_if_match_normalized_failed", exc_info=True)
         _expose_diag(resp)
         return resp
     # Resolve screen_key and current screen ETag
@@ -139,7 +139,7 @@ def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONR
             from app.logic.etag import normalize_if_match as _nf  # type: ignore
             resp.headers["X-If-Match-Normalized"] = _nf(if_match)
         except Exception:
-            pass
+            logger.error("set_if_match_normalized_failed", exc_info=True)
         _expose_diag(resp)
         try:
             logger.info(
@@ -151,7 +151,7 @@ def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONR
                 str(current_etag) if current_etag is not None else None,
             )
         except Exception:
-            pass
+            logger.error("log_etag_enforce_failed", exc_info=True)
         return resp
     try:
         matched = compare_etag(current_etag, str(if_match))
@@ -167,7 +167,7 @@ def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONR
             str(current_etag) if current_etag is not None else None,
         )
     except Exception:
-        pass
+        logger.error("log_etag_enforce_failed", exc_info=True)
     if not matched:
         # Conflict semantics for autosave answers
         problem = {
@@ -184,7 +184,7 @@ def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONR
             from app.logic.etag import normalize_if_match as _nf  # type: ignore
             resp.headers["X-If-Match-Normalized"] = _nf(if_match)
         except Exception:
-            pass
+            logger.error("set_if_match_normalized_failed", exc_info=True)
         _expose_diag(resp)
         return resp
     return None
@@ -256,7 +256,7 @@ def _guard_for_doc_content(request: Request, if_match: str | None) -> Optional[J
                 str(request.url.path),
             )
         except Exception:
-            pass
+            logger.error("log_etag_enforce_failed", exc_info=True)
         return resp
     try:
         matched = compare_etag(current_etag, str(if_match))
@@ -270,7 +270,7 @@ def _guard_for_doc_content(request: Request, if_match: str | None) -> Optional[J
             str(request.url.path),
         )
     except Exception:
-        pass
+        logger.error("log_etag_enforce_failed", exc_info=True)
     if not matched:
         problem = {
             "title": "Precondition Failed",
@@ -350,7 +350,7 @@ def _guard_for_doc_reorder(request: Request, if_match: str | None) -> Optional[J
                 str(request.url.path),
             )
         except Exception:
-            pass
+            logger.error("log_etag_enforce_failed", exc_info=True)
         _expose_diag(resp)
         return resp
     try:
@@ -368,7 +368,7 @@ def _guard_for_doc_reorder(request: Request, if_match: str | None) -> Optional[J
             current=str(current) if current is not None else None,
         )
     except Exception:
-        pass
+        logger.error("log_etag_enforce_failed", exc_info=True)
     if not matched:
         problem = {
             "title": "Precondition Failed",
@@ -385,18 +385,17 @@ def _guard_for_doc_reorder(request: Request, if_match: str | None) -> Optional[J
         try:
             emit_etag_headers(resp, scope="document", token=str(current), include_generic=True)
         except Exception:
-            # Never fail guard on header emission issues
-            pass
+            logger.error("emit_etag_headers_failed", exc_info=True)
         # Preserve diagnostics via headers
         try:
             resp.headers["X-List-ETag"] = str(current)
         except Exception:
-            pass
+            logger.error("emit_list_etag_failed", exc_info=True)
         # Include normalized If-Match for diagnostics per Clarke
         try:
             resp.headers["X-If-Match-Normalized"] = normalize_if_match(if_match)
         except Exception:
-            pass
+            logger.error("set_if_match_normalized_failed", exc_info=True)
         _expose_diag(resp)
         # Short-circuit request by raising with headers preserved
         raise HTTPException(status_code=412, detail=problem, headers=dict(resp.headers))
@@ -439,7 +438,7 @@ def precondition_guard(
                     if str(k).lower() == "content-length":
                         _hdrs.pop(k, None)
             except Exception:
-                pass
+                logger.error("strip_content_length_failed", exc_info=True)
             raise HTTPException(status_code=result.status_code, detail=detail_obj, headers=_hdrs)
         return None
     # Document reorder
@@ -465,7 +464,7 @@ def precondition_guard(
                     if str(k).lower() == "content-length":
                         _hdrs.pop(k, None)
             except Exception:
-                pass
+                logger.error("strip_content_length_failed", exc_info=True)
             raise HTTPException(status_code=result.status_code, detail=detail_obj, headers=_hdrs)
         return None
     # Phase-0 scope: ignore other routes (no-op)

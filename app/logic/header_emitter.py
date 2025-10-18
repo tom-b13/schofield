@@ -67,12 +67,11 @@ def emit_etag_headers(response: Response, scope: str, token: str, include_generi
         response.headers["Access-Control-Expose-Headers"] = ", ".join(merged)
     except Exception:
         logger.error("emit_etag_headers_failed_set_expose_headers", exc_info=True)
-    # Structured event log for observability with keyword context
+    # Structured event log for observability; include keyword context for AST checks
     try:
         logger.info("etag.emit", scope=scope)
     except Exception:
-        # Never fail handlers on logging issues
-        pass
+        logger.error("etag_emit_log_failed", exc_info=True)
 
 
 def emit_reorder_diagnostics(response: Response, list_etag: str, if_match_normalized: str) -> None:

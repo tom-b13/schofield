@@ -124,13 +124,13 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
                         },
                     )
                 except Exception:
-                    logger.debug("refresh_check_log_failed_fallback", exc_info=True)
+                    logger.warning("refresh_check_log_failed_fallback", exc_info=True)
                 if matched:
                     # CLARKE: FINAL_GUARD epic-k-304-fallback
                     try:
                         logger.info("screen.refresh.304")
                     except Exception:
-                        logger.debug("refresh_304_log_failed_fallback", exc_info=True)
+                        logger.warning("refresh_304_log_failed_fallback", exc_info=True)
                     return Response(status_code=304)
             except Exception:
                 # Do not fail fallback due to conditional processing issues
@@ -208,13 +208,13 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
                     },
                 )
             except Exception:
-                logger.debug("refresh_check_log_failed_main", exc_info=True)
+                logger.warning("refresh_check_log_failed_main", exc_info=True)
             if matched:
                 # CLARKE: FINAL_GUARD epic-k-304-main
                 try:
                     logger.info("screen.refresh.304")
                 except Exception:
-                    logger.debug("refresh_304_log_failed_main", exc_info=True)
+                    logger.warning("refresh_304_log_failed_main", exc_info=True)
                 return Response(status_code=304)
         except Exception:
             logger.warning("if_none_match_check_failed_main_path", exc_info=True)

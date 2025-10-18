@@ -162,18 +162,17 @@ def autosave_answer(
                     payload.value_text = raw_json.get("value_text")
             if "value_number" in raw_json and getattr(payload, "value_number", None) is None:
                 vn = raw_json.get("value_number")
-                if isinstance(vn, (int, float, str)):
-                    try:
-                        payload.value_number = float(vn) if isinstance(vn, str) else vn
-                    except Exception:
-                        pass
+                if isinstance(vn, (int, float)):
+                    payload.value_number = vn
+                elif isinstance(vn, str):
+                    m = re.fullmatch(r"\s*([-+]?\d+(?:\.\d+)?)\s*", vn)
+                    if m:
+                        payload.value_number = float(m.group(1))
             if "value_bool" in raw_json and getattr(payload, "value_bool", None) is None:
                 vb = raw_json.get("value_bool")
-                try:
-                    payload.value_bool = canonical_bool(vb)
-                except Exception:
-                    # leave unset if not canonicalizable
-                    pass
+                cb = canonical_bool(vb)
+                if isinstance(cb, bool):
+                    payload.value_bool = cb
             # Generic 'value' fallback when typed aliases are absent
             if getattr(payload, "value_text", None) is None and getattr(payload, "value_number", None) is None and getattr(payload, "value_bool", None) is None:
                 if "value" in raw_json:
@@ -181,15 +180,16 @@ def autosave_answer(
                     if kind_lc in {"text", "short_string"} and isinstance(gen_val, str):
                         payload.value_text = gen_val
                     elif kind_lc == "number" and isinstance(gen_val, (int, float, str)):
-                        try:
-                            payload.value_number = float(gen_val) if isinstance(gen_val, str) else gen_val
-                        except Exception:
-                            pass
+                        if isinstance(gen_val, (int, float)):
+                            payload.value_number = gen_val
+                        elif isinstance(gen_val, str):
+                            m = re.fullmatch(r"\s*([-+]?\d+(?:\.\d+)?)\s*", gen_val)
+                            if m:
+                                payload.value_number = float(m.group(1))
                     elif kind_lc == "boolean":
-                        try:
-                            payload.value_bool = canonical_bool(gen_val)
-                        except Exception:
-                            pass
+                        cb2 = canonical_bool(gen_val)
+                        if isinstance(cb2, bool):
+                            payload.value_bool = cb2
     except Exception:
         logger.error("autosave_raw_body_recovery_failed", exc_info=True)
 
@@ -205,6 +205,14 @@ def autosave_answer(
             # Clarke: enum_single value token should resolve to option_id, not value_text
             if k == "enum_single" and getattr(payload, "option_id", None) is None and isinstance(gen, str) and gen != "":
                 try:
+                    try:
+                        logger.info(
+                            "enum_resolve_attempt q_id=%s value_token=%s",
+                            question_id,
+                            gen,
+                        )
+                    except Exception:
+                        logger.error("enum_resolve_attempt_log_failed", exc_info=True)
                     resolved_opt = resolve_enum_option(str(question_id), value_token=str(gen))
                 except Exception:
                     resolved_opt = None
@@ -214,25 +222,33 @@ def autosave_answer(
                     payload.value = None
                     if getattr(payload, "value_text", None) is not None:
                         payload.value_text = None
+                try:
+                    logger.info(
+                        "enum_resolve_result q_id=%s value_token=%s resolved_option_id=%s",
+                        question_id,
+                        gen,
+                        (resolved_opt or "unresolved"),
+                    )
+                except Exception:
+                    logger.error("enum_resolve_result_log_failed", exc_info=True)
                 # If not resolved, leave payload.value as-is for later 422 handling
             elif k in {"text", "short_string"} and getattr(payload, "value_text", None) is None and isinstance(gen, str):
                 payload.value_text = gen
                 payload.value = None
             elif k == "boolean" and getattr(payload, "value_bool", None) is None and isinstance(gen, (bool, str, int)):
-                try:
-                    payload.value_bool = canonical_bool(gen)
+                cb3 = canonical_bool(gen)
+                if isinstance(cb3, bool):
+                    payload.value_bool = cb3
                     payload.value = None
-                except Exception:
-                    # Leave as-is if not canonicalizable; later validation will handle
-                    pass
             elif k == "number" and getattr(payload, "value_number", None) is None and isinstance(gen, (int, float, str)):
-                try:
-                    # Accept numeric strings; best-effort parse
-                    parsed = float(gen) if isinstance(gen, str) else gen
-                    payload.value_number = parsed
+                if isinstance(gen, (int, float)):
+                    payload.value_number = gen
                     payload.value = None
-                except Exception:
-                    pass
+                elif isinstance(gen, str):
+                    m = re.fullmatch(r"\s*([-+]?\d+(?:\.\d+)?)\s*", gen)
+                    if m:
+                        payload.value_number = float(m.group(1))
+                        payload.value = None
             else:
                 # Fallback: if kind is unknown/unavailable, map string 'value' to value_text
                 if getattr(payload, "value_text", None) is None and isinstance(gen, str):
@@ -711,6 +727,15 @@ def autosave_answer(
             token=new_etag,
             include_generic=True,
         )
+        try:
+            logger.info(
+                "emit_headers_clear scope=%s etag=%s include_generic=%s",
+                "screen",
+                new_etag,
+                True,
+            )
+        except Exception:
+            logger.error("emit_headers_clear_log_failed", exc_info=True)
         now_visible_ids = [str(x) for x in (now_visible or [])]
         # Normalize now_hidden dicts→ids
         if now_hidden and isinstance(now_hidden[0], dict):
@@ -851,6 +876,20 @@ def autosave_answer(
         value,
         _payload_dump,
     )
+    # Request context + If-Match (raw and normalized)
+    try:
+        _ifm_norm = _normalize_etag(if_match)
+        logger.info(
+            "autosave_ctx method=%s path=%s rs_id=%s q_id=%s if_match_raw=%s if_match_norm=%s",
+            getattr(request, "method", ""),
+            (str(getattr(request, "url", getattr(request, "scope", {})).path) if hasattr(request, "url") else ""),
+            response_set_id,
+            question_id,
+            if_match,
+            _ifm_norm,
+        )
+    except Exception:
+        logger.error("autosave_ctx_log_failed", exc_info=True)
     # Additional finite-number guard per contract: check first
     if (kind or "").lower() == "number":
         # Accept common non-finite tokens and float non-finite values
@@ -931,9 +970,26 @@ def autosave_answer(
 
     # Architectural: enum resolution via dedicated resolver
     if (kind or "").lower() == "enum_single" and not payload.option_id:
+        # Instrument resolution attempt from value token
+        try:
+            logger.info(
+                "enum_value_resolve_attempt q_id=%s value_token=%s",
+                question_id,
+                (str(value) if value is not None else None),
+            )
+        except Exception:
+            logger.error("enum_value_resolve_attempt_log_failed", exc_info=True)
         resolved = resolve_enum_option(question_id, value_token=str(value) if value is not None else None)
         if resolved:
             payload.option_id = resolved
+            try:
+                logger.info(
+                    "enum_value_resolve_result q_id=%s resolved_option_id=%s",
+                    question_id,
+                    resolved,
+                )
+            except Exception:
+                logger.error("enum_value_resolve_result_log_failed", exc_info=True)
         else:
             # value token provided but not resolvable -> 422 per contract
             if value is not None:
@@ -996,12 +1052,34 @@ def autosave_answer(
             value,
             payload.option_id,
         )
+        # Log write attempt and outcome around upsert
+        try:
+            logger.info(
+                "upsert_attempt rs_id=%s q_id=%s option_id=%s",
+                response_set_id,
+                question_id,
+                payload.option_id,
+            )
+        except Exception:
+            logger.error("upsert_attempt_log_failed", exc_info=True)
         saved_result = upsert_answer(
             response_set_id=response_set_id,
             question_id=question_id,
             payload={"value": value, "option_id": payload.option_id},
         )
         write_performed = True
+        try:
+            _state_ver = (saved_result or {}).get("state_version") if isinstance(saved_result, dict) else None
+            _keys = (list(saved_result.keys()) if isinstance(saved_result, dict) else type(saved_result).__name__)
+            logger.info(
+                "upsert_result rs_id=%s q_id=%s state_version=%s result=%s",
+                response_set_id,
+                question_id,
+                _state_ver,
+                _keys,
+            )
+        except Exception:
+            logger.error("upsert_result_log_failed", exc_info=True)
 
         # Clarke directive: warm repository in-memory mirror immediately after
         # a successful upsert so subsequent GET reflects refreshed canonical
@@ -1184,6 +1262,15 @@ def autosave_answer(
         token=(screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag),
         include_generic=True,
     )
+    try:
+        logger.info(
+            "emit_headers_final scope=%s etag=%s include_generic=%s",
+            "screen",
+            (screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag),
+            True,
+        )
+    except Exception:
+        logger.error("emit_headers_final_log_failed", exc_info=True)
     logger.info(
         "autosave_ok rs_id=%s q_id=%s screen_key=%s new_etag=%s write_performed=%s now_visible=%s now_hidden=%s",
         response_set_id,
