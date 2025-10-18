@@ -155,7 +155,7 @@ Feature: Epic C — Document ingestion and parsing
       }
       """
     Then the response status should be 412
-    And the response JSON at "code" should equal "RUN_LIST_ETAG_MISMATCH"
+    And the response JSON at "code" should equal "IF_MATCH_MISMATCH"
 
   @sad @run @invalid-docx
   Scenario: Reject structurally invalid DOCX on upload

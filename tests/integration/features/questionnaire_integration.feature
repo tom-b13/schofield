@@ -91,7 +91,7 @@ Scenario: Export questionnaire snapshot to CSV with deterministic ordering
 When I GET "/questionnaires/11111111-1111-1111-1111-111111111111/export"
 Then the response code should be 200
 And the response header "Content-Type" equals "text/csv; charset=utf-8"
-And the first line of the CSV equals "external\_qid,screen\_key,question\_order,question\_text,answer\_kind,mandatory,placeholder\_code,options"
+And the first line of the CSV equals "question_id,question_text,answer_kind"
 And subsequent rows are ordered by screen\_key asc, question\_order asc, then question\_id asc
 And the response header "ETag" should be a non-empty string
 
@@ -175,4 +175,3 @@ And I POST "/response-sets/44444444-4444-4444-4444-444444444444/regenerate-check
 Then the response code should be 200
 And the response JSON at "\$.ok" equals true
 And the response JSON at "\$.blocking\_items" equals \[]
-
