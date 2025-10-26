@@ -1,1279 +1,763 @@
 openapi: 3.1.0
 info:
-  title: FastAPI
-  version: 0.1.0
+  title: Questionnaire Service API (Epic B, without conditionals)
+  version: 1.0.0
+  description: 'Backend API for questionnaires, screens, per-answer autosave, CSV
+    import/export, and generation gating. Conditional-question logic is out of scope
+    for this epic.
+
+    '
+servers:
+- url: /api/v1
+security:
+  - bearerAuth: []
 paths:
-  /api/v1/questionnaires/{id}:
+  /questionnaires/{id}:
     get:
-      tags:
-      - Questionnaires
-      - Import
-      - Export
-      - Questionnaires
       summary: Get questionnaire metadata and screens index (no questions)
       operationId: getQuestionnaire
+      tags: [Questionnaires]
+      security:
+      - bearerAuth: []
       parameters:
       - name: id
         in: path
         required: true
         schema:
           type: string
-          title: Id
+          format: uuid
       responses:
         '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
+          description: Questionnaire metadata and screens
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/questionnaires/import:
-    post:
-      tags:
-      - Questionnaires
-      - Import
-      - Export
-      - Import
-      summary: Import questionnaire CSV (v1.0)
-      operationId: importQuestionnaireCsv
-      requestBody:
-        content:
-          text/csv:
-            schema:
-              type: string
-              format: binary
-              title: Csv Export
-        required: true
-      responses:
-        '200':
-          description: Successful Response
+                type: object
+                required:
+                - questionnaire_id
+                - name
+                - screens
+                properties:
+                  questionnaire_id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  description:
+                    type: string
+                  screens:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScreenIndexItem'
+        '404':
+          $ref: '#/components/responses/NotFound'
           content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/questionnaires/{id}/export:
+                $ref: '#/components/schemas/Problem'
+  /response-sets/{response_set_id}/screens/{screen_id}:
     get:
-      tags:
-      - Questionnaires
-      - Import
-      - Export
-      - Export
-      summary: Export questionnaire CSV (v1.0)
-      operationId: exportQuestionnaireCsv
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/response-sets/{response_set_id}/screens/{screen_key}:
-    get:
-      tags:
-      - ScreenView
-      - Gating
-      - ScreenView
       summary: Get a screen with its questions and any existing answers
+      description: Pre-population may be applied to answers prior to serialization.
       operationId: getScreenWithAnswers
+      tags: [ScreenView]
+      security:
+      - bearerAuth: []
       parameters:
       - name: response_set_id
         in: path
         required: true
         schema:
           type: string
-          title: Response Set Id
-      - name: screen_key
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Screen Key
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ScreenViewEnvelope'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/response-sets/{id}/regenerate-check:
-    post:
-      tags:
-      - ScreenView
-      - Gating
-      - Gating
-      summary: Check whether generation may proceed (gating)
-      operationId: regenerateCheck
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/response-sets/{response_set_id}/answers/{question_id}:
-    patch:
-      tags:
-      - Autosave
-      summary: Autosave a single answer for a question
-      operationId: autosaveAnswer
-      parameters:
-      - name: response_set_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Response Set Id
-      - name: question_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Question Id
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AnswerUpsertModel'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '409':
-          content:
-            application/problem+json: {}
-          description: Conflict
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    delete:
-      tags:
-      - Autosave
-      summary: Delete an answer (skeleton)
-      description: 'Delete a persisted answer row and emit updated ETag headers (204).
-
-
-        Clarke Phase-0: If-Match enforcement is intentionally skipped for DELETE.
-
-        Always perform the delete (best-effort) and emit fresh Screen-ETag and
-
-        generic ETag on success.'
-      operationId: delete_answer_api_v1_response_sets__response_set_id__answers__question_id__delete
-      parameters:
-      - name: response_set_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Response Set Id
-      - name: question_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Question Id
-      - name: If-Match
-        in: header
-        required: true
-        schema:
-          type: string
-          title: If-Match
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '409':
-          content:
-            application/problem+json: {}
-          description: Conflict
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/response-sets/{response_set_id}/answers:batch:
-    post:
-      tags:
-      - Autosave
-      summary: Batch upsert answers
-      description: "Batch upsert endpoint implementing per-item outcomes.\n\n- Parses\
-        \ a BatchUpsertRequest-like body with an `items` array.\n- Each item must\
-        \ include `question_id`, `etag`, and `body` (AnswerPatchBody shape).\n- Performs\
-        \ per-item optimistic concurrency against the screen ETag,\n  and upserts\
-        \ or clears the answer using the same primitives as single PATCH.\n- Returns\
-        \ 200 with a `batch_result.items` array preserving input order."
-      operationId: batch_upsert_answers_api_v1_response_sets__response_set_id__answers_batch_post
-      parameters:
-      - name: response_set_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Response Set Id
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-              title: Payload
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '409':
-          content:
-            application/problem+json: {}
-          description: Conflict
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/response-sets:
-    post:
-      tags:
-      - ResponseSets
-      summary: Create a response set (skeleton)
-      description: 'Create a response set and return its identifier and metadata.
-
-
-        Behaviour: returns 201 Created with outputs containing:
-
-        - response_set_id: UUID v4 string
-
-        - name: echoed input name
-
-        - created_at: RFC3339 timestamp in UTC with trailing ''Z''
-
-        - etag: non-empty opaque string'
-      operationId: create_response_set_api_v1_response_sets_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              additionalProperties: true
-              type: object
-              title: Payload
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '428':
-          description: Precondition Required
-          content:
-            application/problem+json: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/response-sets/{response_set_id}:
-    delete:
-      tags:
-      - ResponseSets
-      summary: Delete a response set (skeleton)
-      description: 'Skeleton delete endpoint returning 204 with a placeholder ETag.
-
-
-        No concurrency enforcement or cascading logic; anchor only.'
-      operationId: delete_response_set_api_v1_response_sets__response_set_id__delete
-      parameters:
-      - name: response_set_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Response Set Id
-      - name: If-Match
-        in: header
-        required: true
-        schema:
-          type: string
-          title: If-Match
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/__test__/reset-state:
-    post:
-      tags:
-      - Documents
-      summary: Reset in-memory stores (test only)
-      description: 'Clear all in-memory state used by Epic C/D.
-
-
-        This endpoint is test-only and ensures a clean slate between scenarios.
-
-        It resets document metadata, content blobs, idempotency maps and
-
-        placeholder/question caches. Returns 204 No Content.'
-      operationId: post_test_reset_state_api_v1___test___reset_state_post
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-  /api/v1/documents:
-    post:
-      tags:
-      - Documents
-      summary: Create a document
-      operationId: create_document_api_v1_documents_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              additionalProperties: true
-              type: object
-              title: Payload
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/documents/names:
-    get:
-      tags:
-      - Documents
-      summary: List document names
-      operationId: get_document_names_api_v1_documents_names_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-  /api/v1/documents/{document_id}:
-    get:
-      tags:
-      - Documents
-      summary: Get document metadata
-      operationId: get_document_api_v1_documents__document_id__get
-      parameters:
-      - name: document_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Document Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    patch:
-      tags:
-      - Documents
-      summary: Patch document (skeleton)
-      operationId: patch_document_api_v1_documents__document_id__patch
-      parameters:
-      - name: document_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Document Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-              title: Body
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    delete:
-      tags:
-      - Documents
-      summary: Delete document
-      operationId: delete_document_api_v1_documents__document_id__delete
-      parameters:
-      - name: document_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Document Id
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '412':
-          content:
-            application/problem+json: {}
-          description: Precondition Failed
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/documents/{document_id}/content:
-    put:
-      tags:
-      - Documents
-      summary: Upload DOCX content
-      operationId: put_document_content_api_v1_documents__document_id__content_put
-      parameters:
-      - name: document_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Document Id
-      - name: Idempotency-Key
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Idempotency-Key
-      - name: Content-Type
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Content-Type
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '412':
-          content:
-            application/problem+json: {}
-          description: Precondition Failed
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    get:
-      tags:
-      - Documents
-      summary: Download DOCX content
-      operationId: get_document_content_api_v1_documents__document_id__content_get
-      parameters:
-      - name: document_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Document Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/documents/order:
-    put:
-      tags:
-      - Documents
-      summary: Reorder documents
-      operationId: put_documents_order_api_v1_documents_order_put
-      parameters:
-      - name: X-Request-ID
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Request-Id
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-              title: Body
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '412':
-          content:
-            application/problem+json: {}
-          description: Precondition Failed
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/transforms/suggest:
-    post:
-      tags:
-      - Transforms
-      summary: Suggest transforms
-      description: accepts schemas/placeholder_probe.schema.json; returns schemas/suggest_response.schema.json
-      operationId: post_transforms_suggest_api_v1_transforms_suggest_post
-      parameters:
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/transforms/preview:
-    post:
-      tags:
-      - Transforms
-      summary: Preview transforms
-      description: returns schemas/transforms_preview_response.schema.json
-      operationId: post_transforms_preview_api_v1_transforms_preview_post
-      parameters:
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/transforms/catalog:
-    get:
-      tags:
-      - Transforms
-      summary: Transforms catalog
-      description: returns schemas/transforms_catalog_response.schema.json
-      operationId: get_transforms_catalog_api_v1_transforms_catalog_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-  /api/v1/placeholders/bind:
-    post:
-      tags:
-      - Placeholders
-      - Bindings
-      summary: Bind placeholder
-      description: 'headers_validator: schemas/http_headers.schema.json; Idempotency-Key;
-        If-Match; uses schemas/placeholder_probe.schema.json -> schemas/probe_receipt.schema.json;
-        returns schemas/bind_result.schema.json'
-      operationId: post_placeholders_bind_api_v1_placeholders_bind_post
-      parameters:
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      requestBody:
-        content:
-          application/json:
-            schema:
-              anyOf:
-              - type: object
-                additionalProperties: true
-              - type: 'null'
-              title: Probe
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/placeholders/unbind:
-    post:
-      tags:
-      - Placeholders
-      - Bindings
-      summary: Unbind placeholder
-      description: 'headers_validator: schemas/http_headers.schema.json; Idempotency-Key;
-        If-Match; returns schemas/unbind_response.schema.json'
-      operationId: post_placeholders_unbind_api_v1_placeholders_unbind_post
-      parameters:
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '428':
-          content:
-            application/problem+json: {}
-          description: Precondition Required
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/questions/{id}/placeholders:
-    get:
-      tags:
-      - Placeholders
-      - Bindings
-      summary: List placeholders by question
-      description: returns schemas/list_placeholders_response.schema.json
-      operationId: get_question_placeholders_api_v1_questions__id__placeholders_get
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Id
-      - name: document_id
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Document Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/documents/{id}/bindings:purge:
-    post:
-      tags:
-      - Bindings
-      - Documents
-      summary: Purge bindings for a document
-      description: accepts schemas/purge_request.schema.json; returns schemas/purge_response.schema.json
-      operationId: post_document_bindings_purge_api_v1_documents__id__bindings_purge_post
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/authoring/screens:
-    post:
-      tags:
-      - Authoring
-      summary: Create Screen Simple
-      description: 'Create a screen using a simple JSON payload.
-
-
-        Expects JSON with keys: questionnaire_id, title (screen_key optional/ignored).
-
-        Emits Screen-ETag and Questionnaire-ETag headers; does not include generic
-        ETag.'
-      operationId: create_screen_simple_api_v1_authoring_screens_post
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-  /api/v1/authoring/questionnaires/{questionnaire_id}/screens:
-    post:
-      tags:
-      - Authoring
-      summary: Create Screen
-      operationId: create_screen_api_v1_authoring_questionnaires__questionnaire_id__screens_post
-      parameters:
-      - name: questionnaire_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Questionnaire Id
-      - name: Idempotency-Key
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Idempotency-Key
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/authoring/questionnaires/{questionnaire_id}/questions:
-    post:
-      tags:
-      - Authoring
-      summary: Create Question
-      operationId: create_question_api_v1_authoring_questionnaires__questionnaire_id__questions_post
-      parameters:
-      - name: questionnaire_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Questionnaire Id
-      - name: Idempotency-Key
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Idempotency-Key
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/authoring/questionnaires/{questionnaire_id}/screens/{screen_id}:
-    patch:
-      tags:
-      - Authoring
-      summary: Update Screen
-      operationId: update_screen_api_v1_authoring_questionnaires__questionnaire_id__screens__screen_id__patch
-      parameters:
-      - name: questionnaire_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Questionnaire Id
+          format: uuid
       - name: screen_id
         in: path
         required: true
         schema:
           type: string
-          title: Screen Id
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
+          format: uuid
       responses:
         '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
+          description: Screen view (no conditional filtering)
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Screen-ETag:
+              description: Domain ETag for screen resources.
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/authoring/questions/{question_id}/position:
+                $ref: '#/components/schemas/ScreenView'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /response-sets/{response_set_id}/answers/{question_id}:
     patch:
-      tags:
-      - Authoring
-      summary: Update Question Position
-      operationId: update_question_position_api_v1_authoring_questions__question_id__position_patch
+      summary: Autosave a single answer for a question
+      operationId: autosaveAnswer
+      tags: [Autosave]
+      security:
+      - bearerAuth: []
       parameters:
+      - name: response_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       - name: question_id
         in: path
         required: true
         schema:
           type: string
-          title: Question Id
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/authoring/questions/{question_id}:
-    patch:
-      tags:
-      - Authoring
-      summary: Update Question
-      operationId: update_question_api_v1_authoring_questions__question_id__patch
-      parameters:
-      - name: question_id
-        in: path
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
         required: true
-        schema:
-          type: string
-          title: Question Id
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerUpsert'
       responses:
         '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
+          description: Saved successfully
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/authoring/questions/{question_id}/visibility:
-    patch:
-      tags:
-      - Authoring
-      summary: Update Question Visibility
-      operationId: update_question_visibility_api_v1_authoring_questions__question_id__visibility_patch
-      parameters:
-      - name: question_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Question Id
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: If-Match
-      responses:
-        '200':
-          description: Successful Response
+                type: object
+                required:
+                  - saved
+                  - etag
+                properties:
+                  saved:
+                    type: boolean
+                  etag:
+                    type: string
+                  suppressed_answers:
+                    description: Identifiers of newly hidden questions that currently have stored answers.
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QuestionId'
+                  visibility_delta:
+                    description: Visibility changes since the last GET/ETag for this screen.
+                    type: object
+                    properties:
+                      now_visible:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/QuestionId'
+                      now_hidden:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/QuestionId'
+        '409':
+          $ref: '#/components/responses/Conflict'
           content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /__test__/reset-state:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /response-sets/{id}/answers:
     post:
-      summary: Test-only reset state
-      description: 'Clear in-memory stores and caches for a clean test precondition.
-
-
-        This endpoint exists only for integration testing and returns 204 with no
-        body.'
-      operationId: reset_state___test___reset_state_post
+      summary: Batch upsert answers (optional; used by importer/integrations)
+      operationId: batchUpsertAnswers
+      tags: [Ingestion]
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerDeltaBatch'
       responses:
-        '200':
-          description: Successful Response
+        '202':
+          description: Accepted; results per delta
           content:
             application/json:
-              schema: {}
-  /__test__/events:
+              schema:
+                type: object
+                required:
+                - results
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - question_id
+                      - saved
+                      properties:
+                        question_id:
+                          type: string
+                          format: uuid
+                        saved:
+                          type: boolean
+                        error:
+                          $ref: '#/components/schemas/ValidationItem'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /response-sets/{id}/regenerate-check:
+    post:
+      summary: Check whether generation may proceed (gating)
+      operationId: regenerateCheck
+      tags: [Gating]
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Gating status
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                - mandatory_total
+                - mandatory_answered
+                properties:
+                  ok:
+                    type: boolean
+                  mandatory_total:
+                    type: integer
+                    minimum: 0
+                  mandatory_answered:
+                    type: integer
+                    minimum: 0
+                  optional_answered:
+                    type: integer
+                    minimum: 0
+                  total_questions:
+                    type: integer
+                    minimum: 0
+                  blocking_outstanding:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+        '404':
+          $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /authoring/screens/{screen_id}:
     get:
-      summary: Test-only events feed
-      description: 'Expose buffered domain events for integration assertions.
-
-
-        Does not clear the buffer; returns a JSON array of event objects.'
-      operationId: get_test_events___test___events_get
+      summary: Get authoring screen metadata
+      tags: [Authoring]
+      parameters:
+      - name: screen_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
-          description: Successful Response
+          description: Authoring screen metadata
+          headers:
+            Screen-ETag:
+              description: Domain ETag for screen resources in authoring context.
+              schema:
+                type: string
           content:
             application/json:
-              schema: {}
-  /health:
+              schema:
+                type: object
+                properties:
+                  screen_id: { type: string, format: uuid }
+                  title: { type: string }
+        '404':
+          $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /questionnaires/import:
+    post:
+      summary: Import questionnaire CSV (v1.0)
+      operationId: importQuestionnaireCsv
+      tags: [Import]
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          text/csv; charset=utf-8:
+            schema:
+              $ref: '#/components/schemas/CSVImportFile'
+      responses:
+        '200':
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+  /questionnaires/{id}/export:
     get:
-      summary: Health
-      operationId: health_health_get
+      summary: Export questionnaire CSV (v1.0)
+      description: |
+        Stream the CSV export using a read-only, repeatable-read (or equivalent snapshot) to ensure deterministic results. The endpoint will stream data to the client.
+        Order by screen_key NULLS LAST, question_order NULLS LAST, then question_id for stable output.
+      operationId: exportQuestionnaireCsv
+      tags: [Export]
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
-          description: Successful Response
+          description: CSV snapshot streamed; read-only, repeatable-read transaction (or equivalent snapshot). Order by screen_key NULLS LAST, question_order NULLS LAST, then question_id.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+              description: Strong validator computed from payload (e.g., SHA-256 over rowset).
+            Questionnaire-ETag:
+              description: Domain ETag for questionnaire resources.
+              schema:
+                type: string
           content:
-            application/json:
-              schema: {}
+            text/csv; charset=utf-8:
+              schema:
+                $ref: '#/components/schemas/CSVExportSnapshot'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  headers:
+    ETag:
+      description: Strong validator computed from payload (e.g., SHA-256 over rowset).
+      schema:
+        type: string
+  responses:
+    NotFound:
+      description: Not Found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Conflict (e.g., If-Match precondition failed)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ValidationError:
+      description: One or more validation errors occurred
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblem'
   schemas:
-    AnswerUpsertModel:
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+      required: [title, status]
+    ValidationProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              path: { type: string }
+              message: { type: string }
+            required: [code, path]
+      required: [errors]
+    ScreenIndexItem:
+      type: object
+      required:
+      - screen_id
+      - screen_key
+      - title
+      - question_count
+      properties:
+        screen_id:
+          type: string
+          format: uuid
+        screen_key:
+          type: string
+        title:
+          type: string
+        question_count:
+          type: integer
+          minimum: 0
+    QuestionWithAnswer:
+      type: object
+      required:
+      - question_id
+      - question_text
+      - answer_kind
+      - mandatory
+      properties:
+        question_id:
+          type: string
+          format: uuid
+        external_qid:
+          type: string
+        question_text:
+          type: string
+        mandatory:
+          type: boolean
+        placeholder_code:
+          type: string
+          nullable: true
+        options:
+          description: Present only for enum_single
+          type: array
+          items:
+            type: object
+            required:
+            - option_id
+            - value
+            properties:
+              option_id:
+                type: string
+                format: uuid
+              value:
+                type: string
+              label:
+                type: string
+        answer:
+          description: Existing answer if present
+          type: object
+          properties:
+            value: {}
+            option_id:
+              type: string
+              format: uuid
+            answered_at:
+              type: string
+              format: date-time
+        answer_kind:
+          type: string
+          enum:
+          - short_string
+          - long_text
+          - boolean
+          - number
+          - enum_single
+          - date
+    ScreenView:
+      type: object
+      required:
+      - screen_id
+      - response_set_id
+      - screen_key
+      - title
+      - questions
+      properties:
+        screen_id:
+          type: string
+          format: uuid
+        response_set_id:
+          type: string
+          format: uuid
+        screen_key:
+          type: string
+        title:
+          type: string
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionWithAnswer'
+    AnswerUpsert:
+      type: object
+      additionalProperties: false
       properties:
         value:
-          anyOf:
+          description: Type-appropriate answer value
+          oneOf:
           - type: string
-          - type: integer
           - type: number
           - type: boolean
-          - type: 'null'
-          title: Value
-        value_bool:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: Value Bool
-        value_number:
-          anyOf:
-          - type: number
-          - type: integer
-          - type: 'null'
-          title: Value Number
-        value_text:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Value Text
         option_id:
-          anyOf:
+          description: Required when answer_kind is enum_single
+          type: string
+          format: uuid
+      anyOf:
+      - required:
+        - value
+      - required:
+        - option_id
+      required: []
+    AnswerDelta:
+      type: object
+      required:
+      - question_id
+      additionalProperties: false
+      properties:
+        question_id:
+          type: string
+          format: uuid
+        value:
+          oneOf:
           - type: string
-          - type: 'null'
-          title: Option Id
-        clear:
-          anyOf:
+          - type: number
           - type: boolean
-          - type: 'null'
-          title: Clear
+        option_id:
+          type: string
+          format: uuid
+    AnswerDeltaBatch:
       type: object
-      title: AnswerUpsertModel
-    HTTPValidationError:
+      required:
+      - items
       properties:
-        detail:
+        items:
+          type: array
+          minItems: 1
           items:
-            $ref: '#/components/schemas/ValidationError'
-          type: array
-          title: Detail
-      type: object
-      title: HTTPValidationError
-    ScreenAlias:
-      properties:
-        screen_key:
-          type: string
-          title: Screen Key
-        screen_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Screen Id
+            $ref: '#/components/schemas/AnswerDelta'
+    Problem:
       type: object
       required:
-      - screen_key
-      title: ScreenAlias
-    ScreenView:
+      - type
+      - title
+      - status
       properties:
-        screen_key:
-          type: string
-          title: Screen Key
-        questions:
-          items: {}
-          type: array
-          title: Questions
-        etag:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Etag
-      type: object
-      required:
-      - screen_key
-      - questions
-      title: ScreenView
-    ScreenViewEnvelope:
-      properties:
-        screen_view:
-          $ref: '#/components/schemas/ScreenView'
-        screen:
-          anyOf:
-          - $ref: '#/components/schemas/ScreenAlias'
-          - type: 'null'
-      type: object
-      required:
-      - screen_view
-      title: ScreenViewEnvelope
-      description: 'Envelope for GET screen responses.
-
-
-        Matches the contract expected by integration: include both
-
-        `screen_view` and a `screen` alias object.'
-    ValidationError:
-      properties:
-        loc:
-          items:
-            anyOf:
-            - type: string
-            - type: integer
-          type: array
-          title: Location
-        msg:
-          type: string
-          title: Message
         type:
           type: string
-          title: Error Type
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+    ValidationItem:
       type: object
       required:
-      - loc
-      - msg
-      - type
-      title: ValidationError
+      - path
+      - message
+      properties:
+        path:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+    ValidationProblem:
+      allOf:
+      - $ref: '#/components/schemas/Problem'
+      - type: object
+        required:
+        - errors
+        properties:
+          errors:
+            type: array
+            items:
+              $ref: '#/components/schemas/ValidationItem'
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationItem'
+    QuestionnaireId:
+      title: QuestionnaireId
+      type: string
+      format: uuid
+      description: Unique identifier for questionnaire objects.
+    ResponseSetId:
+      title: ResponseSetId
+      type: string
+      format: uuid
+      description: Unique identifier for responseset objects.
+    ScreenId:
+      title: ScreenId
+      type: string
+      format: uuid
+      description: Unique identifier for screen objects.
+    QuestionId:
+      title: QuestionId
+      type: string
+      format: uuid
+      description: Unique identifier for question objects.
+    CSVImportFile:
+      title: CSVImportFile
+      type: string
+      contentMediaType: text/csv
+      description: UTF-8, RFC4180 CSV file for questionnaire import.
+    ImportResult:
+      title: ImportResult
+      type: object
+      required:
+      - created
+      - updated
+      - deleted
+      - errors
+      properties:
+        created:
+          type: integer
+        updated:
+          type: integer
+        deleted:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+            required:
+            - line
+            - message
+            properties:
+              line:
+                type: integer
+              message:
+                type: string
+    CSVExportSnapshot:
+      title: CSVExportSnapshot
+      type: string
+      contentMediaType: text/csv
+      description: CSV snapshot produced by export.
+    Questionnaire:
+      type: object
+      properties:
+        questionnaire_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+    Screen:
+      type: object
+      properties:
+        screen_id:
+          type: string
+          format: uuid
+        questionnaire_id:
+          type: string
+          format: uuid
+        screen_key:
+          type: string
+        title:
+          type: string
+    Question:
+      type: object
+      properties:
+        question_id:
+          type: string
+          format: uuid
+        screen_id:
+          type: string
+          format: uuid
+        question_text:
+          type: string
+        answer_kind:
+          type: string
+        mandatory:
+          type: boolean
+    Answer:
+      type: object
+      properties:
+        response_set_id:
+          type: string
+          format: uuid
+        question_id:
+          type: string
+          format: uuid
+        value: {}
+        option_id:
+          type: string
+          format: uuid
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Unique key for idempotent requests.
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+      description: ETag precondition for optimistic concurrency.
+    
+    
+    
+    
+    
+    
