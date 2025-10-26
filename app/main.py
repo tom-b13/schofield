@@ -174,7 +174,7 @@ def create_app() -> FastAPI:
                 # Explicitly verify Epic G columns exist; if missing, force migrations
                 epic_g_missing = False
                 try:
-                    conn.execute(text("SELECT screen_order FROM screens LIMIT 1"))
+                    conn.execute(text("SELECT screen_order FROM screen LIMIT 1"))
                 except Exception:
                     epic_g_missing = True
                 try:

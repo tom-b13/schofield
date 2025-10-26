@@ -11,12 +11,22 @@ from app.db.base import get_engine
 def get_questionnaire_metadata(questionnaire_id: str) -> tuple[str, str] | None:
     eng = get_engine()
     with eng.connect() as conn:
-        row = conn.execute(
-            sql_text(
-                "SELECT name, description FROM questionnaires WHERE questionnaire_id = :id"
-            ),
-            {"id": questionnaire_id},
-        ).fetchone()
+        # Primary: test schema table name 'questionnaire'
+        try:
+            row = conn.execute(
+                sql_text(
+                    "SELECT name, description FROM questionnaire WHERE questionnaire_id = :id"
+                ),
+                {"id": questionnaire_id},
+            ).fetchone()
+        except Exception:
+            # Fallback to legacy pluralised table if present
+            row = conn.execute(
+                sql_text(
+                    "SELECT name, description FROM questionnaires WHERE questionnaire_id = :id"
+                ),
+                {"id": questionnaire_id},
+            ).fetchone()
     if not row:
         return None
     return str(row[0]), str(row[1])
@@ -25,10 +35,16 @@ def get_questionnaire_metadata(questionnaire_id: str) -> tuple[str, str] | None:
 def questionnaire_exists(questionnaire_id: str) -> bool:
     eng = get_engine()
     with eng.connect() as conn:
-        exists = conn.execute(
-            sql_text("SELECT 1 FROM questionnaires WHERE questionnaire_id = :id"),
-            {"id": questionnaire_id},
-        ).fetchone()
+        try:
+            exists = conn.execute(
+                sql_text("SELECT 1 FROM questionnaire WHERE questionnaire_id = :id"),
+                {"id": questionnaire_id},
+            ).fetchone()
+        except Exception:
+            exists = conn.execute(
+                sql_text("SELECT 1 FROM questionnaires WHERE questionnaire_id = :id"),
+                {"id": questionnaire_id},
+            ).fetchone()
     return exists is not None
 
 
@@ -51,11 +67,11 @@ def list_questions_for_questionnaire_export(questionnaire_id: str) -> Iterable[d
                        q.screen_key,
                        q.question_order,
                        q.question_text,
-                       q.answer_type AS answer_kind,
+                       q.answer_kind AS answer_kind,
                        q.mandatory,
                        q.placeholder_code
                 FROM questionnaire_question q
-                JOIN screens s ON s.screen_key = q.screen_key
+                JOIN screen s ON s.screen_key = q.screen_key
                 WHERE s.questionnaire_id = :qid
                 ORDER BY q.question_order ASC, q.question_id ASC
                 """

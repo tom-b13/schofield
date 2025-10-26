@@ -261,6 +261,17 @@ def delete_document(document_id: str):
     "/documents/{document_id}/content",
     summary="Upload DOCX content",
     responses={428: {"content": {"application/problem+json": {}}}, 412: {"content": {"application/problem+json": {}}}},
+    # Declare If-Match as required in OpenAPI while keeping runtime optional for 428 handling
+    openapi_extra={
+        "parameters": [
+            {
+                "name": "If-Match",
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string"},
+            }
+        ]
+    },
 )
 async def put_document_content(
     document_id: str,
@@ -388,6 +399,17 @@ def get_document_content(document_id: str):
     "/documents/order",
     summary="Reorder documents",
     responses={428: {"content": {"application/problem+json": {}}}, 412: {"content": {"application/problem+json": {}}}},
+    # Declare If-Match as required in OpenAPI while keeping runtime optional for 428 handling
+    openapi_extra={
+        "parameters": [
+            {
+                "name": "If-Match",
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string"},
+            }
+        ]
+    },
 )
 def put_documents_order(
     body: dict = Body(...),

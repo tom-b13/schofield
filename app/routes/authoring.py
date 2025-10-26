@@ -550,6 +550,17 @@ async def update_question_position(
         val = payload.get("screen_id")
         if isinstance(val, str) and val.strip():
             target_screen = val.strip()
+    # Clarke instrumentation: log payload keys, proposed_order and target_screen
+    try:
+        _keys = list(payload.keys()) if isinstance(payload, dict) else []
+        logger.info(
+            "update_question_position.debug payload_keys=%s proposed_order=%s target_screen=%s",
+            _keys,
+            proposed_order,
+            target_screen,
+        )
+    except Exception:
+        logger.error("update_question_position.debug logging failed", exc_info=True)
     if proposed_order is not None:
         try:
             if int(proposed_order) <= 0:
@@ -557,12 +568,20 @@ async def update_question_position(
                 detail = "invalid proposed question order"
                 primary_code = errors[0]["code"]
                 content = {"title": "Unprocessable Entity", "status": 422, "detail": detail, "code": primary_code, "errors": errors}
+                logger.info(
+                    "update_question_position.validation_fail reason=invalid_proposed_order value=%s",
+                    proposed_order,
+                )
                 return JSONResponse(status_code=422, content=content, media_type="application/problem+json")
         except Exception:
             errors = [{"path": "$.proposed_question_order", "code": "invalid_or_non_positive"}]
             detail = "invalid proposed question order"
             primary_code = errors[0]["code"]
             content = {"title": "Unprocessable Entity", "status": 422, "detail": detail, "code": primary_code, "errors": errors}
+            logger.info(
+                "update_question_position.validation_fail reason=invalid_proposed_order value=%s",
+                proposed_order,
+            )
             return JSONResponse(status_code=422, content=content, media_type="application/problem+json")
 
     # Handle cross-screen move validation and persistence if requested
@@ -586,6 +605,11 @@ async def update_question_position(
             detail = "target screen is outside current questionnaire"
             primary_code = errors[0]["code"]
             content = {"title": "Unprocessable Entity", "status": 422, "detail": detail, "code": primary_code, "errors": errors}
+            logger.info(
+                "update_question_position.validation_fail reason=cross_questionnaire screen_id=%s target_screen=%s",
+                screen_id,
+                target_screen,
+            )
             return JSONResponse(status_code=422, content=content, media_type="application/problem+json")
         # Persist move and reindex both source and target containers
         try:
@@ -877,4 +901,3 @@ async def update_question_visibility(
     except Exception:
         logger.error("update_question_visibility.result logging failed", exc_info=True)
     return resp
-

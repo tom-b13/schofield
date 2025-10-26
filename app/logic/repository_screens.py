@@ -39,12 +39,12 @@ def get_screen_metadata(screen_id: str) -> tuple[str, str] | None:
     with eng.connect() as conn:
         if is_uuid:
             row = conn.execute(
-                sql_text("SELECT screen_key, title FROM screens WHERE screen_id = :sid"),
+                sql_text("SELECT screen_key, title FROM screen WHERE screen_id = :sid"),
                 {"sid": screen_id},
             ).fetchone()
         else:
             row = conn.execute(
-                sql_text("SELECT screen_key, title FROM screens WHERE screen_key = :skey"),
+                sql_text("SELECT screen_key, title FROM screen WHERE screen_key = :skey"),
                 {"skey": screen_id},
             ).fetchone()
     if not row:
@@ -61,7 +61,7 @@ def get_screen_id_for_key(screen_key: str) -> str | None:
     eng = get_engine()
     with eng.connect() as conn:
         row = conn.execute(
-            sql_text("SELECT screen_id FROM screens WHERE screen_key = :skey"),
+            sql_text("SELECT screen_id FROM screen WHERE screen_key = :skey"),
             {"skey": screen_key},
         ).fetchone()
     if not row:
@@ -79,7 +79,7 @@ def get_screen_by_key(screen_key: str) -> dict | None:
     eng = get_engine()
     with eng.connect() as conn:
         row = conn.execute(
-            sql_text("SELECT screen_id, screen_key FROM screens WHERE screen_key = :skey"),
+            sql_text("SELECT screen_id, screen_key FROM screen WHERE screen_key = :skey"),
             {"skey": screen_key},
         ).fetchone()
     if not row:
@@ -111,7 +111,7 @@ def get_screen_key_for_question(question_id: str) -> str | None:
             if not row or row[0] is None:
                 row = conn.execute(
                     sql_text(
-                        "SELECT s.screen_key FROM questionnaire_question q JOIN screens s ON q.screen_id = s.screen_id WHERE q.question_id = :qid"
+                        "SELECT s.screen_key FROM questionnaire_question q JOIN screen s ON q.screen_id = s.screen_id WHERE q.question_id = :qid"
                     ),
                     {"qid": question_id},
                 ).fetchone()
@@ -121,7 +121,7 @@ def get_screen_key_for_question(question_id: str) -> str | None:
             with eng.connect() as conn:
                 row = conn.execute(
                     sql_text(
-                        "SELECT s.screen_key FROM questionnaire_question q JOIN screens s ON q.screen_id = s.screen_id WHERE q.question_id = :qid"
+                        "SELECT s.screen_key FROM questionnaire_question q JOIN screen s ON q.screen_id = s.screen_id WHERE q.question_id = :qid"
                     ),
                     {"qid": question_id},
                 ).fetchone()
@@ -145,7 +145,7 @@ def list_questions_for_screen(screen_key: str) -> list[dict]:
             rows = conn.execute(
                 sql_text(
                     """
-                    SELECT question_id, external_qid, question_text, answer_type, mandatory, question_order
+                    SELECT question_id, external_qid, question_text, answer_kind, mandatory, question_order
                     FROM questionnaire_question
                     WHERE screen_key = :skey
                     ORDER BY question_order ASC, question_id ASC
@@ -158,9 +158,9 @@ def list_questions_for_screen(screen_key: str) -> list[dict]:
             rows = conn.execute(
                 sql_text(
                     """
-                    SELECT q.question_id, q.external_qid, q.question_text, q.answer_type, q.mandatory, q.question_order
+                    SELECT q.question_id, q.external_qid, q.question_text, q.answer_kind, q.mandatory, q.question_order
                     FROM questionnaire_question q
-                    JOIN screens s ON q.screen_id = s.screen_id
+                    JOIN screen s ON q.screen_id = s.screen_id
                     WHERE s.screen_key = :skey
                     ORDER BY q.question_order ASC, q.question_id ASC
                     """
@@ -200,7 +200,7 @@ def get_screen_title_and_order(questionnaire_id: str, screen_key: str) -> tuple[
         with eng.connect() as conn:
             row = conn.execute(
                 sql_text(
-                    "SELECT title, COALESCE(screen_order, 0) FROM screens WHERE questionnaire_id = :qid AND screen_key = :skey"
+                    "SELECT title, COALESCE(screen_order, 0) FROM screen WHERE questionnaire_id = :qid AND screen_key = :skey"
                 ),
                 {"qid": questionnaire_id, "skey": screen_key},
             ).fetchone()
@@ -221,7 +221,7 @@ def get_screen_title_and_order(questionnaire_id: str, screen_key: str) -> tuple[
             with eng.connect() as conn2:
                 row2 = conn2.execute(
                     sql_text(
-                        "SELECT title FROM screens WHERE questionnaire_id = :qid AND screen_key = :skey"
+                        "SELECT title FROM screen WHERE questionnaire_id = :qid AND screen_key = :skey"
                     ),
                     {"qid": questionnaire_id, "skey": screen_key},
                 ).fetchone()
@@ -422,7 +422,7 @@ def get_screen_row_for_update(screen_key: str) -> dict | None:
         with eng.connect() as r1:
             row = r1.execute(
                 sql_text(
-                    "SELECT screen_id, screen_key, title, COALESCE(screen_order, 0) FROM screens WHERE screen_key = :skey"
+                    "SELECT screen_id, screen_key, title, COALESCE(screen_order, 0) FROM screen WHERE screen_key = :skey"
                 ),
                 {"skey": screen_key},
             ).fetchone()
@@ -442,7 +442,7 @@ def get_screen_row_for_update(screen_key: str) -> dict | None:
     # Fallback without screen_order
     with eng.connect() as r2:
         row2 = r2.execute(
-            sql_text("SELECT screen_id, screen_key, title FROM screens WHERE screen_key = :skey"),
+            sql_text("SELECT screen_id, screen_key, title FROM screen WHERE screen_key = :skey"),
             {"skey": screen_key},
         ).fetchone()
     if not row2:
@@ -485,7 +485,7 @@ def update_screen_title(screen_key: str, title: str) -> None:
     try:
         with eng.begin() as conn:
             conn.execute(
-                sql_text("UPDATE screens SET title = :t WHERE screen_key = :skey"),
+                sql_text("UPDATE screen SET title = :t WHERE screen_key = :skey"),
                 {"t": str(title).strip(), "skey": str(screen_key)},
             )
     except Exception:
@@ -505,7 +505,7 @@ def has_duplicate_title(questionnaire_id: str, title: str) -> bool:
     with eng.connect() as conn:
         row = conn.execute(
             sql_text(
-                "SELECT 1 FROM screens WHERE questionnaire_id = :qid AND LOWER(title) = LOWER(:t) LIMIT 1"
+                "SELECT 1 FROM screen WHERE questionnaire_id = :qid AND LOWER(title) = LOWER(:t) LIMIT 1"
             ),
             {"qid": questionnaire_id, "t": title},
         ).fetchone()
@@ -528,7 +528,7 @@ def create_screen(*, questionnaire_id: str, title: str, order_value: int) -> dic
         with eng.begin() as conn_ins:
             conn_ins.execute(
                 sql_text(
-                    "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title, screen_order) VALUES (:sid, :qid, :skey, :title, :ord)"
+                    "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title, screen_order) VALUES (:sid, :qid, :skey, :title, :ord)"
                 ),
                 {"sid": new_sid, "qid": questionnaire_id, "skey": screen_key, "title": title, "ord": int(order_value)},
             )
@@ -542,7 +542,7 @@ def create_screen(*, questionnaire_id: str, title: str, order_value: int) -> dic
         with eng.begin() as conn_fb:
             conn_fb.execute(
                 sql_text(
-                    "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title) VALUES (:sid, :qid, :skey, :title)"
+                    "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title) VALUES (:sid, :qid, :skey, :title)"
                 ),
                 {"sid": new_sid, "qid": questionnaire_id, "skey": screen_key, "title": title},
             )
@@ -557,7 +557,7 @@ def get_questionnaire_id_for_screen(screen_key: str) -> str | None:
     eng = get_engine()
     with eng.connect() as conn:
         row = conn.execute(
-            sql_text("SELECT questionnaire_id FROM screens WHERE screen_key = :sid"),
+            sql_text("SELECT questionnaire_id FROM screen WHERE screen_key = :sid"),
             {"sid": screen_key},
         ).fetchone()
     if row and row[0] is not None:

@@ -37,7 +37,7 @@ def reindex_screens(questionnaire_id: str, proposed_position: Optional[int]) -> 
         try:
             row = conn.execute(
                 sql_text(
-                    "SELECT COALESCE(MAX(screen_order), 0), COUNT(*) FROM screens WHERE questionnaire_id = :qid"
+                    "SELECT COALESCE(MAX(screen_order), 0), COUNT(*) FROM screen WHERE questionnaire_id = :qid"
                 ),
                 {"qid": questionnaire_id},
             ).fetchone()
@@ -53,7 +53,7 @@ def reindex_screens(questionnaire_id: str, proposed_position: Optional[int]) -> 
         # Fresh connection fallback to avoid operating on an aborted connection
         with eng.connect() as conn2:
             row2 = conn2.execute(
-                sql_text("SELECT COUNT(*) FROM screens WHERE questionnaire_id = :qid"),
+                sql_text("SELECT COUNT(*) FROM screen WHERE questionnaire_id = :qid"),
                 {"qid": questionnaire_id},
             ).fetchone()
             count = int(row2[0]) if row2 and row2[0] is not None else 0
@@ -72,7 +72,7 @@ def reindex_screens(questionnaire_id: str, proposed_position: Optional[int]) -> 
             with eng.begin() as write_conn:
                 write_conn.execute(
                     sql_text(
-                        "UPDATE screens SET screen_order = screen_order + 1 WHERE questionnaire_id = :qid AND screen_order >= :pos"
+                        "UPDATE screen SET screen_order = screen_order + 1 WHERE questionnaire_id = :qid AND screen_order >= :pos"
                     ),
                     {"qid": questionnaire_id, "pos": pos},
                 )
@@ -98,7 +98,7 @@ def reindex_screens(questionnaire_id: str, proposed_position: Optional[int]) -> 
         with eng.begin() as write_conn:
             write_conn.execute(
                 sql_text(
-                    "UPDATE screens SET screen_order = screen_order + 1 WHERE questionnaire_id = :qid AND screen_order >= :pos"
+                    "UPDATE screen SET screen_order = screen_order + 1 WHERE questionnaire_id = :qid AND screen_order >= :pos"
                 ),
                 {"qid": questionnaire_id, "pos": pos},
             )
@@ -131,7 +131,7 @@ def reindex_screens_move(
     with eng.connect() as _r0:
         _rows0 = _r0.execute(
             sql_text(
-                "SELECT screen_key FROM screens WHERE questionnaire_id = :qid ORDER BY screen_order ASC, screen_key ASC"
+                "SELECT screen_key FROM screen WHERE questionnaire_id = :qid ORDER BY screen_order ASC, screen_key ASC"
             ),
             {"qid": questionnaire_id},
         ).fetchall()
@@ -156,7 +156,7 @@ def reindex_screens_move(
         # Phase 1: temporarily offset all orders to free the unique space
         w.execute(
             sql_text(
-                "UPDATE screens SET screen_order = screen_order + 1000 WHERE questionnaire_id = :qid"
+                "UPDATE screen SET screen_order = screen_order + 1000 WHERE questionnaire_id = :qid"
             ),
             {"qid": questionnaire_id},
         )
@@ -164,7 +164,7 @@ def reindex_screens_move(
         for idx, sk in enumerate(keys):
             w.execute(
                 sql_text(
-                    "UPDATE screens SET screen_order = :ord WHERE questionnaire_id = :qid AND screen_key = :skey"
+                    "UPDATE screen SET screen_order = :ord WHERE questionnaire_id = :qid AND screen_key = :skey"
                 ),
                 {"ord": int(idx + 1), "qid": questionnaire_id, "skey": sk},
             )
@@ -173,7 +173,7 @@ def reindex_screens_move(
     with eng.connect() as _rf:
         _row = _rf.execute(
             sql_text(
-                "SELECT COALESCE(screen_order, 0) FROM screens WHERE questionnaire_id = :qid AND screen_key = :skey"
+                "SELECT COALESCE(screen_order, 0) FROM screen WHERE questionnaire_id = :qid AND screen_key = :skey"
             ),
             {"qid": questionnaire_id, "skey": moved_screen_key},
         ).fetchone()
@@ -183,7 +183,7 @@ def reindex_screens_move(
     with eng.connect() as _r1:
         _rows1 = _r1.execute(
             sql_text(
-                "SELECT screen_key FROM screens WHERE questionnaire_id = :qid ORDER BY screen_order ASC, screen_key ASC"
+                "SELECT screen_key FROM screen WHERE questionnaire_id = :qid ORDER BY screen_order ASC, screen_key ASC"
             ),
             {"qid": questionnaire_id},
         ).fetchall()
@@ -245,6 +245,21 @@ def reindex_questions(
 
         # Compute new contiguous 1-based orders
         new_orders: Dict[str, int] = {qid: i + 1 for i, qid in enumerate(working)}
+        # Clarke instrumentation: capture inputs, before/after lists, and mapping stats
+        try:
+            logger.info(
+                "reindex_questions.debug screen_id=%s question_id=%s proposed_order=%s before_ids=%s after_working=%s working_len=%s mapping_count=%s target_planned_order=%s",
+                screen_id,
+                question_id,
+                proposed_order,
+                ids,
+                working,
+                len(working),
+                len(new_orders),
+                new_orders.get(str(question_id)),
+            )
+        except Exception:
+            logger.error("reindex_questions.debug logging failed", exc_info=True)
 
         # Persist updated orders for existing questions in this screen
         for qid, ord_val in new_orders.items():

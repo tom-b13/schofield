@@ -152,7 +152,7 @@ def compute_questionnaire_etag_for_authoring(questionnaire_id: str) -> str:
                     """
                     SELECT screen_key, title,
                            COALESCE(screen_order, 0) AS screen_order
-                    FROM screens
+                    FROM screen
                     WHERE questionnaire_id = :qid
                     ORDER BY screen_order ASC, screen_key ASC
                     """

@@ -98,7 +98,7 @@ def get_screen_key_for_question(question_id: str) -> str | None:
             # Fallback join: resolve via screens when only screen_id exists
             row2 = conn.execute(
                 sql_text(
-                    "SELECT s.screen_key FROM questionnaire_question q JOIN screens s ON q.screen_id = s.screen_id WHERE q.question_id = :qid"
+                    "SELECT s.screen_key FROM questionnaire_question q JOIN screen s ON q.screen_id = s.screen_id WHERE q.question_id = :qid"
                 ),
                 {"qid": question_id},
             ).fetchone()
@@ -121,7 +121,7 @@ def get_screen_key_for_question(question_id: str) -> str | None:
             eng = get_engine()
             with eng.connect() as conn:
                 row = conn.execute(
-                    sql_text("SELECT screen_key FROM screens WHERE screen_id = :sid"),
+                    sql_text("SELECT screen_key FROM screen WHERE screen_id = :sid"),
                     {"sid": str(fallback)},
                 ).fetchone()
             if row and row[0]:
@@ -146,7 +146,7 @@ def get_answer_kind_for_question(question_id: str) -> str | None:
         eng = get_engine()
         with eng.connect() as conn:
             row = conn.execute(
-                sql_text("SELECT answer_type FROM questionnaire_question WHERE question_id = :qid"),
+                sql_text("SELECT answer_kind FROM questionnaire_question WHERE question_id = :qid"),
                 {"qid": question_id},
             ).fetchone()
         return str(row[0]) if row else None

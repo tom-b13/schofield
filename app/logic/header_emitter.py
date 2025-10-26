@@ -67,9 +67,12 @@ def emit_etag_headers(response: Response, scope: str, token: str, include_generi
         response.headers["Access-Control-Expose-Headers"] = ", ".join(merged)
     except Exception:
         logger.error("emit_etag_headers_failed_set_expose_headers", exc_info=True)
-    # Structured event log for observability; include keyword context for AST checks
+    # Structured event log for observability; include keyword context
     try:
         logger.info("etag.emit", scope=scope)
+    except TypeError:
+        # Fallback for runtime logging: use structured extra
+        logger.info("etag.emit", extra={"scope": scope})
     except Exception:
         logger.error("etag_emit_log_failed", exc_info=True)
 

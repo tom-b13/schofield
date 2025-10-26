@@ -1,5 +1,1 @@
-psycopg2-binary
-jsonschema
-httpx
-SQLAlchemy
-uvicorn
+python-multipart>=0.0.6

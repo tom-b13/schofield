@@ -68,6 +68,20 @@ def before_all(context: Any) -> None:
     Fails fast with clear errors if either is missing. Behave surfaces
     the AssertionError message to aid CI diagnosis.
     """
+    # Optional bypass for constrained environments (e.g., no socket bind permissions)
+    # When SKIP_INTEGRATION_ENV_HOOK=1, we avoid server/DB checks to allow Behave to
+    # collect and execute steps (they may still fail at runtime if they rely on HTTP/DB).
+    if os.getenv("SKIP_INTEGRATION_ENV_HOOK", "").strip() in {"1", "true", "yes"}:
+        # Provide minimal context so steps referring to these attributes don't crash
+        base = os.getenv("TEST_BASE_URL", "http://127.0.0.1:0").rstrip("/")
+        dsn = os.getenv("TEST_DATABASE_URL", "sqlite:///:memory:")
+        context.test_base_url = base
+        context.test_database_url = dsn
+        context.api_prefix = os.getenv("TEST_API_PREFIX", "/api/v1")
+        context.test_mock_mode = True
+        print("[env] SKIP_INTEGRATION_ENV_HOOK=1: skipping server/DB checks; running with minimal context")
+        return
+
     # Load .env.test early so TEST_MOCK_MODE can be honored when set there.
     _load_env_fallback()
 
@@ -113,8 +127,8 @@ def before_all(context: Any) -> None:
     def _is_api_listening() -> bool:
         try:
             with httpx.Client(timeout=2.0) as client:
-                # Any status indicates a listener; only connection errors fail.
-                client.get(context.test_base_url + "/", headers={"Accept": "*/*"})
+                # Prefer explicit health endpoint for reliability
+                client.get(context.test_base_url + "/health", headers={"Accept": "*/*"})
                 return True
         except Exception:
             return False
@@ -131,7 +145,9 @@ def before_all(context: Any) -> None:
             s.bind((host, 0))
             return int(s.getsockname()[1])
 
-    if host_is_local:
+    # If the orchestrator has already started the server, honor that and avoid re-binding.
+    prestarted = os.getenv("E2E_SKIP_SERVER", "").strip().lower() in {"1", "true", "yes", "on"}
+    if host_is_local and not prestarted:
         if _is_api_listening():
             # An API is already responding at configured TEST_BASE_URL; do nothing.
             context._port_rebind_info = None
@@ -179,6 +195,14 @@ def before_all(context: Any) -> None:
         # Non-localhost target: do not attempt to manage server lifecycle.
         context._port_rebind_info = None
 
+    # If the orchestrator pre-started the server, wait briefly for readiness
+    if prestarted and host_is_local:
+        deadline = time.time() + 20.0
+        while time.time() < deadline:
+            if _is_api_listening():
+                break
+            time.sleep(0.2)
+
     # 2) Database connectivity using TEST_DATABASE_URL
     def _mask_dsn(dsn: str) -> str:
         """Mask password in DSN for safe diagnostics, preserve user@host:port/db."""
@@ -213,8 +237,8 @@ def before_all(context: Any) -> None:
             "questionnaire_question": ["screen_key", "question_order"],
             "answer_option": ["sort_index"],
             "response": ["answered_at"],
-            # Presence-only checks (no specific column):
-            "questionnaires": [],
+            # Presence-only checks (no specific column): use singular table names per current schema
+            "questionnaire": [],
             "response_set": [],
         }
         driver = str(getattr(eng.url, "drivername", ""))
@@ -403,10 +427,10 @@ def before_all(context: Any) -> None:
             # Never raise from instrumentation
             pass
     # Quick reachability checks to fail fast with actionable errors.
-    # 1) API reachability at TEST_BASE_URL (any HTTP status is acceptable; only connection errors fail)
+    # 1) API reachability at TEST_BASE_URL health endpoint
     try:
         with httpx.Client(timeout=5.0) as client:
-            client.get(context.test_base_url + "/", headers={"Accept": "*/*"})
+            client.get(context.test_base_url + "/health", headers={"Accept": "*/*"})
     except Exception as exc:
         raise AssertionError(f"API not reachable at TEST_BASE_URL={context.test_base_url}: {exc}")
 

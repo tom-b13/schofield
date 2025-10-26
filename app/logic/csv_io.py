@@ -34,9 +34,9 @@ def build_export_csv(questionnaire_id: str, rows: Iterable[Dict[str, object]] | 
                 sql_text(
                     """
                     SELECT q.question_id, q.external_qid, q.screen_key, q.question_order, q.question_text,
-                           q.answer_type AS answer_kind, q.mandatory, q.placeholder_code
+                           q.answer_kind AS answer_kind, q.mandatory, q.placeholder_code
                     FROM questionnaire_question q
-                    JOIN screens s ON s.screen_key = q.screen_key
+                    JOIN screen s ON s.screen_key = q.screen_key
                     WHERE s.questionnaire_id = :qid
                     ORDER BY q.screen_key ASC, q.question_order ASC, q.question_id ASC
                     """
@@ -127,17 +127,24 @@ def parse_import_csv(b: bytes) -> Dict[str, object]:
                 sql_text("SELECT question_id FROM questionnaire_question WHERE external_qid = :ext"),
                 {"ext": external_qid},
             ).fetchone()
+            # Resolve screen_id for the provided screen_key (required by schema)
+            sid_row = conn.execute(
+                sql_text("SELECT screen_id FROM screen WHERE screen_key = :skey"),
+                {"skey": screen_key},
+            ).fetchone()
+            screen_id_val = str(sid_row[0]) if sid_row and sid_row[0] is not None else None
             if existing:
                 question_id = str(existing[0])
                 conn.execute(
                     sql_text(
                         """
                         UPDATE questionnaire_question
-                        SET screen_key=:skey, question_order=:ord, question_text=:qtext, answer_type=:akind, mandatory=:mand, placeholder_code=:ph
+                        SET screen_id=:sid, screen_key=:skey, question_order=:ord, question_text=:qtext, answer_kind=:akind, mandatory=:mand, placeholder_code=:ph
                         WHERE external_qid = :ext
                         """
                     ),
                     {
+                        "sid": screen_id_val,
                         "skey": screen_key,
                         "ord": order,
                         "qtext": question_text,
@@ -159,12 +166,13 @@ def parse_import_csv(b: bytes) -> Dict[str, object]:
                 conn.execute(
                     sql_text(
                         """
-                        INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory, placeholder_code)
-                        VALUES (:qid, :skey, :ext, :ord, :qtext, :akind, :mand, :ph)
+                        INSERT INTO questionnaire_question (question_id, screen_id, screen_key, external_qid, question_order, question_text, answer_kind, mandatory, placeholder_code)
+                        VALUES (:qid, :sid, :skey, :ext, :ord, :qtext, :akind, :mand, :ph)
                         """
                     ),
                     {
                         "qid": question_id,
+                        "sid": screen_id_val,
                         "skey": screen_key,
                         "ext": external_qid,
                         "ord": order,

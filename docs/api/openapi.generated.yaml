@@ -170,11 +170,9 @@ paths:
           title: Question Id
       - name: If-Match
         in: header
-        required: false
+        required: true
         schema:
-          anyOf:
-          - type: string
-          - type: 'null'
+          type: string
           title: If-Match
       requestBody:
         required: true
@@ -576,11 +574,9 @@ paths:
           title: Content-Type
       - name: If-Match
         in: header
-        required: false
+        required: true
         schema:
-          anyOf:
-          - type: string
-          - type: 'null'
+          type: string
           title: If-Match
       responses:
         '200':
@@ -643,11 +639,9 @@ paths:
           title: X-Request-Id
       - name: If-Match
         in: header
-        required: false
+        required: true
         schema:
-          anyOf:
-          - type: string
-          - type: 'null'
+          type: string
           title: If-Match
       requestBody:
         required: true

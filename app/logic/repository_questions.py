@@ -102,43 +102,73 @@ def update_question_text(question_id: str, new_text: str) -> None:
 def create_question(*, screen_id: str, question_text: str, order_value: int) -> dict:
     """Insert a question row and return identifiers.
 
-    Primary path includes `question_order`; on failure, logs and falls back to
-    inserting without `question_order` but with a default `answer_type` to
-    preserve behavior observed in existing routes.
+    - Resolves the UUID `screen_id` for the provided token (UUID or screen_key)
+      and sets both `screen_id` and `screen_key` columns.
+    - Sets `answer_kind` to a non-null default ('short_string') to satisfy
+      NOT NULL constraints while routes may still return `answer_kind=null`.
     Returns a mapping containing `question_id` and `external_qid`.
     """
     import uuid
+    from uuid import UUID
 
     eng = get_engine()
     new_qid = str(uuid.uuid4())
+
+    # Resolve screen identifiers from the provided token
+    provided_token = str(screen_id)
+    resolved_screen_id: str | None = None
+    resolved_screen_key: str | None = None
+    with eng.connect() as conn:
+        is_uuid = False
+        try:
+            UUID(provided_token)
+            is_uuid = True
+        except Exception:
+            is_uuid = False
+        if is_uuid:
+            row = conn.execute(
+                sql_text("SELECT screen_key FROM screen WHERE screen_id = :sid"),
+                {"sid": provided_token},
+            ).fetchone()
+            resolved_screen_id = provided_token
+            resolved_screen_key = str(row[0]) if row and row[0] is not None else None
+        else:
+            row = conn.execute(
+                sql_text("SELECT screen_id FROM screen WHERE screen_key = :skey"),
+                {"skey": provided_token},
+            ).fetchone()
+            resolved_screen_id = str(row[0]) if row and row[0] is not None else None
+            resolved_screen_key = provided_token
+
     try:
         with eng.begin() as w1:
             w1.execute(
                 sql_text(
                     """
-                    INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory)
-                    VALUES (:qid, :sid, :ext, :ord, :qtext, NULL, FALSE)
+                    INSERT INTO questionnaire_question (
+                        question_id, screen_id, screen_key, external_qid, question_order, question_text, answer_kind, mandatory
+                    )
+                    VALUES (:qid, :sid, :skey, :ext, :ord, :qtext, :atype, FALSE)
                     """
                 ),
-                {"qid": new_qid, "sid": screen_id, "ext": new_qid, "ord": int(order_value), "qtext": question_text},
+                {
+                    "qid": new_qid,
+                    "sid": resolved_screen_id,
+                    "skey": resolved_screen_key,
+                    "ext": new_qid,
+                    "ord": int(order_value),
+                    "qtext": question_text,
+                    "atype": "short_string",
+                },
             )
     except Exception:
         logger.error(
-            "create_question primary insert failed; attempting fallback qid=%s screen_id=%s",
+            "create_question insert failed qid=%s screen_token=%s",
             new_qid,
-            screen_id,
+            provided_token,
             exc_info=True,
         )
-        with eng.begin() as w2:
-            w2.execute(
-                sql_text(
-                    """
-                    INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_text, answer_type, mandatory)
-                    VALUES (:qid, :sid, :ext, :qtext, :atype, FALSE)
-                    """
-                ),
-                {"qid": new_qid, "sid": screen_id, "ext": new_qid, "qtext": question_text, "atype": "short_string"},
-            )
+        raise
     return {"question_id": new_qid, "external_qid": new_qid}
 
 

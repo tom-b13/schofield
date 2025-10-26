@@ -52,11 +52,9 @@ def epic_k_auth_token_configured(context) -> None:
 @given('a questionnaire id "{questionnaire_id}" exists')
 def epic_k_questionnaire_id_exists(context, questionnaire_id: str) -> None:
     vars_map = _ensure_vars(context)
-    # Map token "QNR-001" to the seeded questionnaire UUID for baseline dataset.
     seeded_map: Dict[str, str] = {
         "QNR-001": "11111111-1111-1111-1111-111111111111",
     }
-    # Map external id to stable UUID (persist mapping for reuse)
     qn_map: Dict[str, str] = vars_map.setdefault("questionnaire_ids", {})
     qn_uuid = (
         qn_map.get(questionnaire_id)
@@ -65,89 +63,101 @@ def epic_k_questionnaire_id_exists(context, questionnaire_id: str) -> None:
     )
     qn_map[questionnaire_id] = qn_uuid
     vars_map["questionnaire_id"] = qn_uuid
-    # Seed questionnaires row to avoid 404s in downstream GETs
-    try:
+
+    # Seed questionnaire row deterministically
+    _canonical._db_exec(
+        context,
+        "INSERT INTO questionnaire (questionnaire_id, name, description) "
+        "VALUES (:id, :name, :desc) "
+        "ON CONFLICT (questionnaire_id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description",
+        {"id": qn_uuid, "name": questionnaire_id, "desc": f"{questionnaire_id} (Epic K)"},
+    )
+
+    # Deterministic baseline for screens and questions used across scenarios
+    # Remove any existing rows tied to this questionnaire and recreate known baseline
+    # Delete dependent response rows first to satisfy FK fk_response_question
+    _canonical._db_exec(
+        context,
+        "DELETE FROM response WHERE question_id IN (SELECT question_id FROM questionnaire_question WHERE screen_key IN (SELECT screen_key FROM screen WHERE questionnaire_id = :qid))",
+        {"qid": qn_uuid},
+    )
+    # Delete dependent answer_option rows before removing questionnaire_question to satisfy
+    # fk_answer_option_question. This preserves the overall order: response -> answer_option
+    # -> questionnaire_question -> screen.
+    _canonical._db_exec(
+        context,
+        "DELETE FROM answer_option WHERE question_id IN ("
+        " SELECT question_id FROM questionnaire_question WHERE screen_key IN ("
+        "   SELECT screen_key FROM screen WHERE questionnaire_id = :qid)"
+        ")",
+        {"qid": qn_uuid},
+    )
+    _canonical._db_exec(
+        context,
+        "DELETE FROM questionnaire_question WHERE screen_key IN ("
+        " SELECT screen_key FROM screen WHERE questionnaire_id = :qid)",
+        {"qid": qn_uuid},
+    )
+    _canonical._db_exec(
+        context,
+        "DELETE FROM screen WHERE questionnaire_id = :qid",
+        {"qid": qn_uuid},
+    )
+
+    screen_key = "applicant_details"
+    # Ensure a screens row exists linked to this questionnaire (conflict on screen_key)
+    screen_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"epic-k/screen:{qn_uuid}:{screen_key}"))
+    _canonical._db_exec(
+        context,
+        "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title, screen_order) "
+        "VALUES (:sid, :qid, :skey, :title, :ord) "
+        "ON CONFLICT (screen_id) DO UPDATE SET title=EXCLUDED.title, screen_order=EXCLUDED.screen_order",
+        {"sid": screen_id, "qid": qn_uuid, "skey": screen_key, "title": screen_key, "ord": 1},
+    )
+
+    # Upsert exactly two expected questions with deterministic UUIDs and fields
+    rows = [
+        {"question_id": "11111111-1111-1111-1111-111111111111", "order": 1, "text": "Sample question 1"},
+        {"question_id": "22222222-2222-2222-2222-222222222222", "order": 2, "text": "Sample question 2"},
+    ]
+    for r in rows:
         _canonical._db_exec(
             context,
-            "INSERT INTO questionnaires (questionnaire_id, name, description) "
-            "VALUES (:id, :name, :desc) "
-            "ON CONFLICT (questionnaire_id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description",
-            {"id": qn_uuid, "name": questionnaire_id, "desc": f"{questionnaire_id} (Epic K)"},
-        )
-    except Exception:
-        # Best-effort seeding; tests should still proceed using mapping
-        pass
-
-    # Clarke directive: ensure export uses a fixed baseline by purging any existing
-    # screens and questionnaire_question rows for this questionnaire, then inserting
-    # exactly one screen 'applicant_details' and two questionnaire_question rows that
-    # match csv_fixture.csv ordering and content.
-    try:
-        # Purge any existing rows bound to this questionnaire
-        try:
-            # Delete questionnaire_question rows for all screens belonging to this questionnaire
-            _canonical._db_exec(
-                context,
-                "DELETE FROM questionnaire_question WHERE screen_key IN ("
-                " SELECT screen_key FROM screens WHERE questionnaire_id = :qid)",
-                {"qid": qn_uuid},
-            )
-        except Exception:
-            # If the subselect fails in this environment, fall back to targeted delete for our screen_key
-            pass
-        try:
-            _canonical._db_exec(
-                context,
-                "DELETE FROM screens WHERE questionnaire_id = :qid",
-                {"qid": qn_uuid},
-            )
-        except Exception:
-            # Non-fatal; proceed to upsert path
-            pass
-        screen_key = "applicant_details"
-        # Ensure a screens row exists linked to this questionnaire
-        screen_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"epic-k/screen:{qn_uuid}:{screen_key}"))
-        _canonical._db_exec(
-            context,
-            "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title) "
-            "VALUES (:sid, :qid, :skey, :title) "
-            "ON CONFLICT (screen_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, title=EXCLUDED.title",
-            {"sid": screen_id, "qid": qn_uuid, "skey": screen_key, "title": screen_key},
+            "INSERT INTO questionnaire_question (question_id, screen_id, screen_key, external_qid, question_order, question_text, answer_kind, mandatory) "
+            "VALUES (:qid, :sid, :skey, :ext, :ord, :qtext, :atype, :mand) "
+            "ON CONFLICT (question_id) DO UPDATE SET screen_id=EXCLUDED.screen_id, screen_key=EXCLUDED.screen_key, question_order=EXCLUDED.question_order, "
+            "question_text=EXCLUDED.question_text, answer_kind=EXCLUDED.answer_kind, mandatory=EXCLUDED.mandatory",
+            {
+                "qid": r["question_id"],
+                "sid": screen_id,
+                "skey": screen_key,
+                "ext": r["question_id"],
+                "ord": r["order"],
+                "qtext": r["text"],
+                "atype": "short_string",
+                "mand": False,
+            },
         )
 
-        # Upsert the two expected questions with deterministic UUIDs and fields
-        rows = [
-            {
-                "question_id": "11111111-1111-1111-1111-111111111111",
-                "order": 1,
-                "text": "Sample question 1",
-            },
-            {
-                "question_id": "22222222-2222-2222-2222-222222222222",
-                "order": 2,
-                "text": "Sample question 2",
-            },
-        ]
-        for r in rows:
-            _canonical._db_exec(
-                context,
-                "INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory) "
-                "VALUES (:qid, :skey, :ext, :ord, :qtext, :atype, :mand) "
-                "ON CONFLICT (question_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, question_order=EXCLUDED.question_order, "
-                "question_text=EXCLUDED.question_text, answer_type=EXCLUDED.answer_type, mandatory=EXCLUDED.mandatory",
-                {
-                    "qid": r["question_id"],
-                    "skey": screen_key,
-                    "ext": r["question_id"],
-                    "ord": r["order"],
-                    "qtext": r["text"],
-                    "atype": "short_string",
-                    "mand": False,
-                },
-            )
-    except Exception:
-        # Non-fatal in environments without DB access; the test harness may fallback
-        pass
+    # Verification: assert presence before proceeding
+    eng = _canonical._db_engine(context)  # type: ignore[attr-defined]
+    if eng is not None:
+        from sqlalchemy.sql import text as sql_text  # type: ignore
+        with eng.connect() as conn:
+            scount = conn.execute(
+                sql_text(
+                    "SELECT COUNT(*) FROM screen WHERE questionnaire_id=:qid AND screen_key='applicant_details'"
+                ),
+                {"qid": qn_uuid},
+            ).scalar_one()
+            qcount = conn.execute(
+                sql_text(
+                    "SELECT COUNT(*) FROM questionnaire_question WHERE screen_key='applicant_details'"
+                )
+            ).scalar_one()
+            assert int(scount) == 1, "Expected exactly one 'applicant_details' screen bound to questionnaire"
+            assert int(qcount) >= 2, "Expected at least two questionnaire_question rows for 'applicant_details'"
+
     context.vars = vars_map
 
 
@@ -177,25 +187,35 @@ def epic_k_create_response_set(context, questionnaire_id: str, var: str) -> None
 def epic_k_screen_key_exists(context, screen_key: str, questionnaire_id: str) -> None:
     vars_map = _ensure_vars(context)
     vars_map["screen_key"] = screen_key
-    # Resolve questionnaire UUID from mapping created earlier (or derive deterministically)
     qn_map: Dict[str, str] = vars_map.setdefault("questionnaire_ids", {})
     qn_uuid = qn_map.get(questionnaire_id) or str(
         uuid.uuid5(uuid.NAMESPACE_URL, f"epic-k/qn:{questionnaire_id}")
     )
     qn_map[questionnaire_id] = qn_uuid
+
     # Upsert a screen row for (questionnaire_id, screen_key) with deterministic screen_id
-    try:
-        screen_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"epic-k/screen:{qn_uuid}:{screen_key}"))
-        _canonical._db_exec(
-            context,
-            "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title) "
-            "VALUES (:sid, :qid, :skey, :title) "
-            "ON CONFLICT (screen_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, title=EXCLUDED.title",
-            {"sid": screen_id, "qid": qn_uuid, "skey": screen_key, "title": screen_key},
-        )
-    except Exception:
-        # Non-fatal for environments without DB
-        pass
+    screen_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"epic-k/screen:{qn_uuid}:{screen_key}"))
+    _canonical._db_exec(
+        context,
+        "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title, screen_order) "
+        "VALUES (:sid, :qid, :skey, :title, :ord) "
+        "ON CONFLICT (screen_id) DO UPDATE SET title=EXCLUDED.title, screen_order=EXCLUDED.screen_order",
+        {"sid": screen_id, "qid": qn_uuid, "skey": screen_key, "title": screen_key, "ord": 1},
+    )
+
+    # Verify existence to fail fast instead of silent 404s
+    eng = _canonical._db_engine(context)  # type: ignore[attr-defined]
+    if eng is not None:
+        from sqlalchemy.sql import text as sql_text  # type: ignore
+        with eng.connect() as conn:
+            row = conn.execute(
+                sql_text(
+                    "SELECT 1 FROM screen WHERE questionnaire_id=:qid AND screen_key=:skey"
+                ),
+                {"qid": qn_uuid, "skey": screen_key},
+            ).fetchone()
+            assert row is not None, "Expected screen row to exist for provided questionnaire and screen_key"
+
     context.vars = vars_map
 
 
@@ -208,56 +228,75 @@ def epic_k_question_id_exists_on_screen(context, question_id: str, screen_key: s
     )
     q_map[question_id] = q_uuid
     vars_map["question_id"] = q_uuid
-    # Clarke: For scenarios tagged with 'csv', skip DB upsert to preserve
-    # the baseline export fixture; record only the mapping in context.vars.
-    try:
-        tags = getattr(getattr(context, "scenario", None), "tags", []) or []
-        if "csv" in tags:
-            context.vars = vars_map
-            return
-    except Exception:
-        # If tags are unavailable, proceed with normal path
-        pass
-    # Upsert a questionnaire_question row bound to the given screen_key
-    try:
-        # Determine a stable question order: prefer existing max+1 for the screen_key
-        # Fallback to 1 if ordering query fails.
-        next_order = 1
-        try:
-            eng = _canonical._db_engine(context)  # type: ignore[attr-defined]
-            if eng is not None:
-                from sqlalchemy.sql import text as sql_text  # type: ignore
-                with eng.connect() as conn:
-                    row = conn.execute(
-                        sql_text(
-                            "SELECT COALESCE(MAX(question_order), 0) + 1 AS next_ord "
-                            "FROM questionnaire_question WHERE screen_key = :skey"
-                        ),
-                        {"skey": screen_key},
-                    ).fetchone()
-                    if row and row[0]:
-                        next_order = int(row[0])
-        except Exception:
-            next_order = 1
-        _canonical._db_exec(
-            context,
-            "INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory) "
-            "VALUES (:qid, :skey, :ext, :ord, :qtext, :atype, :mand) "
-            "ON CONFLICT (question_id) DO UPDATE SET external_qid=EXCLUDED.external_qid, question_order=EXCLUDED.question_order, "
-            "question_text=EXCLUDED.question_text, answer_type=EXCLUDED.answer_type, mandatory=EXCLUDED.mandatory",
-            {
-                "qid": q_uuid,
-                "skey": screen_key,
-                "ext": question_id,
-                "ord": next_order,
-                "qtext": question_id,
-                "atype": "short_string",
-                "mand": False,
-            },
-        )
-    except Exception:
-        # Environments without DB can still proceed with mapping-only flows
-        pass
+    # If any question already exists for this screen_key, reuse its question_id and return
+    # without inserting a new row. This keeps CSV export bytes stable and avoids inflating
+    # baseline rows seeded elsewhere.
+    next_order = 1
+    eng = _canonical._db_engine(context)  # type: ignore[attr-defined]
+    if eng is not None:
+        from sqlalchemy.sql import text as sql_text  # type: ignore
+        with eng.connect() as conn:
+            # Idempotent short-circuit: pick the first existing question for this screen
+            existing = conn.execute(
+                sql_text(
+                    "SELECT question_id FROM questionnaire_question WHERE screen_key = :skey ORDER BY question_order ASC LIMIT 1"
+                ),
+                {"skey": screen_key},
+            ).fetchone()
+            if existing and existing[0]:
+                try:
+                    vars_map["question_id"] = str(existing[0])
+                    context.vars = vars_map
+                except Exception:
+                    pass
+                return None
+            row = conn.execute(
+                sql_text(
+                    "SELECT COALESCE(MAX(question_order), 0) + 1 AS next_ord "
+                    "FROM questionnaire_question WHERE screen_key = :skey"
+                ),
+                {"skey": screen_key},
+            ).fetchone()
+            if row and row[0]:
+                next_order = int(row[0])
+            # Resolve screen_id for provided screen_key
+            sid_row = conn.execute(
+                sql_text("SELECT screen_id FROM screen WHERE screen_key = :skey"),
+                {"skey": screen_key},
+            ).fetchone()
+            sid_val = str(sid_row[0]) if sid_row and sid_row[0] else None
+    else:
+        sid_val = None
+
+    _canonical._db_exec(
+        context,
+        "INSERT INTO questionnaire_question (question_id, screen_id, screen_key, external_qid, question_order, question_text, answer_kind, mandatory) "
+        "VALUES (:qid, :sid, :skey, :ext, :ord, :qtext, :atype, :mand) "
+        "ON CONFLICT (question_id) DO UPDATE SET screen_id=EXCLUDED.screen_id, external_qid=EXCLUDED.external_qid, question_order=EXCLUDED.question_order, "
+        "question_text=EXCLUDED.question_text, answer_kind=EXCLUDED.answer_kind, mandatory=EXCLUDED.mandatory",
+        {
+            "qid": q_uuid,
+            "sid": sid_val,
+            "skey": screen_key,
+            "ext": question_id,
+            "ord": next_order,
+            "qtext": question_id,
+            "atype": "short_string",
+            "mand": False,
+        },
+    )
+
+    # Verify linkage exists so subsequent PATCH resolves 409 on stale If-Match (not 404)
+    if eng is not None:
+        from sqlalchemy.sql import text as sql_text  # type: ignore
+        with eng.connect() as conn:
+            row = conn.execute(
+                sql_text(
+                    "SELECT 1 FROM questionnaire_question WHERE screen_key=:skey AND question_id=:qid"
+                ),
+                {"skey": screen_key, "qid": q_uuid},
+            ).fetchone()
+            assert row is not None, "Expected questionnaire_question row to exist for provided screen_key and question_id"
     context.vars = vars_map
 
 

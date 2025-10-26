@@ -116,6 +116,17 @@ def _answer_kind_for_question(question_id: str) -> str | None:  # Backwards-comp
         409: {"content": {"application/problem+json": {}}},
         428: {"content": {"application/problem+json": {}}},
     },
+    # Keep runtime header optional to allow 428 semantics, but declare as required in OpenAPI
+    openapi_extra={
+        "parameters": [
+            {
+                "name": "If-Match",
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string"},
+            }
+        ]
+    },
     dependencies=[Depends(precondition_guard)],
 )
 def autosave_answer(

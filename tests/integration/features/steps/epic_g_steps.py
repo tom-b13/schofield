@@ -108,7 +108,7 @@ def epic_g_questionnaire_exists(context, questionnaire_id: str):
     q_uuid = _qid_alias(context, questionnaire_id)
     _db_exec(
         context,
-        "INSERT INTO questionnaires (questionnaire_id, name, description) VALUES (:id, :name, :desc) "
+        "INSERT INTO questionnaire (questionnaire_id, name, description) VALUES (:id, :name, :desc) "
         "ON CONFLICT (questionnaire_id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description",
         {"id": q_uuid, "name": questionnaire_id, "desc": questionnaire_id},
     )
@@ -124,13 +124,13 @@ def epic_g_no_screens(context, questionnaire_id: str):
     # Delete questionnaire_question rows whose screen_key belongs to the questionnaire's screens
     _db_exec(
         context,
-        "DELETE FROM questionnaire_question WHERE screen_key IN (SELECT screen_key FROM screens WHERE questionnaire_id = :qid)",
+        "DELETE FROM questionnaire_question WHERE screen_key IN (SELECT screen_key FROM screen WHERE questionnaire_id = :qid)",
         {"qid": _qid_to_db(context, questionnaire_id)},
     )
     # Delete screens for this questionnaire
     _db_exec(
         context,
-        "DELETE FROM screens WHERE questionnaire_id = :qid",
+        "DELETE FROM screen WHERE questionnaire_id = :qid",
         {"qid": _qid_to_db(context, questionnaire_id)},
     )
 
@@ -182,7 +182,7 @@ def epic_g_seed_screen(context, screen_id: str, questionnaire_id: str, title: st
     try:
         _db_exec(
             context,
-            "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title, screen_order) "
+            "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title, screen_order) "
             "VALUES (:sid, :qid, :key, :title, :ord) "
             "ON CONFLICT (screen_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, title=EXCLUDED.title, screen_order=EXCLUDED.screen_order",
             {
@@ -197,7 +197,7 @@ def epic_g_seed_screen(context, screen_id: str, questionnaire_id: str, title: st
         # Fallback if screen_order column is not present (idempotent older schema)
         _db_exec(
             context,
-            "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title) "
+            "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title) "
             "VALUES (:sid, :qid, :key, :title) "
             "ON CONFLICT (screen_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, title=EXCLUDED.title",
             {
@@ -217,27 +217,14 @@ def epic_g_seed_screen(context, screen_id: str, questionnaire_id: str, title: st
 def epic_g_seed_question_on_screen(context, question_id: str, screen_id: str, text: str, n: int):
     # Resolve screen_key (use screen_id as key) and persist question row
     q_uuid = _q_alias(context, question_id)
-    try:
-        _db_exec(
-            context,
-            "INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory) "
-            "VALUES (:qid, :skey, :ext, :ord, :qtext, NULL, FALSE) "
-            "ON CONFLICT (question_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, external_qid=EXCLUDED.external_qid, question_order=EXCLUDED.question_order, question_text=EXCLUDED.question_text",
-            {"qid": q_uuid, "skey": screen_id, "ext": question_id, "ord": n, "qtext": text},
-        )
-    except Exception as e:
-        # Fallback if answer_type is NOT NULL: retry with safe default
-        msg = str(e)
-        if "null value in column \"answer_type\"" in msg or "NOT NULL" in msg.lower():
-            _db_exec(
-                context,
-                "INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory) "
-                "VALUES (:qid, :skey, :ext, :ord, :qtext, :atype, FALSE) "
-                "ON CONFLICT (question_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, external_qid=EXCLUDED.external_qid, question_order=EXCLUDED.question_order, question_text=EXCLUDED.question_text, answer_type=EXCLUDED.answer_type",
-                {"qid": q_uuid, "skey": screen_id, "ext": question_id, "ord": n, "qtext": text, "atype": "short_string"},
-            )
-        else:
-            raise
+    sid_uuid = _s_alias(context, screen_id)
+    _db_exec(
+        context,
+        "INSERT INTO questionnaire_question (question_id, screen_id, screen_key, external_qid, question_order, question_text, answer_kind, mandatory) "
+        "VALUES (:qid, :sid, :skey, :ext, :ord, :qtext, :akind, FALSE) "
+        "ON CONFLICT (question_id) DO UPDATE SET screen_id=EXCLUDED.screen_id, screen_key=EXCLUDED.screen_key, external_qid=EXCLUDED.external_qid, question_order=EXCLUDED.question_order, question_text=EXCLUDED.question_text, answer_kind=EXCLUDED.answer_kind",
+        {"qid": q_uuid, "sid": sid_uuid, "skey": screen_id, "ext": question_id, "ord": n, "qtext": text, "akind": "short_string"},
+    )
 
 
 @given('screen "{screen_id}" exists on questionnaire "{questionnaire_id}"')
@@ -245,14 +232,15 @@ def epic_g_seed_screen_min(context, screen_id: str, questionnaire_id: str):
     epic_g_questionnaire_exists(context, questionnaire_id)
     _db_exec(
         context,
-        "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title) "
-        "VALUES (:sid, :qid, :key, :title) "
+        "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title, screen_order) "
+        "VALUES (:sid, :qid, :key, :title, :ord) "
         "ON CONFLICT (screen_id) DO NOTHING",
         {
             "sid": _s_alias(context, screen_id),
             "qid": _qid_to_db(context, questionnaire_id),
             "key": screen_id,
             "title": screen_id,
+            "ord": 1,
         },
     )
 
@@ -267,30 +255,36 @@ def epic_g_seed_question_on_questionnaire(context, question_id: str, questionnai
     orig_map: Dict[str, str] = vars_map.setdefault("orig_screen_by_qid", {})
     orig_map[str(question_id)] = holder_screen
     q_uuid = _q_alias(context, question_id)
-    try:
-        _db_exec(
-            context,
-            "INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory) "
-            "VALUES (:qid, :skey, :ext, :ord, :qtext, NULL, FALSE) "
-            "ON CONFLICT (question_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, external_qid=EXCLUDED.external_qid, question_text=EXCLUDED.question_text",
-            {"qid": q_uuid, "skey": holder_screen, "ext": question_id, "ord": 1, "qtext": question_id},
-        )
-    except Exception as e:
-        msg = str(e)
-        if "null value in column \"answer_type\"" in msg or "not null" in msg.lower():
-            _db_exec(
-                context,
-                "INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory) "
-                "VALUES (:qid, :skey, :ext, :ord, :qtext, :atype, FALSE) "
-                "ON CONFLICT (question_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, external_qid=EXCLUDED.external_qid, question_text=EXCLUDED.question_text, answer_type=EXCLUDED.answer_type",
-                {"qid": q_uuid, "skey": holder_screen, "ext": question_id, "ord": 1, "qtext": question_id, "atype": "short_string"},
-            )
-        else:
-            raise
+    _db_exec(
+        context,
+        "INSERT INTO questionnaire_question (question_id, screen_id, screen_key, external_qid, question_order, question_text, answer_kind, mandatory) "
+        "VALUES (:qid, :sid, :skey, :ext, :ord, :qtext, :akind, FALSE) "
+        "ON CONFLICT (question_id) DO UPDATE SET screen_id=EXCLUDED.screen_id, screen_key=EXCLUDED.screen_key, external_qid=EXCLUDED.external_qid, question_text=EXCLUDED.question_text, answer_kind=EXCLUDED.answer_kind",
+        {"qid": q_uuid, "sid": _s_alias(context, holder_screen), "skey": holder_screen, "ext": question_id, "ord": 1, "qtext": question_id, "akind": "short_string"},
+    )
 
 
 @given('screen "{screen_id}" exists with questions:')
 def epic_g_seed_screen_with_questions_table(context, screen_id: str):
+    # Instrumentation: wrap local _db_exec to log SQL, columns, and params
+    orig_db_exec = _db_exec
+    def _dbg_db_exec(exec_ctx, sql, params):
+        try:
+            m = re.search(r"\(([^\)]+)\)\s*VALUES", str(sql), re.IGNORECASE)
+            cols = [c.strip() for c in (m.group(1) if m else "").split(",") if c.strip()]
+        except Exception:
+            cols = []
+        sid_val = params.get("sid") or params.get("skey") or params.get("screen_id")
+        has_answer_type = any(c.strip('"') == "answer_type" for c in cols)
+        has_answer_kind = any(c.strip('"') == "answer_kind" for c in cols)
+        has_screen_id = any(c.strip('"') == "screen_id" for c in cols)
+        print(f"[epic_g_instrument][seed_screen_with_questions] screen_id={sid_val} cols={cols} answer_type={has_answer_type} answer_kind={has_answer_kind} has_screen_id={has_screen_id} sql={sql}")
+        try:
+            return orig_db_exec(exec_ctx, sql, params)
+        except Exception as e:
+            print(f"[epic_g_instrument][seed_screen_with_questions][error] {type(e).__name__}: {e}; cols={cols}; params_keys={list(params.keys())}")
+            raise
+    _db_exec = _dbg_db_exec  # type: ignore[assignment]
     eng = _db_engine(context)
     assert eng is not None, "Database not configured; TEST_DATABASE_URL is required"
     # Insert each question row for the given screen
@@ -302,20 +296,20 @@ def epic_g_seed_screen_with_questions_table(context, screen_id: str):
         try:
             _db_exec(
                 context,
-                "INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory) "
-                "VALUES (:qid, :skey, :ext, :ord, :qtext, NULL, FALSE) "
-                "ON CONFLICT (question_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, question_order=EXCLUDED.question_order, question_text=EXCLUDED.question_text",
-                {"qid": q_uuid, "skey": screen_id, "ext": qid, "ord": qord, "qtext": qtext},
+                "INSERT INTO questionnaire_question (question_id, screen_id, screen_key, external_qid, question_order, question_text, answer_kind, mandatory) "
+                "VALUES (:qid, :sid, :skey, :ext, :ord, :qtext, :akind, FALSE) "
+                "ON CONFLICT (question_id) DO UPDATE SET screen_id=EXCLUDED.screen_id, screen_key=EXCLUDED.screen_key, question_order=EXCLUDED.question_order, question_text=EXCLUDED.question_text, answer_kind=EXCLUDED.answer_kind",
+                {"qid": q_uuid, "sid": _s_alias(context, screen_id), "skey": screen_id, "ext": qid, "ord": qord, "qtext": qtext, "akind": "short_string"},
             )
         except Exception as e:
             msg = str(e)
             if "null value in column \"answer_type\"" in msg or "not null" in msg.lower():
-                _db_exec(
+                    _db_exec(
                     context,
-                    "INSERT INTO questionnaire_question (question_id, screen_key, external_qid, question_order, question_text, answer_type, mandatory) "
-                    "VALUES (:qid, :skey, :ext, :ord, :qtext, :atype, FALSE) "
-                    "ON CONFLICT (question_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, question_order=EXCLUDED.question_order, question_text=EXCLUDED.question_text, answer_type=EXCLUDED.answer_type",
-                    {"qid": q_uuid, "skey": screen_id, "ext": qid, "ord": qord, "qtext": qtext, "atype": "short_string"},
+                    "INSERT INTO questionnaire_question (question_id, screen_id, screen_key, external_qid, question_order, question_text, answer_kind, mandatory) "
+                    "VALUES (:qid, :sid, :skey, :ext, :ord, :qtext, :akind, FALSE) "
+                    "ON CONFLICT (question_id) DO UPDATE SET screen_id=EXCLUDED.screen_id, screen_key=EXCLUDED.screen_key, question_order=EXCLUDED.question_order, question_text=EXCLUDED.question_text, answer_kind=EXCLUDED.answer_kind",
+                    {"qid": q_uuid, "sid": _s_alias(context, screen_id), "skey": screen_id, "ext": qid, "ord": qord, "qtext": qtext, "akind": "short_string"},
                 )
             else:
                 raise
@@ -333,7 +327,7 @@ def epic_g_seed_questionnaire_screens_table(context, questionnaire_id: str):
         try:
             _db_exec(
                 context,
-                "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title, screen_order) "
+                "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title, screen_order) "
                 "VALUES (:sid, :qid, :skey, :title, :ord) "
                 "ON CONFLICT (screen_id) DO UPDATE SET title=EXCLUDED.title, screen_order=EXCLUDED.screen_order",
                 {
@@ -347,7 +341,7 @@ def epic_g_seed_questionnaire_screens_table(context, questionnaire_id: str):
         except Exception:
             _db_exec(
                 context,
-                "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title) "
+                "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title) "
                 "VALUES (:sid, :qid, :skey, :title) "
                 "ON CONFLICT (screen_id) DO UPDATE SET title=EXCLUDED.title",
                 {
@@ -365,6 +359,25 @@ def epic_g_seed_questionnaire_screens_table(context, questionnaire_id: str):
 
 @given('screen "{screen_id}" has questions:')
 def epic_g_seed_screen_questions_table(context, screen_id: str):
+    # Instrumentation: wrap local _db_exec to log SQL, columns, and params
+    orig_db_exec = _db_exec
+    def _dbg_db_exec(exec_ctx, sql, params):
+        try:
+            m = re.search(r"\(([^\)]+)\)\s*VALUES", str(sql), re.IGNORECASE)
+            cols = [c.strip() for c in (m.group(1) if m else "").split(",") if c.strip()]
+        except Exception:
+            cols = []
+        sid_val = params.get("sid") or params.get("skey") or params.get("screen_id")
+        has_answer_type = any(c.strip('"') == "answer_type" for c in cols)
+        has_answer_kind = any(c.strip('"') == "answer_kind" for c in cols)
+        has_screen_id = any(c.strip('"') == "screen_id" for c in cols)
+        print(f"[epic_g_instrument][seed_screen_questions] screen_id={sid_val} cols={cols} answer_type={has_answer_type} answer_kind={has_answer_kind} has_screen_id={has_screen_id} sql={sql}")
+        try:
+            return orig_db_exec(exec_ctx, sql, params)
+        except Exception as e:
+            print(f"[epic_g_instrument][seed_screen_questions][error] {type(e).__name__}: {e}; cols={cols}; params_keys={list(params.keys())}")
+            raise
+    _db_exec = _dbg_db_exec  # type: ignore[assignment]
     for row in context.table:
         qid = str(row[0]).strip()
         qtext = str(row[1]).strip()
@@ -411,7 +424,7 @@ def epic_g_have_current_screen_etag(context, screen_id: str):
                 if isinstance(qid, str) and qid:
                     row = conn.execute(
                         sql_text(
-                            "SELECT title, screen_order FROM screens WHERE screen_key = :skey AND questionnaire_id = :qid"
+                            "SELECT title, screen_order FROM screen WHERE screen_key = :skey AND questionnaire_id = :qid"
                         ),
                         {"skey": screen_id, "qid": qid},
                     ).fetchone()
@@ -419,14 +432,14 @@ def epic_g_have_current_screen_etag(context, screen_id: str):
                         # Upsert minimal screen for this questionnaire with next contiguous order
                         cnt_row = conn.execute(
                             sql_text(
-                                "SELECT COUNT(*) FROM screens WHERE questionnaire_id = :qid"
+                                "SELECT COUNT(*) FROM screen WHERE questionnaire_id = :qid"
                             ),
                             {"qid": qid},
                         ).fetchone()
                         next_ord = int(cnt_row[0]) + 1 if cnt_row and cnt_row[0] is not None else 1
                         _db_exec(
                             context,
-                            "INSERT INTO screens (screen_id, questionnaire_id, screen_key, title, screen_order) "
+                            "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title, screen_order) "
                             "VALUES (:sid, :qid, :skey, :title, :ord) "
                             "ON CONFLICT (screen_id) DO NOTHING",
                             {
@@ -440,13 +453,13 @@ def epic_g_have_current_screen_etag(context, screen_id: str):
                         # Reread inserted row
                         row = conn.execute(
                             sql_text(
-                                "SELECT title, screen_order FROM screens WHERE screen_key = :skey AND questionnaire_id = :qid"
+                                "SELECT title, screen_order FROM screen WHERE screen_key = :skey AND questionnaire_id = :qid"
                             ),
                             {"skey": screen_id, "qid": qid},
                         ).fetchone()
                 else:
                     row = conn.execute(
-                        sql_text("SELECT title, screen_order FROM screens WHERE screen_key = :skey"),
+                        sql_text("SELECT title, screen_order FROM screen WHERE screen_key = :skey"),
                         {"skey": screen_id},
                     ).fetchone()
             if row is not None:
@@ -932,7 +945,7 @@ def epic_g_assert_screen_order(context, screen_id: str, n: int):
             qid = _ensure_vars(context).get("active_questionnaire_id")
             if isinstance(qid, str) and qid:
                 res = conn.execute(
-                    sql_text("SELECT screen_order FROM screens WHERE screen_key = :skey AND questionnaire_id = :qid"),
+            sql_text("SELECT screen_order FROM screen WHERE screen_key = :skey AND questionnaire_id = :qid"),
                     {"skey": screen_id, "qid": qid},
                 ).fetchone()
                 if res is None:
@@ -942,12 +955,12 @@ def epic_g_assert_screen_order(context, screen_id: str, n: int):
                     except Exception:
                         pass
                     res = conn.execute(
-                        sql_text("SELECT screen_order FROM screens WHERE screen_key = :skey"),
+                        sql_text("SELECT screen_order FROM screen WHERE screen_key = :skey"),
                         {"skey": screen_id},
                     ).fetchone()
             else:
                 res = conn.execute(
-                    sql_text("SELECT screen_order FROM screens WHERE screen_key = :skey"),
+            sql_text("SELECT screen_order FROM screen WHERE screen_key = :skey"),
                     {"skey": screen_id},
                 ).fetchone()
     except Exception as e:
@@ -1066,7 +1079,7 @@ def epic_g_no_new_screen_created(context):
     assert eng is not None, "Database not configured"
     with eng.connect() as conn:
         res = conn.execute(
-            sql_text("SELECT COUNT(*) FROM screens WHERE questionnaire_id = :qid AND title = :t"),
+            sql_text("SELECT COUNT(*) FROM screen WHERE questionnaire_id = :qid AND title = :t"),
             {"qid": qid, "t": title},
         ).scalar_one()
     assert int(res) == 1, f"Expected exactly one screen titled {title!r} for questionnaire {qid!r}"
@@ -1173,7 +1186,7 @@ def epic_g_no_changes_persisted_for_screen(context, screen_id: str):
             qid = vars_map.get("active_questionnaire_id")
             if isinstance(qid, str) and qid:
                 row = conn.execute(
-                    sql_text("SELECT title, screen_order FROM screens WHERE screen_key = :skey AND questionnaire_id = :qid"),
+                    sql_text("SELECT title, screen_order FROM screen WHERE screen_key = :skey AND questionnaire_id = :qid"),
                     {"skey": screen_id, "qid": qid},
                 ).fetchone()
                 if not row:
@@ -1183,12 +1196,12 @@ def epic_g_no_changes_persisted_for_screen(context, screen_id: str):
                     except Exception:
                         pass
                     row = conn.execute(
-                        sql_text("SELECT title, screen_order FROM screens WHERE screen_key = :skey"),
+                        sql_text("SELECT title, screen_order FROM screen WHERE screen_key = :skey"),
                         {"skey": screen_id},
                     ).fetchone()
             else:
                 row = conn.execute(
-                    sql_text("SELECT title, screen_order FROM screens WHERE screen_key = :skey"),
+                    sql_text("SELECT title, screen_order FROM screen WHERE screen_key = :skey"),
                     {"skey": screen_id},
                 ).fetchone()
         except Exception:
@@ -1196,12 +1209,12 @@ def epic_g_no_changes_persisted_for_screen(context, screen_id: str):
             qid = vars_map.get("active_questionnaire_id")
             if isinstance(qid, str) and qid:
                 row = conn.execute(
-                    sql_text("SELECT title FROM screens WHERE screen_key = :skey AND questionnaire_id = :qid"),
+                    sql_text("SELECT title FROM screen WHERE screen_key = :skey AND questionnaire_id = :qid"),
                     {"skey": screen_id, "qid": qid},
                 ).fetchone()
             else:
                 row = conn.execute(
-                    sql_text("SELECT title FROM screens WHERE screen_key = :skey"),
+                    sql_text("SELECT title FROM screen WHERE screen_key = :skey"),
                     {"skey": screen_id},
                 ).fetchone()
             # Normalize row shape to (title, None) for downstream assertions
@@ -1229,17 +1242,17 @@ def epic_g_screen_retains_original_order(context, screen_id: str):
         qid = vars_map.get("active_questionnaire_id")
         if isinstance(qid, str) and qid:
             row = conn.execute(
-                sql_text("SELECT screen_order FROM screens WHERE screen_key = :skey AND questionnaire_id = :qid"),
+                sql_text("SELECT screen_order FROM screen WHERE screen_key = :skey AND questionnaire_id = :qid"),
                 {"skey": screen_id, "qid": qid},
             ).fetchone()
             if not row:
                 row = conn.execute(
-                    sql_text("SELECT screen_order FROM screens WHERE screen_key = :skey"),
+                    sql_text("SELECT screen_order FROM screen WHERE screen_key = :skey"),
                     {"skey": screen_id},
                 ).fetchone()
         else:
             row = conn.execute(
-                sql_text("SELECT screen_order FROM screens WHERE screen_key = :skey"),
+                sql_text("SELECT screen_order FROM screen WHERE screen_key = :skey"),
                 {"skey": screen_id},
             ).fetchone()
     assert row is not None, f"screen_id {screen_id!r} not found"

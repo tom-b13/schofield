@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Response
+from fastapi import APIRouter, Body, Response, UploadFile, File, Request
 from fastapi.responses import JSONResponse
 import logging
 import csv
 import io
 
-from app.logic.csv_io import parse_import_csv
+from app.logic.csv_io import parse_import_csv, build_export_csv
 from app.logic.header_emitter import emit_etag_headers, SCOPE_TO_HEADER
 from app.logic.etag import compute_questionnaire_etag_for_authoring
 from app.logic.repository_questionnaires import (
@@ -49,8 +49,80 @@ def get_questionnaire(id: str):
     operation_id="importQuestionnaireCsv",
     tags=["Import"],
 )
-def import_questionnaire(csv_export: bytes = Body(..., media_type="text/csv")):
-    result = parse_import_csv(csv_export)
+async def import_questionnaire(
+    request: Request,
+    file: UploadFile | None = File(None),
+    csv_export: bytes | None = Body(None, media_type="text/csv"),
+):
+    data: bytes
+    source: str
+    if file is not None:
+        source = "multipart"
+        data = file.file.read() if hasattr(file, "file") else (file.read() or b"")  # type: ignore[attr-defined]
+    elif csv_export is not None:
+        source = "raw"
+        data = csv_export
+    else:
+        # Fallback: accept raw request body (e.g., text/plain or text/csv without Body binding)
+        source = "raw"
+        data = await request.body()
+
+    # Pre-parse diagnostics: size and first-line preview (non-throwing)
+    size_bytes = len(data)
+    try:
+        first_line = (data.split(b"\n", 1)[0] if data else b"").decode("utf-8", errors="ignore")
+    except Exception:
+        first_line = ""
+    try:
+        logger.info(
+            "import_questionnaire_request",
+            extra={
+                "path": "/questionnaires/import",
+                "source": source,
+                "size_bytes": size_bytes,
+                "first_line_preview": first_line[:120],
+            },
+        )
+    except Exception:
+        # Logging must never interfere with import behaviour
+        pass
+
+    # Parse with instrumentation; preserve existing semantics on failure
+    try:
+        result = parse_import_csv(data)
+    except Exception as exc:
+        try:
+            logger.error(
+                "import_questionnaire_failed",
+                extra={
+                    "path": "/questionnaires/import",
+                    "source": source,
+                    "size_bytes": size_bytes,
+                    "exception_type": type(exc).__name__,
+                    "exception_message": str(exc),
+                },
+                exc_info=True,
+            )
+        except Exception:
+            pass
+        raise
+
+    # Post-parse success diagnostics: approximate row count (header excluded if present)
+    try:
+        line_count = data.count(b"\n") + (1 if (data and not data.endswith(b"\n")) else 0)
+        approx_rows = max(0, line_count - 1)
+        logger.info(
+            "import_questionnaire_success",
+            extra={
+                "path": "/questionnaires/import",
+                "source": source,
+                "size_bytes": size_bytes,
+                "approx_rows": approx_rows,
+            },
+        )
+    except Exception:
+        pass
+
     return result
 
 
@@ -71,19 +143,8 @@ def export_questionnaire(id: str):
     if not exists:
         problem = {"title": "Questionnaire not found", "status": 404}
         return JSONResponse(problem, status_code=404, media_type="application/problem+json")
-    # Build legacy CSV (Phase-0 parity): exact 3-column header and rows
-    rows = list(list_questions_for_questionnaire_export(id))
-    buf = io.StringIO(newline="")
-    writer = csv.writer(buf, lineterminator='\n')
-    # Header: exact legacy 3-column contract
-    writer.writerow(["question_id", "question_text", "answer_kind"])
-    for r in rows:
-        writer.writerow([
-            str(r.get("question_id", "")),
-            str(r.get("question_text", "")),
-            str(r.get("answer_kind", "")),
-        ])
-    data = buf.getvalue().encode("utf-8")
+    # Build legacy CSV (Phase-0 parity): exact 3-column header and rows via central builder
+    data = build_export_csv(id)
     resp = Response(content=data, media_type="text/csv; charset=utf-8")
     # Compute and emit ETag headers defensively; ensure both Questionnaire-ETag and ETag exist.
     try:
