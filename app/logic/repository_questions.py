@@ -56,20 +56,30 @@ def get_next_question_order(screen_key: str) -> int:
 
 
 def move_question_to_screen(question_id: str, target_screen_key: str) -> None:
-    """Move a question to a different screen by updating its screen_key.
+    """Move a question to a different screen by updating both identifiers.
 
-    Executes in its own transaction. Logs failures before re-raising to let
-    callers decide recovery (e.g., reindex on source screen).
+    Resolves the target `screen_id` from the provided `target_screen_key` and
+    atomically updates both `screen_id` and `screen_key` for the question. The
+    transaction is committed before any caller-triggered reindexing to avoid
+    unique collisions on (screen_id, question_order) during source reindex.
     """
     eng = get_engine()
     try:
         with eng.begin() as conn:
+            # Resolve target screen UUID first (authoritative linkage)
+            row = conn.execute(
+                sql_text("SELECT screen_id FROM screen WHERE screen_key = :skey"),
+                {"skey": str(target_screen_key)},
+            ).fetchone()
+            target_screen_id = str(row[0]) if row and row[0] is not None else None
+            # Proceed with update; rely on the foreign key to enforce existence
             conn.execute(
                 sql_text(
-                    "UPDATE questionnaire_question SET screen_key = :tgt WHERE question_id = :qid"
+                    "UPDATE questionnaire_question SET screen_id = :sid, screen_key = :skey WHERE question_id = :qid"
                 ),
-                {"tgt": str(target_screen_key), "qid": str(question_id)},
+                {"sid": target_screen_id, "skey": str(target_screen_key), "qid": str(question_id)},
             )
+            # Exiting the context commits before any subsequent reindex
     except Exception:
         logger.error(
             "move_question_to_screen failed qid=%s target_screen=%s",
@@ -226,17 +236,29 @@ def get_external_qid(question_id: str) -> str | None:
 def update_question_visibility(*, question_id: str, parent_qid: str | None, visible_if_values: list[str] | None) -> None:
     """Update parent_question_id and visible_if_value for a question.
 
-    Executes within a transaction. Logs failures and re-raises per policy.
+    Uses explicit parameter binding and safe JSONB casting. When
+    `visible_if_values` is None, sets the column to NULL; otherwise binds the
+    JSON text and casts it using CAST(:vis AS JSONB).
     """
     eng = get_engine()
+    import json as _json
     try:
         with eng.begin() as conn:
-            conn.execute(
-                sql_text(
-                    "UPDATE questionnaire_question SET parent_question_id = :pid, visible_if_value = :vis WHERE question_id = :qid"
-                ),
-                {"pid": parent_qid, "vis": visible_if_values, "qid": question_id},
-            )
+            if visible_if_values is None:
+                conn.execute(
+                    sql_text(
+                        "UPDATE questionnaire_question SET parent_question_id = :pid, visible_if_value = NULL WHERE question_id = :qid"
+                    ),
+                    {"pid": parent_qid, "qid": question_id},
+                )
+            else:
+                vis_param = _json.dumps(visible_if_values)
+                conn.execute(
+                    sql_text(
+                        "UPDATE questionnaire_question SET parent_question_id = :pid, visible_if_value = CAST(:vis AS JSONB) WHERE question_id = :qid"
+                    ),
+                    {"pid": parent_qid, "vis": vis_param, "qid": question_id},
+                )
     except Exception:
         logger.error(
             "update_question_visibility failed qid=%s parent=%s vis=%s",

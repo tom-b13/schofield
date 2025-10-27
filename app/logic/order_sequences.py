@@ -261,7 +261,15 @@ def reindex_questions(
         except Exception:
             logger.error("reindex_questions.debug logging failed", exc_info=True)
 
-        # Persist updated orders for existing questions in this screen
+        # Two-phase write to avoid unique collisions on (screen_key, question_order)
+        # Phase 1: temporarily offset all existing orders for this screen
+        conn.execute(
+            sql_text(
+                "UPDATE questionnaire_question SET question_order = COALESCE(question_order, 0) + 1000 WHERE screen_key = :sid"
+            ),
+            {"sid": screen_id},
+        )
+        # Phase 2: persist final contiguous 1-based orders
         for qid, ord_val in new_orders.items():
             conn.execute(
                 sql_text(

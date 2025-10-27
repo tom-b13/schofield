@@ -12,6 +12,11 @@ except ImportError:
 from app.routes.documents import router as documents_router
 from app.routes.questionnaires import router as questionnaires_router
 from app.routes.screens import router as screens_router
+try:
+    from app.routes.debug import router as debug_router, authoring_router as debug_authoring_router  # type: ignore
+except ImportError:
+    debug_router = None  # type: ignore
+    debug_authoring_router = None  # type: ignore
 # Epic G authoring skeleton routes
 try:
     from app.routes.authoring import router as authoring_router  # type: ignore
@@ -46,5 +51,9 @@ if bindings_purge_router is not None:
     api_router.include_router(bindings_purge_router, tags=["Bindings", "Documents"])  # Epic D skeleton
 if authoring_router is not None:
     api_router.include_router(authoring_router, tags=["Authoring"])  # Epic G skeleton
+if debug_router is not None:
+    api_router.include_router(debug_router, tags=["Internal"])  # Test diagnostics only
+if debug_authoring_router is not None:
+    api_router.include_router(debug_authoring_router, tags=["Internal"])  # Alias for tests posting to authoring/internal
 
 __all__ = ["api_router"]

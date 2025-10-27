@@ -6,22 +6,17 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'screens' AND column_name = 'screen_order'
+        WHERE table_name = 'screen' AND column_name = 'screen_order'
     ) THEN
-        ALTER TABLE screens ADD COLUMN screen_order INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE screen ADD COLUMN screen_order INTEGER NOT NULL DEFAULT 1;
     END IF;
-EXCEPTION WHEN undefined_table THEN
-    -- Table may not exist in some environments; skip
-    NULL;
 END $$;
 
 -- Unique contiguous ordering is enforced by application logic; add indexes to support reindex operations
 DO $$
 BEGIN
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_screens_qid_order ON screens(questionnaire_id, screen_order);
-    CREATE INDEX IF NOT EXISTS idx_screens_by_qid ON screens(questionnaire_id);
-EXCEPTION WHEN undefined_table THEN
-    NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_screen_qid_order ON screen(questionnaire_id, screen_order);
+    CREATE INDEX IF NOT EXISTS idx_screen_by_qid ON screen(questionnaire_id);
 END $$;
 
 -- Questions: ensure question_order column exists and is indexed for per-screen ordering
@@ -35,9 +30,6 @@ BEGIN
         -- Application will backfill and enforce contiguity; leave NULLs for legacy rows
     END IF;
     CREATE INDEX IF NOT EXISTS idx_question_by_screen_order ON questionnaire_question(screen_key, question_order);
-EXCEPTION WHEN undefined_table THEN
-    NULL;
 END $$;
 
 -- end-of-file
-

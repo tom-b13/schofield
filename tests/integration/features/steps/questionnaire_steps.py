@@ -779,6 +779,34 @@ def _http_request(
                     body_text = resp.text
         except Exception:
             body_text = resp.text
+        # Clarke instrumentation (post-dispatch): emit one-line HTTP-RESP with selected headers
+        try:
+            def _h(name: str) -> str:
+                lname = name.lower()
+                for k, v in out_headers.items():
+                    if str(k).lower() == lname:
+                        return str(v)
+                return ""
+
+            h_etag = _h("ETag") or "-"
+            h_screen = _h("Screen-ETag") or "-"
+            h_question = _h("Question-ETag") or "-"
+            h_document = _h("Document-ETag") or "-"
+            h_questionnaire = _h("Questionnaire-ETag") or "-"
+            h_list = _h("X-List-ETag") or "-"
+            h_ifnorm = _h("X-If-Match-Normalized") or "-"
+            h_expose = _h("Access-Control-Expose-Headers") or "-"
+            resp_line = (
+                f"[HTTP-RESP] {method.upper()} {effective_path} -> {resp.status_code} "
+                f"ETag={h_etag} Screen-ETag={h_screen} Question-ETag={h_question} "
+                f"Document-ETag={h_document} Questionnaire-ETag={h_questionnaire} "
+                f"X-List-ETag={h_list} X-If-Match-Normalized={h_ifnorm} "
+                f"Expose={h_expose}"
+            )
+            print(resp_line)
+        except Exception:
+            # Never allow instrumentation to affect behavior
+            pass
         # Clarke: expose raw bytes for follow-up assertions (non-breaking)
         try:
             setattr(context, "_last_response_bytes", bytes(resp.content))
@@ -889,8 +917,152 @@ def _db_exec(context, sql: str, params: Optional[Dict[str, Any]] = None) -> None
         return
     eng = _db_engine(context)
     assert eng is not None, "Database not configured; TEST_DATABASE_URL is required for DB steps"
-    with eng.begin() as conn:
-        conn.execute(sql_text(sql), params or {})
+    # Clarke integration fix: Before executing an INSERT into questionnaire_question,
+    # ensure the referenced screen exists when params include sid/skey. The
+    # questionnaire_id is derived from context.vars (questionnaire_id or
+    # questionnaire_ids map). Insert the screen idempotently.
+    try:
+        sql_text_str = str(sql) if not isinstance(sql, str) else sql
+        s = (sql_text_str or "").strip()
+        op = (s.split(None, 1)[0].upper() if s else "")
+        import re as _re  # stdlib only
+        m = _re.search(r"\bINSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_]*)", s, _re.IGNORECASE)
+        table = m.group(1) if m else ""
+        p: Dict[str, Any] = params or {}
+        sid_val = p.get("sid") if isinstance(p, dict) else None
+        skey_val = p.get("skey") if isinstance(p, dict) else None
+        if (op == "INSERT") and (str(table).lower() == "questionnaire_question") and sid_val and skey_val:
+            # Discover questionnaire_id from context vars
+            vars_map: Dict[str, Any] = getattr(context, "vars", {}) or {}
+            qn_id = vars_map.get("questionnaire_id")
+            if not (isinstance(qn_id, str) and qn_id.strip()):
+                qn_ids_map = vars_map.get("questionnaire_ids")
+                if isinstance(qn_ids_map, dict) and qn_ids_map:
+                    try:
+                        # Prefer a single mapping; otherwise take first stable key order
+                        if len(qn_ids_map) == 1:
+                            qn_id = next(iter(qn_ids_map.values()))
+                        else:
+                            qn_id = list(qn_ids_map.values())[0]
+                    except Exception:
+                        qn_id = None
+            # If we have a questionnaire_id, ensure the screen exists
+            if isinstance(qn_id, str) and qn_id.strip():
+                try:
+                    # Normalize escaped underscores in screen_key used as default title
+                    try:
+                        normalized_key = str(skey_val).replace("\\_", "_")
+                    except Exception:
+                        normalized_key = str(skey_val)
+                    with eng.connect() as _conn:
+                        row = _conn.execute(
+                            sql_text("SELECT 1 FROM screen WHERE screen_id = :sid LIMIT 1"),
+                            {"sid": sid_val},
+                        ).fetchone()
+                    if not row:
+                        # Attempt insert with screen_order; fallback to variant without it
+                        try:
+                            with eng.begin() as _conn_w:
+                                _conn_w.execute(
+                                    sql_text(
+                                        "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title, screen_order) "
+                                        "VALUES (:sid, :qid, :key, :title, :ord) "
+                                        "ON CONFLICT (screen_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, title=EXCLUDED.title, screen_order=EXCLUDED.screen_order"
+                                    ),
+                                    {"sid": sid_val, "qid": qn_id, "key": normalized_key, "title": normalized_key, "ord": 1},
+                                )
+                        except Exception:
+                            with eng.begin() as _conn_w2:
+                                _conn_w2.execute(
+                                    sql_text(
+                                        "INSERT INTO screen (screen_id, questionnaire_id, screen_key, title) "
+                                        "VALUES (:sid, :qid, :key, :title) "
+                                        "ON CONFLICT (screen_id) DO UPDATE SET screen_key=EXCLUDED.screen_key, title=EXCLUDED.title"
+                                    ),
+                                    {"sid": sid_val, "qid": qn_id, "key": normalized_key, "title": normalized_key},
+                                )
+                except Exception:
+                    # Precondition helper is best-effort; do not block original exec
+                    pass
+    except Exception:
+        # Never fail due to pre-insert helper logic
+        pass
+    try:
+        with eng.begin() as conn:
+            conn.execute(sql_text(sql), params or {})
+    except Exception as exc:
+        # Clarke-directed fallback: handle legacy column name 'answer_type' where
+        # the schema provides 'answer_kind'. Only retry once on UndefinedColumn
+        # errors that mention 'answer_type'.
+        msg = str(exc)
+
+        # Clarke instrumentation: on fk_question_screen violations, emit a single
+        # diagnostic line to STDOUT and re-raise. This must not alter behavior.
+        try:
+            if isinstance(msg, str) and ("fk_question_screen" in msg or "fk_question_screen" in msg.lower()):
+                p: Dict[str, Any] = params or {}
+                vars_map: Dict[str, Any] = getattr(context, "vars", {}) or {}
+                sql_text_str = str(sql) if not isinstance(sql, str) else sql
+                sql_has_screen_id = ("screen_id" in (sql_text_str or ""))
+                params_keys = sorted(list(p.keys())) if isinstance(p, dict) else []
+                vars_keys = sorted(list(vars_map.keys())) if isinstance(vars_map, dict) else []
+                sid_val = p.get("sid") if isinstance(p, dict) else None
+                skey_val = p.get("skey") if isinstance(p, dict) else None
+                sid_present = "sid" in p if isinstance(p, dict) else False
+                skey_present = "skey" in p if isinstance(p, dict) else False
+                # Detect SQL operation and table for context
+                try:
+                    s = (sql_text_str or "").strip()
+                    op = (s.split(None, 1)[0].upper() if s else "")
+                    import re as _re  # use existing stdlib, no new deps
+                    m = _re.search(r"\bINSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_]*)", s, _re.IGNORECASE) or \
+                        _re.search(r"\bUPDATE\s+([A-Za-z_][A-Za-z0-9_]*)", s, _re.IGNORECASE)
+                    table = m.group(1) if m else ""
+                except Exception:
+                    op = ""
+                    table = ""
+                # Probe questionnaire identifiers presence for scoping potential auto-insert
+                qn_id_direct = vars_map.get("questionnaire_id")
+                qn_ids_map = vars_map.get("questionnaire_ids")
+                qn_discoverable = bool(qn_id_direct) or bool(qn_ids_map)
+                qn_ids_keys = (
+                    sorted(list(qn_ids_map.keys())) if isinstance(qn_ids_map, dict) else []
+                )
+                # SELECT probe: does the referenced screen_id exist?
+                screen_exists: Optional[bool] = None
+                try:
+                    if (op == "INSERT") and (str(table).lower() == "questionnaire_question") and sid_present and sid_val:
+                        with eng.connect() as _conn:
+                            row = _conn.execute(sql_text("SELECT 1 FROM screen WHERE screen_id = :sid LIMIT 1"), {"sid": sid_val}).fetchone()
+                            screen_exists = bool(row)
+                except Exception:
+                    screen_exists = None
+                diag = (
+                    f"[DB-EXEC][fk_question_screen] op={op or '-'} table={table or '-'} "
+                    f"sql_has_screen_id={bool(sql_has_screen_id)} "
+                    f"params_keys={params_keys} vars_keys={vars_keys} "
+                    f"sid_present={sid_present} skey_present={skey_present} "
+                    f"sid={sid_val} skey={skey_val} "
+                    f"questionnaire_id_discoverable={qn_discoverable} questionnaire_ids_keys={qn_ids_keys} "
+                    f"screen_exists={screen_exists if screen_exists is not None else 'unknown'}"
+                )
+                print(diag)
+        except Exception:
+            # Never interfere with the original exception behavior
+            pass
+        needs_fallback = ("UndefinedColumn" in msg or "undefined column" in msg.lower()) and (
+            "answer_type" in msg or (isinstance(sql, str) and "answer_type" in sql)
+        )
+        if needs_fallback:
+            fixed_sql = sql.replace("answer_type", "answer_kind") if isinstance(sql, str) else sql
+            with eng.begin() as conn:
+                conn.execute(sql_text(fixed_sql), params or {})
+        else:
+            raise
+
+# Thin alias for Epic G wrappers that call _base_db_exec
+def _base_db_exec(context, sql: str, params: Optional[Dict[str, Any]]) -> None:
+    _db_exec(context, sql, params)
 
 
 def _row_count_response(context, rs_id: str, q_id: Optional[str] = None) -> int:
