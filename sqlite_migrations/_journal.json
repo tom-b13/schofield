@@ -1,0 +1,14 @@
+[
+  {
+    "filename": "migrations/000_core_schema.sql",
+    "applied_at": "2025-11-10T16:26:50Z"
+  },
+  {
+    "filename": "migrations/001_create_response_tables.sql",
+    "applied_at": "2025-11-10T16:26:50Z"
+  },
+  {
+    "filename": "migrations/011_add_idempotency_keys.sql",
+    "applied_at": "2025-11-10T16:26:50Z"
+  }
+]

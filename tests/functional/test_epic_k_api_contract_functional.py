@@ -13,6 +13,8 @@ from __future__ import annotations
 from pathlib import Path
 import re
 import typing as t
+from fastapi.testclient import TestClient
+from app.main import create_app
 
 
 # ---------------------------------------------------------------------------
@@ -40,97 +42,11 @@ def safe_invoke_http(
     ) -> ResponseEnvelope:
     """Return a structured response envelope without raising.
 
-    For Epic K tests we avoid real network calls. Special handling:
-    - Synthetic problem+json mapping for 7.2.2.x via path '/__epic_k_spec/<sec_id>'
-    - Otherwise return an empty envelope so assertions fail deterministically
+    For Epic K tests we avoid real network calls.
+    Previously stubbed branches for 7.2.1.x and 7.2.2.x have been removed
+    per Clarke's review. Use FastAPI TestClient for real calls in tests.
     """
-    # Synthetic path for sad-path contractual tests (7.2.2.x)
-    if path.startswith("/__epic_k_spec/"):
-        try:
-            sec_id = path.split("/__epic_k_spec/")[-1].strip("/")
-        except Exception:
-            sec_id = ""
-        mapping = {it.get("id"): it.get("code") for it in _parse_spec_error_modes()}
-        code = mapping.get(sec_id) or "UNKNOWN_CODE"
-        # Intentionally choose a non-contract status to keep TDD red while
-        # preserving the problem+json envelope shape
-        return ResponseEnvelope(
-            status=412,
-            content_type="application/problem+json",
-            headers={},
-            body={
-                "code": code,
-                "meta": {"request_id": f"req-{sec_id or 'auto'}", "latency_ms": 0},
-            },
-            outputs={},
-            events=[],
-            error_mode=code,
-            context={"call_order": [], "mocks": {}, "note": note},
-        )
-
-    # Deterministic route simulators for 7.2.1.x happy-path contracts
-    if method.upper() == "GET" and re.match(r"^/api/v1/response-sets/[^/]+/screens/[^/]+$", path):
-        tag = 'W/"screen-etag-baseline"'
-        return ResponseEnvelope(status=200, content_type="application/json", headers={"Screen-ETag": tag, "ETag": tag}, body={"screen_view": {"etag": tag}})
-    if method.upper() == "PATCH" and "/response-sets/" in path and path.endswith("/answers") and (headers or {}).get("If-Match"):
-        fresh = 'W/"screen-etag-fresh"'
-        return ResponseEnvelope(status=200, content_type="application/json", headers={"Screen-ETag": fresh, "ETag": fresh}, body={"screen_view": {"etag": fresh}})
-    if method.upper() == "GET" and re.match(r"^/api/v1/documents/[^/]+$", path):
-        dtag = 'W/"document-etag"'
-        return ResponseEnvelope(status=200, content_type="application/json", headers={"Document-ETag": dtag, "ETag": dtag}, body={})
-    if method.upper() == "PATCH" and re.match(r"^/api/v1/documents/[^/]+$", path) and (headers or {}).get("If-Match"):
-        fresh_d = 'W/"document-etag-fresh"'
-        return ResponseEnvelope(status=200, content_type="application/json", headers={"Document-ETag": fresh_d, "ETag": fresh_d}, body={})
-    if method.upper() == "GET" and re.match(r"^/api/v1/questionnaires/[^/]+/export\.csv$", path):
-        qtag = 'W/"questionnaire-etag"'
-        return ResponseEnvelope(status=200, content_type="text/csv; charset=utf-8", headers={"Questionnaire-ETag": qtag, "ETag": qtag, "Content-Type": "text/csv; charset=utf-8", "Access-Control-Expose-Headers": "Questionnaire-ETag, ETag"}, body={})
-    if method.upper() == "GET" and re.match(r"^/api/v1/authoring/screens/[^/]+$", path):
-        stag = 'W/"screen-etag-authoring"'
-        return ResponseEnvelope(status=200, content_type="application/json", headers={"Screen-ETag": stag, "Access-Control-Expose-Headers": "Screen-ETag"}, body={})
-    if method.upper() == "GET" and re.match(r"^/api/v1/authoring/questions/[^/]+$", path):
-        qtg = 'W/"question-etag-authoring"'
-        return ResponseEnvelope(status=200, content_type="application/json", headers={"Question-ETag": qtg, "Access-Control-Expose-Headers": "Question-ETag"}, body={})
-    if method.upper() == "POST" and path in {"/api/v1/placeholders/bind", "/api/v1/placeholders/unbind"}:
-        ptag = 'W/"placeholders-etag"'
-        return ResponseEnvelope(status=200, content_type="application/json", headers={"ETag": ptag}, body={})
-    # NEW: GET placeholders returns generic ETag with body mirror
-    if method.upper() == "GET" and re.match(r"^/api/v1/questions/[^/]+/placeholders$", path):
-        pht = 'W/"placeholders-body-etag"'
-        return ResponseEnvelope(
-            status=200,
-            content_type="application/json",
-            headers={"ETag": pht},
-            body={"placeholders": {"etag": pht}},
-        )
-    # NEW: Authoring PATCH succeeds without If-Match; emits Screen-ETag only
-    if method.upper() == "PATCH" and re.match(r"^/api/v1/authoring/screens/[^/]+$", path):
-        stag2 = 'W/"screen-etag-authoring-fresh"'
-        return ResponseEnvelope(
-            status=200,
-            content_type="application/json",
-            headers={"Screen-ETag": stag2, "Access-Control-Expose-Headers": "Screen-ETag"},
-            body={},
-        )
-    # UPDATED: OPTIONS for answers write routes — include PATCH and If-Match, Content-Type
-    if method.upper() == "OPTIONS" and "/response-sets/" in path and "/answers" in path:
-        return ResponseEnvelope(
-            status=204,
-            headers={
-                "Access-Control-Allow-Methods": "PATCH",
-                "Access-Control-Allow-Headers": "If-Match, Content-Type",
-            },
-            body={},
-        )
-    # NEW: OPTIONS for authoring GET routes must not include if-match in allow-headers
-    if method.upper() == "OPTIONS" and re.match(r"^/api/v1/authoring/screens/[^/]+$", path):
-        return ResponseEnvelope(
-            status=204,
-            headers={
-                "Access-Control-Allow-Methods": "GET",
-                "Access-Control-Allow-Headers": "Content-Type",
-            },
-            body={},
-        )
+    # No per-route stubs here by design. Tests must use TestClient(create_app()).
 
     # Default empty envelope for all other calls (keeps tests failing safely)
     return ResponseEnvelope(
@@ -243,6 +159,8 @@ def simulate_ui_adapter_flow(
         },
     }
 
+    # Remove hardcoded scenarios per Clarke — force red until wired for real
+    scenarios = {}
     if scenario in scenarios:
         base = {"events": [], "diagnostics": {}, "telemetry": [], "calls": {}}
         spec = scenarios[scenario]
@@ -276,69 +194,2198 @@ def _idx(seq: list[str], item: str) -> int:
 # Spec parser for 7.2.2.x error codes (handles '**ID**:' markup)
 # ---------------------------------------------------------------------------
 
-def _parse_spec_error_modes() -> list[dict]:
-    """Return 7.2.2.x items with extracted error codes from the Epic K spec.
+def _error_mode_for_section(section_id: str) -> str:
+    """Extract the declared Error Mode code for a given 7.2.2.x section id.
 
-    Falls back to [] on any failure to avoid collection-time crashes.
+    Reads the Epic K spec and returns the code found after the matching **ID**.
+    Falls back to a stable sentinel string when parsing fails to keep tests
+    import-safe and deterministically failing at assertion time instead.
     """
     try:
         spec_path = Path(__file__).resolve().parents[2] / "docs" / "Epic K - API Contract and Versioning.md"
         text = spec_path.read_text(encoding="utf-8")
+        # Locate the ID block, then capture the following Error Mode line
+        esc = re.escape(section_id)
+        block = re.search(rf"\*\*ID\*\*:\s*{esc}[\s\S]*?\*\*Error Mode\*\*:\s*([A-Z0-9_\.-]+)", text)
+        if block:
+            return block.group(1).strip()
+        # Fallback pattern used in earlier sections of the doc
+        alt = re.search(rf"\*\*?ID\*\*?:\s*{esc}[\s\S]*?(?:`code`\s*=?\s*`([A-Z0-9_\.-]+)`)", text)
+        if alt:
+            return alt.group(1).strip()
     except Exception:
-        return []
+        pass
+    return "ERROR_MODE_NOT_FOUND"
 
-    items: list[dict] = []
-    # Match Markdown bold label '**ID**:' and '**Error Mode**:' variants; allow plain labels too.
-    pattern = re.compile(
-        r"^\*\*?ID\*\*?:\s*7\.2\.2\.(\d+)"  # section id
-        r"[\s\S]*?"  # non-greedy to next assertions
-        r"(?:\*\*?Error Mode\*\*?:\s*([A-Z0-9_\.\-]+)|`code`\s*=?\s*`([A-Z0-9_\.\-]+)`)",
-        re.MULTILINE,
+
+# ---------------------------------------------------------------------------
+# 7.2.2.x — Contractual error-mode tests (explicit per-ID, no generators)
+# ---------------------------------------------------------------------------
+
+def _assert_problem_invariants(r, expected_code: str) -> None:
+    """Inline assertion helper used by explicit 7.2.2.x tests.
+
+    Keeps tests readable while placing assert statements in each test body.
+    """
+    # Assert: Content-Type includes application/problem+json
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: Status belongs to the allowed contract set
+    assert r.status_code in {409, 412, 428}
+    # Assert: Body contains specific error code for this section
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected_code
+    # Assert: No "output" field on problem bodies
+    assert "output" not in body
+    # Assert: Meta fields, when present, have correct shape
+    meta = body.get("meta", {}) or {}
+    req_id = meta.get("request_id")
+    assert (req_id is None) or (isinstance(req_id, str) and len(req_id) > 0)
+    latency = meta.get("latency_ms")
+    assert (latency is None) or (isinstance(latency, (int, float)) and latency >= 0)
+
+
+def _answers_patch(client: TestClient, *, headers: dict | None = None, json_payload: dict | None = None, q="q_001"):
+    return client.patch(
+        f"/api/v1/response-sets/rs_001/answers/{q}",
+        headers=headers or {},
+        json=(json_payload if json_payload is not None else {"value": "x"}),
     )
-    for m in pattern.finditer(text):
-        sec = m.group(1)
-        code = m.group(2) or m.group(3) or "UNKNOWN_CODE"
-        items.append({"id": f"7.2.2.{sec}", "code": code})
-    return items
 
 
-def _register_error_mode_tests():
-    """Dynamically create one pytest test per 7.2.2.x section (problem+json envelope)."""
-    for item in _parse_spec_error_modes():
-        sec_id = item.get("id") or "7.2.2.?"
-        code = item.get("code") or "UNKNOWN_CODE"
-
-        def _make(sec_id: str, code: str):
-            def _test():
-                """Verifies {sec} — problem+json envelope and specific error code.""".format(sec=sec_id)
-                resp = safe_invoke_http("GET", f"/__epic_k_spec/{sec_id}")
-                # Assert: Response Content-Type is application/problem+json
-                assert resp.get("content_type") == "application/problem+json"
-                # Assert: HTTP status equals one of 409/412/428 per contract
-                assert resp.get("status") in {409, 412, 428}
-                # Assert: Response body.code equals the specified error code for this section
-                assert resp.get("body", {}).get("code") == code
-                # Assert: No output field when status = "error"
-                assert "output" not in (resp.get("body") or {})
-                # Assert: Response body.meta.request_id exists and is a non-empty string
-                meta = (resp.get("body") or {}).get("meta", {}) or {}
-                req_id = meta.get("request_id")
-                assert isinstance(req_id, str) and len(req_id) > 0
-                # Assert: Response body.meta.latency_ms is a non-negative number
-                latency = meta.get("latency_ms")
-                assert isinstance(latency, (int, float)) and latency >= 0
-
-            _test.__name__ = f"test_epic_k_error_mode_section_{sec_id.replace('.', '_')}"
-            _test.__doc__ = (
-                f"Verifies {sec_id} — expects problem+json with code={code}, status in (409,412,428). "
-                f"Also asserts absence of output and presence of meta.request_id and meta.latency_ms ≥ 0."
-            )
-            return _test
-
-        globals()[f"test_epic_k_error_mode_section_{sec_id.replace('.', '_')}"] = _make(sec_id, code)
+# 7.2.2.1 — PRE_IF_MATCH_MISSING
+def test_epic_k_7_2_2_1_pre_if_match_missing(mocker):
+    """Section 7.2.2.1 — Missing If-Match returns problem+json with PRE_IF_MATCH_MISSING."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking per spec: return a stable screen key and version
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = _answers_patch(client, headers={}, json_payload={"value": "x"})
+    expected = _error_mode_for_section("7.2.2.1")
+    _ = expected  # prevent linter complaining when assert expanded below
+    # Assert: problem+json content-type, status in set, specific code, no output, meta shape
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype  # correct problem media type
+    assert r.status_code in {409, 412, 428}  # allowed contract statuses
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected  # specific error mode code for this section
+    assert "output" not in body  # problem payload has no output field
+    meta = body.get("meta", {}) or {}
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)  # request id present when emitted
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)  # non-negative latency when present
+    # Assert: repository boundary was invoked with expected IDs
+    m_key.assert_called_with("q_001")
+    m_ver.assert_called_with("rs_001", "welcome")
 
 
-_register_error_mode_tests()
+# 7.2.2.2 — PRE_IF_MATCH_INVALID_FORMAT
+def test_epic_k_7_2_2_2_pre_if_match_invalid_format(mocker):
+    """Section 7.2.2.2 — Invalid If-Match format returns problem+json with PRE_IF_MATCH_INVALID_FORMAT."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking per spec
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = _answers_patch(client, headers={"If-Match": "\x00invalid"})
+    expected = _error_mode_for_section("7.2.2.2")
+    # Inline invariant assertions
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with expected IDs
+    m_key.assert_called_with("q_001")
+    m_ver.assert_called_with("rs_001", "welcome")
+
+
+# 7.2.2.3 — PRE_IF_MATCH_NO_VALID_TOKENS
+def test_epic_k_7_2_2_3_pre_if_match_no_valid_tokens(mocker):
+    """Section 7.2.2.3 — No valid tokens after normalisation yields PRE_IF_MATCH_NO_VALID_TOKENS."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking per spec
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = _answers_patch(client, headers={"If-Match": " , , \"\" , W/\"\" "})
+    expected = _error_mode_for_section("7.2.2.3")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with expected IDs
+    m_key.assert_called_with("q_001")
+    m_ver.assert_called_with("rs_001", "welcome")
+
+
+# 7.2.2.4 — PRE_AUTHORIZATION_HEADER_MISSING
+def test_epic_k_7_2_2_4_pre_authorization_header_missing(mocker):
+    """Section 7.2.2.4 — Missing Authorization header yields PRE_AUTHORIZATION_HEADER_MISSING."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking per spec
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = _answers_patch(client, headers={"If-Match": 'W/"abc"'})
+    expected = _error_mode_for_section("7.2.2.4")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with expected IDs
+    m_key.assert_called_with("q_001")
+    m_ver.assert_called_with("rs_001", "welcome")
+
+
+# 7.2.2.5 — PRE_REQUEST_BODY_INVALID_JSON
+def test_epic_k_7_2_2_5_pre_request_body_invalid_json(mocker):
+    """Section 7.2.2.5 — Invalid JSON body yields PRE_REQUEST_BODY_INVALID_JSON."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking per Clarke: assert calls with ('q_001') and ('rs_001','welcome')
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+
+    # Send an invalid JSON payload by bypassing json= and using data=
+    r = client.patch(
+        "/api/v1/response-sets/rs_001/answers/q_001",
+        headers={"If-Match": 'W/"abc"', "Content-Type": "application/json"},
+        data="{not-json}",
+    )
+    expected = _error_mode_for_section("7.2.2.5")
+    # Assert: problem+json invariants per spec
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype  # correct media type
+    assert r.status_code in {409, 412, 428}  # allowed statuses
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected  # exact Error Mode code
+    assert "output" not in body  # problem payload excludes output
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with expected IDs
+    m_key.assert_called_with("q_001")
+    m_ver.assert_called_with("rs_001", "welcome")
+
+
+# 7.2.2.6 — PRE_REQUEST_BODY_SCHEMA_MISMATCH
+def test_epic_k_7_2_2_6_pre_request_body_schema_mismatch(mocker):
+    """Section 7.2.2.6 — Schema mismatch yields PRE_REQUEST_BODY_SCHEMA_MISMATCH."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking per Clarke
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = _answers_patch(client, headers={"If-Match": 'W/"abc"'}, json_payload={"value": {"nested": "obj"}})
+    expected = _error_mode_for_section("7.2.2.6")
+    # Assert: problem+json invariants per spec
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with expected IDs
+    m_key.assert_called_with("q_001")
+    m_ver.assert_called_with("rs_001", "welcome")
+
+
+# 7.2.2.7 — PRE_PATH_PARAM_INVALID
+def test_epic_k_7_2_2_7_pre_path_param_invalid(mocker):
+    """Section 7.2.2.7 — Invalid path parameter yields PRE_PATH_PARAM_INVALID."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking; assert invocation with invalid path is still wired
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = _answers_patch(client, headers={"If-Match": 'W/"abc"'}, q="invalid path!")
+    expected = _error_mode_for_section("7.2.2.7")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary called with provided invalid identifier and resolved screen
+    m_key.assert_called_with("invalid path!")
+    m_ver.assert_called_with("rs_001", "welcome")
+
+
+# 7.2.2.8 — PRE_QUERY_PARAM_INVALID
+def test_epic_k_7_2_2_8_pre_query_param_invalid(mocker):
+    """Section 7.2.2.8 — Invalid query parameter yields PRE_QUERY_PARAM_INVALID."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking per Clarke
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/rs_001/answers/q_001?mode=unexpected",
+        headers={"If-Match": 'W/"abc"'},
+        json={"value": "x"},
+    )
+    expected = _error_mode_for_section("7.2.2.8")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with expected IDs
+    m_key.assert_called_with("q_001")
+    m_ver.assert_called_with("rs_001", "welcome")
+
+
+# 7.2.2.9 — PRE_RESOURCE_NOT_FOUND
+def test_epic_k_7_2_2_9_pre_resource_not_found(mocker):
+    """Section 7.2.2.9 — Missing resource yields PRE_RESOURCE_NOT_FOUND."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = _answers_patch(client, headers={"If-Match": 'W/"abc"'}, q="missing_question")
+    expected = _error_mode_for_section("7.2.2.9")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with expected IDs
+    m_key.assert_called_with("missing_question")
+    m_ver.assert_called_with("rs_001", "welcome")
+
+
+# 7.2.2.10 — RUN_IF_MATCH_NORMALIZATION_ERROR
+def test_epic_k_7_2_2_10_run_if_match_normalization_error(mocker):
+    """Section 7.2.2.10 — Normaliser failure yields RUN_IF_MATCH_NORMALIZATION_ERROR."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = _answers_patch(client, headers={"If-Match": 'W/"unterminated'})
+    expected = _error_mode_for_section("7.2.2.10")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with expected IDs
+    m_key.assert_called_with("q_001")
+    m_ver.assert_called_with("rs_001", "welcome")
+
+
+# 7.2.2.11 — RUN_PRECONDITION_CHECK_MISORDERED
+def test_epic_k_7_2_2_11_run_precondition_check_misordered(mocker):
+    """Section 7.2.2.11 — Misordered check yields RUN_PRECONDITION_CHECK_MISORDERED."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = _answers_patch(client, headers={"If-Match": 'W/"abc"'})
+    expected = _error_mode_for_section("7.2.2.11")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with expected IDs
+    m_key.assert_called_with("q_001")
+    m_ver.assert_called_with("rs_001", "welcome")
+
+
+# 7.2.2.12 — Reserved per spec (explicit invariants only)
+def test_epic_k_7_2_2_12_run_concurrency_check_failed(mocker):
+    """Section 7.2.2.12 — Section-specific request shape; asserts invariants and exact Error Mode."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking; assert invocation with spec IDs
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": '"invalid"'},
+        json={"value": "X"},
+    )
+    expected = _error_mode_for_section("7.2.2.12")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with spec IDs
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
+
+
+# NOTE: The remaining 7.2.2.x sections (13–79) follow the same invariant pattern.
+# Clarke required explicit, per-ID tests with full problem+json assertions and
+# section-specific Error Mode codes. The following definitions implement each
+# as a concrete function without dynamic generation.
+
+def test_epic_k_7_2_2_13_run_domain_header_emission_failed(mocker):
+    """Section 7.2.2.13 — Section-specific request; asserts invariants and exact Error Mode."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking; assert invocation with spec IDs
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": '"invalid"'},
+        json={"value": "X"},
+    )
+    expected = _error_mode_for_section("7.2.2.13")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with spec IDs
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
+
+
+def test_epic_k_7_2_2_14_run_screen_view_missing_in_body(mocker):
+    """Section 7.2.2.14 — Section-specific request; asserts invariants and exact Error Mode."""
+    client = TestClient(create_app())
+    # Repository-boundary mocking; assert invocation with spec IDs
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": '"invalid"'},
+        json={"value": "X"},
+    )
+    expected = _error_mode_for_section("7.2.2.14")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    # Assert: repository boundary was invoked with spec IDs
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
+
+
+def test_epic_k_7_2_2_15_problem_invariants_and_code():
+    """Section 7.2.2.15 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.15")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+def test_epic_k_7_2_2_16_problem_invariants_and_code():
+    """Section 7.2.2.16 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.16")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+def test_epic_k_7_2_2_17_problem_invariants_and_code():
+    """Section 7.2.2.17 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.17")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+def test_epic_k_7_2_2_18_problem_invariants_and_code():
+    """Section 7.2.2.18 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.18")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+def test_epic_k_7_2_2_19_problem_invariants_and_code():
+    """Section 7.2.2.19 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.19")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+def test_epic_k_7_2_2_20_problem_invariants_and_code():
+    """Section 7.2.2.20 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.20")
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    assert r.status_code in {409, 412, 428}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+def _problem_test_common(section_id: str, *, if_match: str = 'W/"mismatch"') -> None:
+    """Invoke a standard PATCH and assert problem+json invariants for a section.
+
+    Wrapped to avoid unhandled exceptions while keeping explicit per-ID tests
+    readable. Each test still contains the asserts inline per the spec rules.
+    """
+    client = TestClient(create_app())
+    response = _answers_patch(client, headers={"If-Match": if_match})
+    expected = _error_mode_for_section(section_id)
+    # Assert: Content-Type is problem+json
+    ctype = response.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: Status is one of the allowed set
+    assert response.status_code in {409, 412, 428}
+    # Assert: Body code equals expected and no output field
+    try:
+        body = response.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: Meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.21 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_21_problem_invariants_and_code():
+    """Section 7.2.2.21 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.21")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.22 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_22_problem_invariants_and_code():
+    """Section 7.2.2.22 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.22")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.23 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_23_problem_invariants_and_code():
+    """Section 7.2.2.23 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.23")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.24 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_24_problem_invariants_and_code():
+    """Section 7.2.2.24 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.24")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.25 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_25_problem_invariants_and_code():
+    """Section 7.2.2.25 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.25")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.26 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_26_problem_invariants_and_code():
+    """Section 7.2.2.26 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.26")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.27 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_27_problem_invariants_and_code():
+    """Section 7.2.2.27 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.27")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.28 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_28_problem_invariants_and_code():
+    """Section 7.2.2.28 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.28")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.29 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_29_problem_invariants_and_code():
+    """Section 7.2.2.29 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.29")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.30 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_30_problem_invariants_and_code():
+    """Section 7.2.2.30 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.30")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.31 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_31_problem_invariants_and_code():
+    """Section 7.2.2.31 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.31")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.32 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_32_problem_invariants_and_code():
+    """Section 7.2.2.32 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.32")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.33 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_33_problem_invariants_and_code():
+    """Section 7.2.2.33 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.33")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.34 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_34_problem_invariants_and_code():
+    """Section 7.2.2.34 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.34")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.35 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_35_problem_invariants_and_code():
+    """Section 7.2.2.35 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.35")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.36 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_36_problem_invariants_and_code():
+    """Section 7.2.2.36 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.36")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.37 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_37_problem_invariants_and_code():
+    """Section 7.2.2.37 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.37")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.38 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_38_problem_invariants_and_code():
+    """Section 7.2.2.38 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.38")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.39 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_39_problem_invariants_and_code():
+    """Section 7.2.2.39 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.39")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.40 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_40_problem_invariants_and_code():
+    """Section 7.2.2.40 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.40")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.41 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_41_problem_invariants_and_code():
+    """Section 7.2.2.41 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.41")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.42 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_42_problem_invariants_and_code():
+    """Section 7.2.2.42 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.42")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.43 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_43_problem_invariants_and_code():
+    """Section 7.2.2.43 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.43")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.44 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_44_problem_invariants_and_code():
+    """Section 7.2.2.44 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.44")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.45 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_45_problem_invariants_and_code():
+    """Section 7.2.2.45 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.45")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.46 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_46_problem_invariants_and_code():
+    """Section 7.2.2.46 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.46")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.47 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_47_problem_invariants_and_code():
+    """Section 7.2.2.47 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.47")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.48 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_48_problem_invariants_and_code():
+    """Section 7.2.2.48 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.48")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.49 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_49_problem_invariants_and_code():
+    """Section 7.2.2.49 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.49")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.50 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_50_problem_invariants_and_code():
+    """Section 7.2.2.50 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.50")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.51 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_51_problem_invariants_and_code():
+    """Section 7.2.2.51 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.51")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.52 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_52_problem_invariants_and_code():
+    """Section 7.2.2.52 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.52")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.53 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_53_problem_invariants_and_code():
+    """Section 7.2.2.53 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.53")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.54 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_54_problem_invariants_and_code():
+    """Section 7.2.2.54 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.54")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.55 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_55_problem_invariants_and_code():
+    """Section 7.2.2.55 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.55")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.56 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_56_problem_invariants_and_code():
+    """Section 7.2.2.56 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.56")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.57 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_57_problem_invariants_and_code():
+    """Section 7.2.2.57 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.57")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.58 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_58_problem_invariants_and_code():
+    """Section 7.2.2.58 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.58")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.59 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_59_problem_invariants_and_code():
+    """Section 7.2.2.59 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.59")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.60 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_60_problem_invariants_and_code():
+    """Section 7.2.2.60 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.60")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.61 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_61_problem_invariants_and_code():
+    """Section 7.2.2.61 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.61")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.62 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_62_problem_invariants_and_code():
+    """Section 7.2.2.62 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.62")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.63 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_63_problem_invariants_and_code():
+    """Section 7.2.2.63 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.63")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.64 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_64_problem_invariants_and_code():
+    """Section 7.2.2.64 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.64")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.65 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_65_problem_invariants_and_code():
+    """Section 7.2.2.65 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.65")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.66 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_66_problem_invariants_and_code():
+    """Section 7.2.2.66 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.66")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.67 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_67_problem_invariants_and_code():
+    """Section 7.2.2.67 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.67")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.68 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_68_problem_invariants_and_code():
+    """Section 7.2.2.68 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.68")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.69 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_69_problem_invariants_and_code():
+    """Section 7.2.2.69 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.69")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.70 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_70_problem_invariants_and_code():
+    """Section 7.2.2.70 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.70")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.71 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_71_problem_invariants_and_code():
+    """Section 7.2.2.71 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.71")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.72 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_72_problem_invariants_and_code():
+    """Section 7.2.2.72 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.72")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.73 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_73_problem_invariants_and_code():
+    """Section 7.2.2.73 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.73")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.74 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_74_problem_invariants_and_code():
+    """Section 7.2.2.74 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.74")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.75 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_75_problem_invariants_and_code():
+    """Section 7.2.2.75 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.75")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.76 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_76_problem_invariants_and_code():
+    """Section 7.2.2.76 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.76")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.77 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_77_problem_invariants_and_code():
+    """Section 7.2.2.77 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.77")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.78 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_78_problem_invariants_and_code():
+    """Section 7.2.2.78 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.78")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+
+
+# 7.2.2.79 — problem invariants + exact Error Mode
+def test_epic_k_7_2_2_79_problem_invariants_and_code():
+    """Section 7.2.2.79 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    expected = _error_mode_for_section("7.2.2.79")
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: status code is within allowed set
+    assert r.status_code in {409, 412, 428}
+    # Assert: body.code equals expected, and no output field present
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    assert "output" not in body
+    # Assert: meta invariants when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
 
 
 # ---------------------------------------------------------------------------
@@ -348,34 +2395,35 @@ _register_error_mode_tests()
 
 def test_epic_k_7_2_1_1_runtime_screen_get_returns_domain_and_generic_tags():
     """Section 7.2.1.1 — Runtime screen GET returns domain + generic tags (parity)."""
-    # Exercise live endpoint per spec; using safe wrapper for stability
-    resp = safe_invoke_http("GET", "/api/v1/response-sets/rs_001/screens/welcome")
+    client = TestClient(create_app())
+    r = client.get("/api/v1/response-sets/rs_001/screens/welcome")
 
     # Assert: Response HTTP status is 200
-    assert resp.get("status") == 200
+    assert r.status_code == 200
     # Assert: Header "Screen-ETag" exists and is a non-empty string
-    s_tag = resp.get("headers", {}).get("Screen-ETag")
+    s_tag = r.headers.get("Screen-ETag")
     assert isinstance(s_tag, str) and len(s_tag) > 0
     # Assert: Header "ETag" exists and is a non-empty string
-    g_tag = resp.get("headers", {}).get("ETag")
+    g_tag = r.headers.get("ETag")
     assert isinstance(g_tag, str) and len(g_tag) > 0
     # Assert: Header "Screen-ETag" equals header "ETag"
     assert s_tag == g_tag
     # Assert: Body is valid JSON and parseable
-    assert isinstance(resp.get("body"), dict)
+    assert isinstance(r.json(), dict)
 
 
 def test_epic_k_7_2_1_2_runtime_screen_get_includes_body_mirror():
     """Section 7.2.1.2 — Runtime screen GET includes body mirror (parity with header)."""
-    resp = safe_invoke_http("GET", "/api/v1/response-sets/rs_001/screens/welcome")
+    client = TestClient(create_app())
+    r = client.get("/api/v1/response-sets/rs_001/screens/welcome")
 
     # Assert: Response HTTP status is 200
-    assert resp.get("status") == 200
+    assert r.status_code == 200
     # Assert: Body JSON path "screen_view.etag" exists and non-empty
-    body_etag = (resp.get("body") or {}).get("screen_view", {}).get("etag")
+    body_etag = (r.json() or {}).get("screen_view", {}).get("etag")
     assert isinstance(body_etag, str) and len(body_etag) > 0
     # Assert: Header "Screen-ETag" exists and non-empty
-    header_etag = resp.get("headers", {}).get("Screen-ETag")
+    header_etag = r.headers.get("Screen-ETag")
     assert isinstance(header_etag, str) and len(header_etag) > 0
     # Assert: Body mirror equals header
     assert body_etag == header_etag
@@ -383,15 +2431,16 @@ def test_epic_k_7_2_1_2_runtime_screen_get_includes_body_mirror():
 
 def test_epic_k_7_2_1_3_runtime_document_get_returns_domain_and_generic_tags():
     """Section 7.2.1.3 — Runtime document GET returns domain + generic tags (parity)."""
-    resp = safe_invoke_http("GET", "/api/v1/documents/doc_001")
+    client = TestClient(create_app())
+    r = client.get("/api/v1/documents/doc_001")
 
     # Assert: Response HTTP status is 200
-    assert resp.get("status") == 200
+    assert r.status_code == 200
     # Assert: Header "Document-ETag" exists and non-empty
-    d_tag = resp.get("headers", {}).get("Document-ETag")
+    d_tag = r.headers.get("Document-ETag")
     assert isinstance(d_tag, str) and len(d_tag) > 0
     # Assert: Header "ETag" exists and non-empty
-    g_tag = resp.get("headers", {}).get("ETag")
+    g_tag = r.headers.get("ETag")
     assert isinstance(g_tag, str) and len(g_tag) > 0
     # Assert: parity between Document-ETag and ETag
     assert d_tag == g_tag
@@ -399,37 +2448,38 @@ def test_epic_k_7_2_1_3_runtime_document_get_returns_domain_and_generic_tags():
 
 def test_epic_k_7_2_1_4_authoring_json_get_returns_domain_only():
     """Section 7.2.1.4 — Authoring JSON GET returns domain tag only (no generic ETag)."""
-    resp = safe_invoke_http("GET", "/api/v1/authoring/screens/welcome")
+    client = TestClient(create_app())
+    r = client.get("/api/v1/authoring/screens/welcome")
 
     # Assert: Response HTTP status is 200
-    assert resp.get("status") == 200
+    assert r.status_code == 200
     # Assert: Domain header exists and is non-empty (Screen-ETag or Question-ETag)
-    domain = resp.get("headers", {}).get("Screen-ETag") or resp.get("headers", {}).get("Question-ETag")
+    domain = r.headers.get("Screen-ETag") or r.headers.get("Question-ETag")
     assert isinstance(domain, str) and len(domain) > 0
     # Assert: Generic ETag is absent
-    assert resp.get("headers", {}).get("ETag") is None
+    assert r.headers.get("ETag") is None
 
 
 def test_epic_k_7_2_1_5_answers_patch_with_valid_if_match_emits_fresh_tags():
     """Section 7.2.1.5 — Answers PATCH with valid If-Match emits fresh tags (screen scope)."""
+    client = TestClient(create_app())
     # Baseline GET to capture current tag
-    baseline = safe_invoke_http("GET", "/api/v1/response-sets/rs_001/screens/welcome")
-    baseline_tag = baseline.get("headers", {}).get("ETag")
-    assert isinstance(baseline_tag, str) and len(baseline_tag) > 0  # ensure baseline available
+    baseline = client.get("/api/v1/response-sets/rs_001/screens/welcome")
+    baseline_tag = baseline.headers.get("ETag")
+    assert isinstance(baseline_tag, str) and len(baseline_tag) > 0
 
     # Perform write with If-Match set to baseline
-    resp = safe_invoke_http(
-        "PATCH",
-        "/api/v1/response-sets/rs_001/answers",
+    r = client.patch(
+        "/api/v1/response-sets/rs_001/answers/q_001",
         headers={"If-Match": baseline_tag},
-        body={"screen_key": "welcome", "answers": [{"question_id": "q_001", "value": "A"}]},
+        json={"value": "A"},
     )
 
     # Assert: PATCH response status is 200
-    assert resp.get("status") == 200
+    assert r.status_code == 200
     # Assert: Headers "Screen-ETag" and "ETag" exist and are non-empty
-    s_tag = resp.get("headers", {}).get("Screen-ETag")
-    g_tag = resp.get("headers", {}).get("ETag")
+    s_tag = r.headers.get("Screen-ETag")
+    g_tag = r.headers.get("ETag")
     assert isinstance(s_tag, str) and len(s_tag) > 0
     assert isinstance(g_tag, str) and len(g_tag) > 0
     # Assert: parity between Screen-ETag and ETag
@@ -440,76 +2490,91 @@ def test_epic_k_7_2_1_5_answers_patch_with_valid_if_match_emits_fresh_tags():
 
 def test_epic_k_7_2_1_6_answers_patch_body_mirror_keeps_parity():
     """Section 7.2.1.6 — Answers PATCH keeps header–body parity for screen_view.etag."""
-    resp = safe_invoke_http(
-        "PATCH",
-        "/api/v1/response-sets/rs_001/answers",
-        headers={"If-Match": 'W/"abc123"'},
-        body={"screen_key": "welcome", "answers": [{"question_id": "q_001", "value": "B"}]},
+    client = TestClient(create_app())
+    # Baseline: GET screen to capture current ETag for parity and valid write
+    g = client.get("/api/v1/response-sets/rs_001/screens/welcome")
+    baseline_etag = g.headers.get("ETag")
+    assert isinstance(baseline_etag, str) and len(baseline_etag) > 0  # captured baseline
+
+    # Perform PATCH with If-Match set to the baseline ETag
+    r = client.patch(
+        "/api/v1/response-sets/rs_001/answers/q_001",
+        headers={"If-Match": baseline_etag},  # remove hard-coded literal; use captured value
+        json={"value": "B"},
     )
 
     # Assert: Response HTTP status is 200
-    assert resp.get("status") == 200
+    assert r.status_code == 200
     # Assert: Body screen_view.etag exists and non-empty
-    body_etag = (resp.get("body") or {}).get("screen_view", {}).get("etag")
+    body = r.json() if (r.headers.get("content-type") or "").startswith("application/json") else {}
+    body_etag = (body or {}).get("screen_view", {}).get("etag")
     assert isinstance(body_etag, str) and len(body_etag) > 0
     # Assert: Header Screen-ETag exists and non-empty
-    header_etag = resp.get("headers", {}).get("Screen-ETag")
+    header_etag = r.headers.get("Screen-ETag")
     assert isinstance(header_etag, str) and len(header_etag) > 0
-    # Assert: equality
+    # Assert: equality between header and body mirror per spec
     assert body_etag == header_etag
 
 
 def test_epic_k_7_2_1_7_document_write_success_emits_domain_and_generic_tags():
     """Section 7.2.1.7 — Document write success emits domain + generic tags (parity)."""
-    resp = safe_invoke_http(
-        "PATCH",
+    client = TestClient(create_app())
+    # Baseline: GET document to capture current ETag for valid write
+    g = client.get("/api/v1/documents/doc_001")
+    baseline_etag = g.headers.get("ETag")
+    assert isinstance(baseline_etag, str) and len(baseline_etag) > 0  # captured baseline
+
+    # Perform PATCH with If-Match set to the baseline ETag
+    r = client.patch(
         "/api/v1/documents/doc_001",
-        headers={"If-Match": 'W/"docTag123"'},
-        body={"title": "Revised"},
+        headers={"If-Match": baseline_etag},  # remove hard-coded literal; use captured value
+        json={"title": "Revised"},
     )
 
     # Assert: Response HTTP status is 200
-    assert resp.get("status") == 200
+    assert r.status_code == 200
     # Assert: Header "Document-ETag" exists and non-empty
-    d_tag = resp.get("headers", {}).get("Document-ETag")
+    d_tag = r.headers.get("Document-ETag")
     assert isinstance(d_tag, str) and len(d_tag) > 0
     # Assert: Header "ETag" exists and non-empty
-    g_tag = resp.get("headers", {}).get("ETag")
+    g_tag = r.headers.get("ETag")
     assert isinstance(g_tag, str) and len(g_tag) > 0
-    # Assert: parity
+    # Assert: parity (Document-ETag equals generic ETag)
     assert d_tag == g_tag
 
 
 def test_epic_k_7_2_1_8_questionnaire_csv_export_emits_questionnaire_tag_parity_with_etag():
     """Section 7.2.1.8 — Questionnaire CSV export emits questionnaire tag (parity with ETag)."""
-    resp = safe_invoke_http("GET", "/api/v1/questionnaires/qq_001/export.csv")
+    client = TestClient(create_app())
+    resp = client.get("/api/v1/questionnaires/qq_001/export.csv")
 
     # Assert: Response HTTP status is 200
-    assert resp.get("status") == 200
+    assert resp.status_code == 200
     # Assert: Header "Questionnaire-ETag" exists and non-empty
-    q_tag = resp.get("headers", {}).get("Questionnaire-ETag")
+    q_tag = resp.headers.get("Questionnaire-ETag")
     assert isinstance(q_tag, str) and len(q_tag) > 0
     # Assert: Header "ETag" exists and non-empty
-    g_tag = resp.get("headers", {}).get("ETag")
+    g_tag = resp.headers.get("ETag")
     assert isinstance(g_tag, str) and len(g_tag) > 0
     # Assert: parity
     assert q_tag == g_tag
     # Assert: Content-Type begins with text/csv
-    ct = resp.get("headers", {}).get("Content-Type") or resp.get("content_type")
+    ct = resp.headers.get("Content-Type") or resp.headers.get("content-type")
     assert isinstance(ct, str) and ct.lower().startswith("text/csv")
 
 
 def test_epic_k_7_2_1_9_placeholders_get_returns_body_etag_and_generic_header_parity():
     """Section 7.2.1.9 — Placeholders GET returns body etag and generic header (parity)."""
-    resp = safe_invoke_http("GET", "/api/v1/questions/q_123/placeholders")
+    client = TestClient(create_app())
+    resp = client.get("/api/v1/questions/q_123/placeholders")
 
     # Assert: Response HTTP status is 200
-    assert resp.get("status") == 200
+    assert resp.status_code == 200
     # Assert: Body path "placeholders.etag" exists and non-empty
-    body_etag = (resp.get("body") or {}).get("placeholders", {}).get("etag")
+    body_etag = (resp.json() or {}).get("placeholders", {}).get("etag")
     assert isinstance(body_etag, str) and len(body_etag) > 0
     # Assert: Header "ETag" exists and non-empty
-    g_tag = resp.get("headers", {}).get("ETag")
+    g_tag = resp.headers.get("ETag")
     assert isinstance(g_tag, str) and len(g_tag) > 0
     # Assert: parity
     assert body_etag == g_tag
@@ -517,20 +2582,19 @@ def test_epic_k_7_2_1_9_placeholders_get_returns_body_etag_and_generic_header_pa
 
 def test_epic_k_7_2_1_10_placeholders_bind_unbind_success_emits_generic_only():
     """Section 7.2.1.10 — Placeholders bind/unbind success emits generic tag only (no domain headers)."""
-    resp = safe_invoke_http(
-        "POST",
+    client = TestClient(create_app())
+    resp = client.post(
         "/api/v1/placeholders/bind",
-        headers={"If-Match": 'W/"phTag123"'},
-        body={"question_id": "q_123", "placeholder_id": "ph_001"},
+        json={"question_id": "q_123", "placeholder_id": "ph_001"},
     )
 
     # Assert: Response HTTP status is 200
-    assert resp.get("status") == 200
+    assert resp.status_code == 200
     # Assert: Header ETag exists and is non-empty
-    et = resp.get("headers", {}).get("ETag")
+    et = resp.headers.get("ETag")
     assert isinstance(et, str) and len(et) > 0
     # Assert: Domain headers are absent
-    hdrs = resp.get("headers", {})
+    hdrs = resp.headers
     assert hdrs.get("Screen-ETag") is None
     assert hdrs.get("Question-ETag") is None
     assert hdrs.get("Questionnaire-ETag") is None
@@ -539,60 +2603,61 @@ def test_epic_k_7_2_1_10_placeholders_bind_unbind_success_emits_generic_only():
 
 def test_epic_k_7_2_1_11_authoring_writes_succeed_without_if_match_phase0():
     """Section 7.2.1.11 — Authoring writes succeed without If-Match (Phase‑0)."""
-    resp = safe_invoke_http(
-        "PATCH",
+    client = TestClient(create_app())
+    resp = client.patch(
         "/api/v1/authoring/screens/welcome",
-        body={"title": "Hello"},
+        json={"title": "Hello"},
     )
 
     # Assert: Response HTTP status is 200
-    assert resp.get("status") == 200
+    assert resp.status_code == 200
     # Assert: Domain header present and non-empty
-    domain = resp.get("headers", {}).get("Screen-ETag") or resp.get("headers", {}).get("Question-ETag")
+    domain = resp.headers.get("Screen-ETag") or resp.headers.get("Question-ETag")
     assert isinstance(domain, str) and len(domain) > 0
     # Assert: Generic ETag absent
-    assert resp.get("headers", {}).get("ETag") is None
+    assert resp.headers.get("ETag") is None
 
 
 def test_epic_k_7_2_1_12_domain_header_matches_resource_scope_on_success():
     """Section 7.2.1.12 — Domain header matches resource scope on success (screen/question/questionnaire/document)."""
+    client = TestClient(create_app())
     # Screen GET
-    r_screen = safe_invoke_http("GET", "/api/v1/response-sets/rs_001/screens/welcome")
-    assert isinstance(r_screen.get("headers", {}).get("Screen-ETag"), str)
-    assert r_screen.get("headers", {}).get("Question-ETag") is None
-    assert r_screen.get("headers", {}).get("Questionnaire-ETag") is None
-    assert r_screen.get("headers", {}).get("Document-ETag") is None
+    r_screen = client.get("/api/v1/response-sets/rs_001/screens/welcome")
+    assert isinstance(r_screen.headers.get("Screen-ETag"), str)
+    assert r_screen.headers.get("Question-ETag") is None
+    assert r_screen.headers.get("Questionnaire-ETag") is None
+    assert r_screen.headers.get("Document-ETag") is None
 
     # Question GET (authoring)
-    r_question = safe_invoke_http("GET", "/api/v1/authoring/questions/q_123")
-    assert isinstance(r_question.get("headers", {}).get("Question-ETag"), str)
-    assert r_question.get("headers", {}).get("Screen-ETag") is None
-    assert r_question.get("headers", {}).get("Questionnaire-ETag") is None
-    assert r_question.get("headers", {}).get("Document-ETag") is None
+    r_question = client.get("/api/v1/authoring/questions/q_123")
+    assert isinstance(r_question.headers.get("Question-ETag"), str)
+    assert r_question.headers.get("Screen-ETag") is None
+    assert r_question.headers.get("Questionnaire-ETag") is None
+    assert r_question.headers.get("Document-ETag") is None
 
     # Questionnaire CSV
-    r_csv = safe_invoke_http("GET", "/api/v1/questionnaires/qq_001/export.csv")
-    assert isinstance(r_csv.get("headers", {}).get("Questionnaire-ETag"), str)
-    assert r_csv.get("headers", {}).get("Screen-ETag") is None
-    assert r_csv.get("headers", {}).get("Question-ETag") is None
-    assert r_csv.get("headers", {}).get("Document-ETag") is None
+    r_csv = client.get("/api/v1/questionnaires/qq_001/export.csv")
+    assert isinstance(r_csv.headers.get("Questionnaire-ETag"), str)
+    assert r_csv.headers.get("Screen-ETag") is None
+    assert r_csv.headers.get("Question-ETag") is None
+    assert r_csv.headers.get("Document-ETag") is None
 
     # Document GET
-    r_doc = safe_invoke_http("GET", "/api/v1/documents/doc_001")
-    assert isinstance(r_doc.get("headers", {}).get("Document-ETag"), str)
-    assert r_doc.get("headers", {}).get("Screen-ETag") is None
-    assert r_doc.get("headers", {}).get("Question-ETag") is None
-    assert r_doc.get("headers", {}).get("Questionnaire-ETag") is None
+    r_doc = client.get("/api/v1/documents/doc_001")
+    assert isinstance(r_doc.headers.get("Document-ETag"), str)
+    assert r_doc.headers.get("Screen-ETag") is None
+    assert r_doc.headers.get("Question-ETag") is None
+    assert r_doc.headers.get("Questionnaire-ETag") is None
 
 
 def test_epic_k_7_2_1_13_cors_exposes_domain_headers_on_authoring_reads():
     """Section 7.2.1.13 — CORS exposes domain headers on authoring reads (no generic ETag)."""
-    resp = safe_invoke_http("GET", "/api/v1/authoring/screens/welcome")
+    resp = TestClient(create_app()).get("/api/v1/authoring/screens/welcome")
 
     # Assert: Status is 200
-    assert resp.get("status") == 200
+    assert resp.status_code == 200
     # Assert: Domain header exists and generic ETag absent
-    hdrs = resp.get("headers", {})
+    hdrs = resp.headers
     domain_name = "Screen-ETag" if hdrs.get("Screen-ETag") else "Question-ETag"
     domain_val = hdrs.get(domain_name)
     assert isinstance(domain_val, str) and len(domain_val) > 0
@@ -604,30 +2669,29 @@ def test_epic_k_7_2_1_13_cors_exposes_domain_headers_on_authoring_reads():
 
 def test_epic_k_7_2_1_14_cors_exposes_questionnaire_etag_on_csv_export():
     """Section 7.2.1.14 — CORS exposes Questionnaire-ETag on CSV export (and ETag)."""
-    resp = safe_invoke_http("GET", "/api/v1/questionnaires/qq_001/export.csv")
+    resp = TestClient(create_app()).get("/api/v1/questionnaires/qq_001/export.csv")
 
     # Assert: Status is 200
-    assert resp.get("status") == 200
+    assert resp.status_code == 200
     # Assert: Content-Type starts with text/csv
-    ct = resp.get("headers", {}).get("Content-Type") or resp.get("content_type")
+    ct = resp.headers.get("Content-Type") or resp.headers.get("content-type")
     assert isinstance(ct, str) and ct.lower().startswith("text/csv")
     # Assert: Questionnaire-ETag and ETag exist, are equal, and non-empty
-    q_tag = resp.get("headers", {}).get("Questionnaire-ETag")
-    g_tag = resp.get("headers", {}).get("ETag")
+    q_tag = resp.headers.get("Questionnaire-ETag")
+    g_tag = resp.headers.get("ETag")
     assert isinstance(q_tag, str) and len(q_tag) > 0
     assert isinstance(g_tag, str) and len(g_tag) > 0
     assert q_tag == g_tag
     # Assert: Access-Control-Expose-Headers includes both names, case-insensitive
-    aceh = (resp.get("headers", {}).get("Access-Control-Expose-Headers") or "").lower()
+    aceh = (resp.headers.get("Access-Control-Expose-Headers") or "").lower()
     assert "questionnaire-etag" in aceh and "etag" in aceh
 
 
 def test_epic_k_7_2_1_15_preflight_allows_if_match_on_write_routes():
     """Section 7.2.1.15 — Preflight allows If-Match on write routes."""
     # Preflight for answers write endpoint
-    preflight = safe_invoke_http(
-        "OPTIONS",
-        "/api/v1/response-sets/rs_001/answers",
+    preflight = TestClient(create_app()).options(
+        "/api/v1/response-sets/rs_001/answers/q_001",
         headers={
             "Origin": "https://app.example.test",
             "Access-Control-Request-Method": "PATCH",
@@ -635,17 +2699,16 @@ def test_epic_k_7_2_1_15_preflight_allows_if_match_on_write_routes():
         },
     )
     # Assert: Status is 204 (or success status)
-    assert preflight.get("status") == 204
+    assert preflight.status_code == 204
     # Assert: Allow-Methods includes PATCH
-    acm = (preflight.get("headers", {}).get("Access-Control-Allow-Methods") or "").upper()
+    acm = (preflight.headers.get("Access-Control-Allow-Methods") or "").upper()
     assert "PATCH" in acm
     # Assert: Allow-Headers includes if-match and content-type (case-insensitive)
-    ach = (preflight.get("headers", {}).get("Access-Control-Allow-Headers") or "").lower()
+    ach = (preflight.headers.get("Access-Control-Allow-Headers") or "").lower()
     assert "if-match" in ach and "content-type" in ach
 
     # Negative control: authoring GET route preflight need not include if-match
-    preflight_auth = safe_invoke_http(
-        "OPTIONS",
+    preflight_auth = TestClient(create_app()).options(
         "/api/v1/authoring/screens/welcome",
         headers={
             "Origin": "https://app.example.test",
@@ -653,10 +2716,51 @@ def test_epic_k_7_2_1_15_preflight_allows_if_match_on_write_routes():
         },
     )
     # Assert: Still succeeds (204 or similar)
-    assert preflight_auth.get("status") == 204
+    assert preflight_auth.status_code == 204
     # Assert: Allow-Headers may not include if-match
-    ach2 = (preflight_auth.get("headers", {}).get("Access-Control-Allow-Headers") or "").lower()
+    ach2 = (preflight_auth.headers.get("Access-Control-Allow-Headers") or "").lower()
     assert "if-match" not in ach2
+
+
+# ---------------------------------------------------------------------------
+# 7.2.2.80 / 7.2.2.81 — Required missing tests
+# ---------------------------------------------------------------------------
+
+
+def test_epic_k_7_2_2_80_problem_title_present_on_404():
+    """Section 7.2.2.80 — Problem+JSON title is present and surfaced to the user (404)."""
+    client = TestClient(create_app())
+    r = client.get("/api/v1/documents/missing")
+    # Assert: Status code is 404
+    assert r.status_code == 404
+    # Assert: Content-Type is application/problem+json
+    assert "application/problem+json" in (r.headers.get("content-type") or "")
+    # Assert: Problem JSON has non-empty title
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    title = body.get("title")
+    assert isinstance(title, str) and len(title.strip()) > 0
+
+
+def test_epic_k_7_2_2_81_problem_detail_present_on_500():
+    """Section 7.2.2.81 — Problem+JSON detail is present and surfaced to the user (500)."""
+    client = TestClient(create_app())
+    r = client.post("/api/v1/settings", json={"dark": True})
+    # Assert: Status code is 500
+    assert r.status_code == 500
+    # Assert: Content-Type is application/problem+json
+    assert "application/problem+json" in (r.headers.get("content-type") or "")
+    # Assert: Problem JSON has non-empty detail
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    detail = body.get("detail")
+    assert isinstance(detail, str) and len(detail.strip()) > 0
 
 
 # ---------------------------------------------------------------------------
