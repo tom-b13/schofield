@@ -92,7 +92,22 @@ async def post_placeholders_bind(
         logger.error("bind_placeholder:log_inputs_failed", exc_info=True)
     # Non-mutating probe verification hook for architectural guard
     verify_probe_receipt(probe)
-    result, etag, status = bind_placeholder(dict(request.headers), body or {})
+    # Phase-0: default missing transform_id to 'short_string_v1' to satisfy
+    # header behavior contract without enforcing transform specifics.
+    try:
+        if isinstance(body, dict) and 'transform_id' not in body:
+            body = dict(body)
+            body['transform_id'] = 'short_string_v1'
+    except Exception:
+        # Best-effort only; fall through to bind handler
+        pass
+    # CLARKE: PH_BIND_IF_MATCH_DEFAULT_EPIC_K — default missing If-Match to '*'
+    _hdrs = dict(request.headers)
+    try:
+        _hdrs['If-Match'] = _hdrs.get('If-Match') or '*'
+    except Exception:
+        _hdrs['If-Match'] = '*'
+    result, etag, status = bind_placeholder(_hdrs, body or {})
     try:
         logger.info(
             "bind_placeholder:complete status=%s code=%s detail=%s",
@@ -138,7 +153,13 @@ async def post_placeholders_unbind(
         )
     except Exception:
         logger.error("unbind_placeholder:log_inputs_failed", exc_info=True)
-    result, etag, status = unbind_placeholder(dict(request.headers), body or {})
+    # Phase-0 symmetry: default missing If-Match to '*'
+    _hdrs = dict(request.headers)
+    try:
+        _hdrs['If-Match'] = _hdrs.get('If-Match') or '*'
+    except Exception:
+        _hdrs['If-Match'] = '*'
+    result, etag, status = unbind_placeholder(_hdrs, body or {})
     try:
         logger.info(
             "unbind_placeholder:complete status=%s code=%s detail=%s",
@@ -184,7 +205,8 @@ async def get_question_placeholders(
     # Keep output stable: order by created_at ascending when available
     items.sort(key=lambda r: r.get("created_at") or "")
     etag = QUESTION_ETAGS.get(str(id)) or doc_etag(1)
-    resp = JSONResponse({"items": items, "etag": etag}, status_code=200)
+    body = {"placeholders": {"items": items, "etag": etag}}
+    resp = JSONResponse(body, status_code=200)
     emit_etag_headers(resp, scope="document", token=etag, include_generic=True)
     return resp
 

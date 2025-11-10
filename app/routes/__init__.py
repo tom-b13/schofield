@@ -13,10 +13,15 @@ from app.routes.documents import router as documents_router
 from app.routes.questionnaires import router as questionnaires_router
 from app.routes.screens import router as screens_router
 try:
-    from app.routes.debug import router as debug_router, authoring_router as debug_authoring_router  # type: ignore
+    from app.routes.debug import (
+        router as debug_router,
+        authoring_router as debug_authoring_router,
+        settings_router as debug_settings_router,
+    )  # type: ignore
 except ImportError:
     debug_router = None  # type: ignore
     debug_authoring_router = None  # type: ignore
+    debug_settings_router = None  # type: ignore
 # Epic G authoring skeleton routes
 try:
     from app.routes.authoring import router as authoring_router  # type: ignore
@@ -55,5 +60,7 @@ if debug_router is not None:
     api_router.include_router(debug_router, tags=["Internal"])  # Test diagnostics only
 if debug_authoring_router is not None:
     api_router.include_router(debug_authoring_router, tags=["Internal"])  # Alias for tests posting to authoring/internal
+if debug_settings_router is not None:
+    api_router.include_router(debug_settings_router, tags=["Internal"])  # Contract test route for problem+json 500
 
 __all__ = ["api_router"]

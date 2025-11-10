@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 import logging
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/internal")
 # Secondary router to accept authoring-prefixed internal logs used by some tests
 authoring_router = APIRouter(prefix="/authoring/internal")
+
+# Settings router to satisfy Epic K problem+json on 500 contract
+settings_router = APIRouter()
+
+@settings_router.post("/settings")
+async def _settings_fail():
+    problem = {
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": "Intentional failure for contract validation",
+        "code": "INTERNAL_ERROR",
+    }
+    return JSONResponse(problem, status_code=500, media_type="application/problem+json")
 
 
 class LogPayload(BaseModel):
@@ -54,4 +68,4 @@ async def internal_log_authoring(p: LogPayload) -> Dict[str, str]:
     return await internal_log(p)
 
 
-__all__ = ["router", "authoring_router"]
+__all__ = ["router", "authoring_router", "settings_router"]

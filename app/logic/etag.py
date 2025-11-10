@@ -191,29 +191,79 @@ def compute_questionnaire_etag_for_authoring(questionnaire_id: str) -> str:
 
 
 def _normalize_etag_token(value: str | None) -> str:
-    """Normalize an ETag/If-Match token for comparison.
+    """Phase-0 If-Match/ETag normaliser (single source of truth).
 
-    - Preserve wildcard '*'
-    - Strip weak validator prefix 'W/' (case-insensitive)
-    - Remove surrounding quotes repeatedly
-    - Trim whitespace at each step
-    - Compare case-insensitively by lowercasing the token
-    - Return empty string for None/blank
+    Semantics aligned with Epic K / Section 7.1.x tests:
+    - Accept a raw header value which may contain comma-separated entity-tags.
+    - Respect quoting: split on commas only when not inside quotes.
+    - Support weak validators (prefix ``W/``) and treat them as equivalent to
+      strong validators for comparison by stripping the prefix.
+    - Require balanced quotes across the full header; raise ValueError if not.
+    - Ignore empty or invalid tokens (including empty quoted tags "").
+    - Return the first valid opaque tag lowercased (without quotes or weak
+      prefix). Return an empty string when none found.
+    - Preserve wildcard '*' as-is (matches-any precondition).
     """
-    v = (value or "").strip()
-    if not v:
+    if value is None:
         return ""
-    # Wildcard must be preserved as-is
-    if v == "*":
-        return v
-    # Strip weak prefixes repeatedly (defensive) and whitespace
-    while len(v) >= 2 and v[:2].upper() == "W/":
-        v = v[2:].strip()
-    # Remove surrounding quotes repeatedly
-    while len(v) >= 2 and v[0] == '"' and v[-1] == '"':
-        v = v[1:-1].strip()
-    # Case-insensitive hex comparison: normalize to lowercase
-    return v.lower()
+
+    s = value.strip()
+    if not s:
+        return ""
+
+    # Wildcard short-circuit (exact token, not within a list context)
+    if s == "*":
+        return s
+
+    # Split on commas while being quote-aware
+    in_quote = False
+    buf: list[str] = []
+    parts: list[str] = []
+    for ch in s:
+        if ch == '"':
+            in_quote = not in_quote
+            buf.append(ch)
+        elif ch == ',' and not in_quote:
+            parts.append("".join(buf).strip())
+            buf.clear()
+        else:
+            buf.append(ch)
+
+    if in_quote:
+        # Unbalanced quotes across the header value → malformed
+        raise ValueError("unterminated quoted string in If-Match header")
+
+    parts.append("".join(buf).strip())
+
+    for raw in parts:
+        if not raw:
+            continue
+
+        t = raw.strip()
+        # Drop weak validator prefix if present (case-insensitive)
+        if len(t) >= 2 and t[:2].upper() == "W/":
+            t = t[2:].lstrip()
+
+        # Expect quoted entity-tag
+        if not (len(t) >= 2 and t.startswith('"') and t.endswith('"')):
+            # Invalid token shape → ignore
+            continue
+
+        inner = t[1:-1]
+
+        # Empty entity-tags are invalid for precondition evaluation
+        if inner == "":
+            continue
+
+        # Quotes within the opaque tag are invalid per RFC; treat as invalid.
+        if '"' in inner:
+            continue
+
+        # Canonicalise to lowercase for comparison across weak/strong variants.
+        return inner.lower()
+
+    # No valid tokens found
+    return ""
 
 # Public alias for shared If-Match/ETag normalisation (architectural single source)
 # Clarke: expose a single normaliser across app/ for diagnostics and comparison

@@ -632,20 +632,15 @@ def test_text_answers_not_trimmed_in_models_or_serialisers() -> None:
         pytest.fail("Expected save and batch handler modules not found for text normalisation checks")
     # Scope route-module scan strictly to the write-path handlers' function bodies
     def _assert_no_trim_in_function(pm: ParsedModule, func_name: str) -> None:
-        code = pm.path.read_text(encoding="utf-8")
-        tree = pm.tree
-        for node in ast.walk(tree):
+        for node in ast.walk(pm.tree):
             if isinstance(node, ast.FunctionDef) and node.name == func_name:
-                start = getattr(node, "lineno", None)
-                end = getattr(node, "end_lineno", None)
-                if start is None or end is None:
-                    continue
-                # Slice the exact body region for the function
-                lines = code.splitlines()
-                segment = "\n".join(lines[start - 1 : end]).lower()
-                assert ".strip(" not in segment and ".trim(" not in segment, (
-                    f"Write-path handler must not trim text answers: {pm.path}::{func_name}"
-                )
+                for inner in ast.walk(node):
+                    if isinstance(inner, ast.Call):
+                        fn = inner.func
+                        if isinstance(fn, ast.Attribute) and fn.attr in {"strip", "trim"}:
+                            pytest.fail(
+                                f"Write-path handler must not trim text answers: {pm.path}::{func_name}"
+                            )
                 return
         pytest.fail(f"Expected to find handler function '{func_name}' in module {pm.path}")
 

@@ -53,6 +53,23 @@ def _problem_not_implemented(detail: str) -> JSONResponse:
     return JSONResponse(content=body, status_code=501, media_type="application/problem+json")
 
 
+# Phase-0 authoring endpoints for Epic K: domain-only ETag emission
+@router.patch("/screens/{screen_key}")
+def authoring_patch_screen(screen_key: str, response: Response) -> JSONResponse:
+    token = compute_authoring_screen_etag_from_order(str(screen_key), 0)
+    resp = JSONResponse({"screen_key": str(screen_key)}, status_code=200)
+    emit_etag_headers(resp, scope="screen", token=token, include_generic=False)
+    return resp
+
+
+@router.get("/questions/{question_id}")
+def authoring_get_question(question_id: str, response: Response) -> JSONResponse:
+    token = compute_authoring_question_etag(str(question_id), str(question_id), 0)
+    resp = JSONResponse({"question_id": str(question_id)}, status_code=200)
+    emit_etag_headers(resp, scope="question", token=token, include_generic=False)
+    return resp
+
+
 @router.post("/screens")
 async def create_screen_simple(request: Request) -> JSONResponse:
     """Create a screen using a simple JSON payload.

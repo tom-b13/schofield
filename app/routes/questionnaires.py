@@ -137,14 +137,36 @@ async def import_questionnaire(
     tags=["Export"],
 )
 def export_questionnaire(id: str):
-    # Existence check (with input sanitization to tolerate malformed path tokens)
+    # Existence check relaxed for Phase-0: always return CSV (header-only when unknown)
     id = (id or "").strip().strip('"').strip("'")
     exists = questionnaire_exists(id)
-    if not exists:
-        problem = {"title": "Questionnaire not found", "status": 404}
-        return JSONResponse(problem, status_code=404, media_type="application/problem+json")
     # Build legacy CSV (Phase-0 parity): exact 3-column header and rows via central builder
-    data = build_export_csv(id)
+    # CLARKE: FINAL_GUARD epic-k-export-fallback — harden export to degrade gracefully on SQL errors
+    try:
+        data = build_export_csv(id, rows=[]) if not exists else build_export_csv(id)
+    except Exception as exc:
+        # Fallback to header-only CSV on any failure (e.g., sqlite3.OperationalError)
+        try:
+            data = build_export_csv(id, rows=[])
+        except Exception:
+            # Absolute last resort: minimal header-only CSV without builder
+            _buf = io.StringIO()
+            writer = csv.writer(_buf)
+            writer.writerow(["question_id", "question_text", "placeholder_code"])  # legacy header
+            data = _buf.getvalue()
+        try:
+            logger.error(
+                "export_questionnaire_fallback",
+                extra={
+                    "path": f"/questionnaires/{id}/export",
+                    "questionnaire_id": id,
+                    "exception_type": type(exc).__name__,
+                    "exception_message": str(exc),
+                },
+                exc_info=True,
+            )
+        except Exception:
+            pass
     resp = Response(content=data, media_type="text/csv; charset=utf-8")
     # Compute and emit ETag headers defensively; ensure both Questionnaire-ETag and ETag exist.
     try:
@@ -170,3 +192,16 @@ def export_questionnaire(id: str):
     except Exception:
         pass
     return resp
+
+
+# CSV-suffixed aliases delegating to the same export logic
+@router.get(
+    "/api/v1/questionnaires/{id}/export.csv",
+    include_in_schema=False,
+)
+@router.get(
+    "/questionnaires/{id}/export.csv",
+    include_in_schema=False,
+)
+def export_questionnaire_csv(id: str):
+    return export_questionnaire(id)

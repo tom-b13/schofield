@@ -40,6 +40,22 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
         logger.error("etag_current_str_cast_failed", exc_info=True)
         current_str = None
 
+    # CLARKE: FINAL_GUARD etag-enforce-log
+    def _log_enforce_decision(_outcome: str, _tokens) -> None:
+        try:
+            logger.info(
+                "etag.enforce.decision",
+                extra={
+                    "policy": "strict",
+                    "if_match_raw": if_match_raw,
+                    "if_match_tokens": _tokens,
+                    "current_etag": current_str,
+                    "match_outcome": _outcome,
+                },
+            )
+        except Exception:
+            logger.error("etag_enforce_decision_log_failed", exc_info=True)
+
     # Missing header -> 428 Precondition Required
     if not if_match_header or not str(if_match_header).strip():
         # 428 Precondition Required with explicit problem code per Epic K
@@ -63,6 +79,77 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
             )
         except Exception:
             logger.error("etag_if_match_missing_log_failed", exc_info=True)
+        _log_enforce_decision("missing", if_match_norm)
+        return False, 428, problem
+
+    # Granular classification prior to comparison
+    try:
+        raw = str(if_match_header)
+    except Exception:  # pragma: no cover
+        raw = ""
+    # (1) Invalid format: control characters only (quotes handled by normalizer)
+    try:
+        has_ctrl = any((ord(c) < 32 or ord(c) == 127) for c in raw)
+        if has_ctrl:
+            problem = {
+                "title": "Precondition Failed",
+                "status": 412,
+                "detail": "If-Match header has invalid format",
+                "code": "PRE_IF_MATCH_INVALID_FORMAT",
+            }
+            try:
+                logger.info(
+                    "etag.if_match_decision",
+                    extra={
+                        "outcome": "invalid_format",
+                        "if_match_raw": if_match_raw,
+                        "if_match_norm": None,
+                        "current": current_str,
+                        "status": 412,
+                    },
+                )
+            except Exception:
+                logger.error("etag_if_match_invalid_format_log_failed", exc_info=True)
+            _log_enforce_decision("invalid_format", None)
+            return False, 412, problem
+    except Exception:  # pragma: no cover
+        logger.error("etag_invalid_format_check_failed", exc_info=True)
+
+    # (2) Normalization: detect exceptions and empty-results
+    try:
+        norm_value = normalise_if_match(if_match_header)
+    except Exception:
+        # Normalizer failure is a distinct run-time classification
+        logger.error("etag_normalise_failed_strict", exc_info=True)
+        problem = {
+            "title": "Precondition Failed",
+            "status": 412,
+            "detail": "If-Match normalization error",
+            "code": "RUN_IF_MATCH_NORMALIZATION_ERROR",
+        }
+        _log_enforce_decision("normalization_error", None)
+        return False, 412, problem
+    if norm_value is None or not str(norm_value).strip():
+        problem = {
+            "title": "Precondition Required",
+            "status": 428,
+            "detail": "If-Match contains no valid tokens",
+            "code": "PRE_IF_MATCH_NO_VALID_TOKENS",
+        }
+        try:
+            logger.info(
+                "etag.if_match_decision",
+                extra={
+                    "outcome": "no_valid_tokens",
+                    "if_match_raw": if_match_raw,
+                    "if_match_norm": norm_value,
+                    "current": current_str,
+                    "status": 428,
+                },
+            )
+        except Exception:
+            logger.error("etag_if_match_no_tokens_log_failed", exc_info=True)
+        _log_enforce_decision("no_valid_tokens", norm_value)
         return False, 428, problem
 
     # Compare using public comparator which applies canonical normalisation
@@ -95,8 +182,10 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
             "detail": "If-Match does not match current ETag",
             "code": "PRE_IF_MATCH_ETAG_MISMATCH",
         }
+        _log_enforce_decision("mismatch", if_match_norm)
         return False, 409, problem
 
+    _log_enforce_decision("pass", if_match_norm)
     return True, 200, {}
 
 

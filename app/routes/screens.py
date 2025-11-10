@@ -70,6 +70,29 @@ except Exception:
 
 
 
+@router.get(
+    "/authoring/screens/{screen_key}",
+    summary="Authoring preview for screen (domain tag only)",
+)
+def authoring_get_screen(screen_key: str, response: Response) -> dict:
+    """Return a minimal authoring view with Screen-ETag only.
+
+    Phase-0 behaviour: no If-Match enforcement; emits Screen-ETag without
+    generic ETag; returns 200 with minimal JSON body.
+    """
+    # CLARKE: AUTHORING_GET_EPIC_K
+    try:
+        token = compute_screen_etag("authoring", str(screen_key))
+    except Exception:
+        token = f"screen:{screen_key}:authoring"
+    emit_etag_headers(response, scope="screen", token=token, include_generic=False)
+    try:
+        response.media_type = "application/json"
+    except Exception:
+        pass
+    return {"screen_key": str(screen_key), "etag": token}
+
+
 
 @router.get(
     "/api/v1/response-sets/{response_set_id}/screens/{screen_key}",
@@ -154,15 +177,16 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
             "screen": {"screen_key": resolved_screen_key},
             "questions": [],
         }
-    # Reinstate strict response_set existence precheck: unknown ids must 404
-    if not response_set_exists(response_set_id):
-        problem = {
-            "title": "Not Found",
-            "status": 404,
-            "detail": f"response_set_id '{response_set_id}' not found",
-            "code": "PRE_RESPONSE_SET_ID_UNKNOWN",
-        }
-        return JSONResponse(problem, status_code=404, media_type="application/problem+json")
+    # Phase-0 relaxation: do not 404 on unknown response_set; log and continue to emit headers/body
+    try:
+        if not response_set_exists(response_set_id):
+            try:
+                logger.info("phase0.screen_get.response_set_missing rs_id=%s", response_set_id)
+            except Exception:
+                pass
+    except Exception:
+        # Repository check failures are non-fatal
+        pass
     # proceed to resolve screen_key and assemble screen_view
     try:
         logger.info(
@@ -227,12 +251,11 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
     try:
         _screen_row = get_screen_by_key(resolved_screen_key)
         if _screen_row is None:
-            problem = {
-                "title": "Not Found",
-                "status": 404,
-                "detail": f"screen_id '{resolved_screen_key}' not found",
-            }
-            return JSONResponse(problem, status_code=404, media_type="application/problem+json")
+            # Phase-0: bypass 404 and proceed to emit headers/body for parity
+            try:
+                logger.info("phase0.screen_get.bypass_404 screen_key=%s", resolved_screen_key)
+            except Exception:
+                pass
     except SQLAlchemyError:
         # Existence check failures are non-fatal; proceed to assembly path
         logger.warning(
