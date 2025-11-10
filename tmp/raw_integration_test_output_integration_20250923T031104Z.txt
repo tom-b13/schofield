@@ -1,1 +1,0 @@
-ConfigError: No feature files in '/home/codex/schofield/tests/integration/features'

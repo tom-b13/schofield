@@ -1,4 +1,6 @@
-tmp/
+# Project temp directory: ignore all contents but keep .gitignore tracked
+tmp/*
+!tmp/.gitignore
 
 
 # Byte-compiled / optimized / DLL files
