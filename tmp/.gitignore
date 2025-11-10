@@ -1,0 +1,4 @@
+# Ignore all generated files in this directory while keeping this file tracked
+*
+!.gitignore
+
