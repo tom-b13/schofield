@@ -258,3 +258,25 @@ Feature: Epic G — Build questionnaire (authoring)
     Then the request is rejected because answer_kind cannot be supplied on create
     And no question is created
 
+    @happy_path
+    Scenario: Read questions for a screen returns ordered list with Screen-ETag
+        Given screen "S-2" exists with questions:
+          | question_id | question_text            | question_order |
+          | Q-1         | Where is your HQ?        | 1              |
+          | Q-2         | How many offices?        | 2              |
+        When I GET "/screens/S-2/questions"
+        Then the response status should be 200
+        And the response should include headers "Screen-ETag"
+        And the response body should include:
+          | path                        | value                   |
+          | questions[0].question_id    | Q-1                     |
+          | questions[0].question_text  | Where is your HQ?       |
+          | questions[0].question_order | 1                       |
+          | questions[1].question_id    | Q-2                     |
+          | questions[1].question_text  | How many offices?       |
+          | questions[1].question_order | 2                       |
+    
+    @sad_path
+    Scenario: Read questions for unknown screen returns 404
+        When I GET "/screens/DOES-NOT-EXIST/questions"
+        Then the response status should be 404
