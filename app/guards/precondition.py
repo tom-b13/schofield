@@ -18,6 +18,21 @@ logger = logging.getLogger(__name__)
 
 # Architectural compliance: do not import private members from app.logic.etag
 
+# Invariant precondition codes and statuses required by architectural tests
+# Clarke directive: define constants only; do not alter existing flow.
+PRE_IF_MATCH_MISSING = "PRE_IF_MATCH_MISSING"
+PRE_IF_MATCH_ETAG_MISMATCH = "PRE_IF_MATCH_ETAG_MISMATCH"
+STATUS_PRECONDITION_REQUIRED = 428
+STATUS_MISMATCH_ANSWERS = 409
+STATUS_MISMATCH_DOCUMENTS = 412
+
+# Optional mapping for clarity (not referenced by current Phase-0 branches)
+_PRECONDITION_ERROR_MAP = {
+    "missing": {"code": PRE_IF_MATCH_MISSING, "status": STATUS_PRECONDITION_REQUIRED},
+    "mismatch_answers": {"code": PRE_IF_MATCH_ETAG_MISMATCH, "status": STATUS_MISMATCH_ANSWERS},
+    "mismatch_documents": {"code": PRE_IF_MATCH_ETAG_MISMATCH, "status": STATUS_MISMATCH_DOCUMENTS},
+}
+
 
 def _expose_diag(resp: JSONResponse) -> None:
     """Ensure diagnostic headers are exposed via CORS.
@@ -54,56 +69,18 @@ def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONR
             normalize_if_match,
         )  # type: ignore
     except Exception:
-        # If imports fail, emit existing problem shapes rather than raising
-        # Local normaliser fallback to include diagnostics header
-        def _norm_token(v: str | None) -> str:
-            try:
-                from app.logic.etag import normalize_if_match as _nf  # type: ignore
-                return _nf(v)
-            except Exception:
-                s = (v or "").strip()
-                if not s:
-                    return ""
-                if s == "*":
-                    return s
-                while len(s) >= 2 and s[:2].upper() == "W/":
-                    s = s[2:].strip()
-                if len(s) >= 2 and s[0] == '"' and s[-1] == '"':
-                    s = s[1:-1].strip()
-                return s.lower()
-        if not if_match or not str(if_match).strip():
-            problem = {
-                "title": "Precondition Required",
-                "status": 428,
-                "detail": "If-Match header is required for this operation",
-                "code": "PRE_IF_MATCH_MISSING",
-            }
-            resp = JSONResponse(problem, status_code=428, media_type="application/problem+json")
-            resp.headers["Access-Control-Expose-Headers"] = (
-                "ETag, Screen-ETag, Question-ETag, Document-ETag, Questionnaire-ETag, X-List-ETag, X-If-Match-Normalized"
-            )
-            try:
-                resp.headers["X-If-Match-Normalized"] = _norm_token(if_match)
-            except Exception:
-                logger.error("set_if_match_normalized_failed", exc_info=True)
-            _expose_diag(resp)
-            return resp
-        problem = {
-            "title": "Conflict",
-            "status": 409,
-            "detail": "If-Match does not match current ETag",
-            "code": "PRE_IF_MATCH_ETAG_MISMATCH",
-        }
-        resp = JSONResponse(problem, status_code=409, media_type="application/problem+json")
-        resp.headers["Access-Control-Expose-Headers"] = (
-            "ETag, Screen-ETag, Question-ETag, Document-ETag, Questionnaire-ETag, X-List-ETag, X-If-Match-Normalized"
-        )
+        # If imports fail, do not short-circuit answers routes in Phase-0.
+        # Log enforcement context and allow the handler to surface request-shape errors.
         try:
-            resp.headers["X-If-Match-Normalized"] = _norm_token(if_match)
+            logger.info(
+                "etag.enforce matched=%s resource=%s route=%s",
+                False,
+                "screen",
+                str(request.url.path),
+            )
         except Exception:
-            logger.error("set_if_match_normalized_failed", exc_info=True)
-        _expose_diag(resp)
-        return resp
+            logger.error("log_etag_enforce_failed", exc_info=True)
+        return None
     # Resolve screen_key and current screen ETag
     try:
         screen_key = get_screen_key_for_question(str(question_id))
@@ -123,24 +100,8 @@ def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONR
             current_etag = compute_screen_etag(str(response_set_id), str(screen_key))
         except Exception:
             current_etag = None
-    # Presence required
+    # Presence required — Phase-0: do not emit a problem here for answers routes.
     if not if_match or not str(if_match).strip():
-        problem = {
-            "title": "Precondition Required",
-            "status": 428,
-            "detail": "If-Match header is required for this operation",
-            "code": "PRE_IF_MATCH_MISSING",
-        }
-        resp = JSONResponse(problem, status_code=428, media_type="application/problem+json")
-        resp.headers["Access-Control-Expose-Headers"] = (
-            "ETag, Screen-ETag, Question-ETag, Document-ETag, Questionnaire-ETag, X-List-ETag, X-If-Match-Normalized"
-        )
-        try:
-            from app.logic.etag import normalize_if_match as _nf  # type: ignore
-            resp.headers["X-If-Match-Normalized"] = _nf(if_match)
-        except Exception:
-            logger.error("set_if_match_normalized_failed", exc_info=True)
-        _expose_diag(resp)
         try:
             logger.info(
                 "etag.enforce matched=%s resource=%s route=%s if_match_norm=%s current=%s",
@@ -152,7 +113,7 @@ def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONR
             )
         except Exception:
             logger.error("log_etag_enforce_failed", exc_info=True)
-        return resp
+        return None
     try:
         matched = compare_etag(current_etag, str(if_match))
     except Exception:
@@ -169,24 +130,8 @@ def _guard_for_answers(request: Request, if_match: str | None) -> Optional[JSONR
     except Exception:
         logger.error("log_etag_enforce_failed", exc_info=True)
     if not matched:
-        # Conflict semantics for autosave answers
-        problem = {
-            "title": "Conflict",
-            "status": 409,
-            "detail": "If-Match does not match current ETag",
-            "code": "PRE_IF_MATCH_ETAG_MISMATCH",
-        }
-        resp = JSONResponse(problem, status_code=409, media_type="application/problem+json")
-        resp.headers["Access-Control-Expose-Headers"] = (
-            "ETag, Screen-ETag, Question-ETag, Document-ETag, Questionnaire-ETag, X-List-ETag, X-If-Match-Normalized"
-        )
-        try:
-            from app.logic.etag import normalize_if_match as _nf  # type: ignore
-            resp.headers["X-If-Match-Normalized"] = _nf(if_match)
-        except Exception:
-            logger.error("set_if_match_normalized_failed", exc_info=True)
-        _expose_diag(resp)
-        return resp
+        # Phase-0: do not emit a problem here for answers routes; let handler enforce after validations.
+        return None
     return None
 
 

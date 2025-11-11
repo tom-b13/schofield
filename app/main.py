@@ -147,6 +147,8 @@ def create_app() -> FastAPI:
                 "title": "Invalid Request",
                 "status": 409,
                 "detail": detail,
+                # Epic K invariant: include human-readable message; fallback to detail
+                "message": (detail or "Request validation failed"),
                 "code": code,
             }
             return JSONResponse(problem, status_code=409, media_type="application/problem+json")

@@ -29,7 +29,7 @@ async def _settings_fail():
         "title": "Internal Server Error",
         "status": 500,
         "detail": "Intentional failure for contract validation",
-        "code": "INTERNAL_ERROR",
+        "code": "RUN_UNEXPECTED_ERROR",
     }
     return JSONResponse(problem, status_code=500, media_type="application/problem+json")
 

@@ -125,7 +125,6 @@ def _answer_kind_for_question(question_id: str) -> str | None:  # Backwards-comp
         409: {"content": {"application/problem+json": {}}},
         428: {"content": {"application/problem+json": {}}},
     },
-    dependencies=[Depends(precondition_guard)],
     # Keep runtime header optional to allow 428 semantics, but declare as required in OpenAPI
     openapi_extra={
         "parameters": [
@@ -137,6 +136,7 @@ def _answer_kind_for_question(question_id: str) -> str | None:  # Backwards-comp
             }
         ]
     },
+    dependencies=[Depends(precondition_guard)],
 )
 def autosave_answer(
     response_set_id: str,
@@ -146,7 +146,45 @@ def autosave_answer(
     response: Response,
     if_match: str | None = Header(None, alias="If-Match"),
 ):
+    # CLARKE: FINAL_GUARD 3a9d1a9f-answers-problem-emit
+    def _log_problem_emit(
+        problem: dict,
+        status: int,
+        *,
+        section_hint: str | None = None,
+        current_etag: str | None = None,
+        screen_key_local: str | None = None,
+    ) -> None:
+        """Structured problem emission log for Epic K diagnostics.
+
+        Logs a single line with sufficient context to disambiguate whether
+        If-Match enforcement is short-circuiting non-precondition sections.
+        """
+        try:
+            if_match_raw = if_match
+            try:
+                if_match_normalized = _normalize_etag(if_match)
+            except Exception:
+                if_match_normalized = None
+            logger.info(
+                "answers.problem.emit",
+                extra={
+                    "section_hint": section_hint,
+                    "selected_code": (problem or {}).get("code"),
+                    "status": status,
+                    "if_match_raw": if_match_raw,
+                    "if_match_normalized": if_match_normalized,
+                    "current_etag": current_etag,
+                    "screen_key": screen_key_local,
+                },
+            )
+        except Exception:
+            logger.error("answers_problem_emit_log_failed", exc_info=True)
     # If-Match enforcement handled inline per Epic K Phase-0.
+
+    # CLARKE: FINAL_GUARD autosaveAnswer
+    # Removed early non-terminal If-Match probe to ensure request-shape
+    # validations run before enforcement as per Phase-0 ordering.
 
     # Instrumentation + recovery: if the parsed payload is effectively empty,
     # try to inspect the raw JSON body (cached by Starlette) to recover fields
@@ -370,7 +408,18 @@ def autosave_answer(
                     "status": 409,
                     "detail": "Unexpected query parameters present",
                     "code": "PRE_QUERY_PARAM_INVALID",
+                    "message": "Unexpected query parameters present",
                 }
+                try:
+                    _log_problem_emit(
+                        problem,
+                        409,
+                        section_hint="pre_if_match",
+                        current_etag=(str(best_etag) if best_etag else None),
+                        screen_key_local=screen_key,
+                    )
+                except Exception:
+                    pass
                 return _emit_and_return(problem, status_code=409)
         except Exception:
             logger.error("pre_if_match_prevalidations_query_params_failed", exc_info=True)
@@ -385,7 +434,18 @@ def autosave_answer(
                     "status": 409,
                     "detail": "Path parameter contains invalid characters",
                     "code": "PRE_PATH_PARAM_INVALID",
+                    "message": "Path parameter contains invalid characters",
                 }
+                try:
+                    _log_problem_emit(
+                        problem,
+                        409,
+                        section_hint="pre_if_match",
+                        current_etag=(str(best_etag) if best_etag else None),
+                        screen_key_local=screen_key,
+                    )
+                except Exception:
+                    pass
                 return _emit_and_return(problem, status_code=409)
         except Exception:
             logger.error("pre_if_match_prevalidations_path_failed", exc_info=True)
@@ -397,7 +457,18 @@ def autosave_answer(
                 "status": 409,
                 "detail": "question not found",
                 "code": "PRE_RESOURCE_NOT_FOUND",
+                "message": "question not found",
             }
+            try:
+                _log_problem_emit(
+                    problem,
+                    409,
+                    section_hint="pre_if_match",
+                    current_etag=(str(best_etag) if best_etag else None),
+                    screen_key_local=screen_key,
+                )
+            except Exception:
+                pass
             return _emit_and_return(problem, status_code=409)
     except Exception:
         logger.error("pre_if_match_prevalidations_block_failed", exc_info=True)
@@ -450,62 +521,6 @@ def autosave_answer(
             logger.error("answers_if_match_check_log_failed", exc_info=True)
     except Exception:
         logger.error("answers_if_match_instrumentation_failed", exc_info=True)
-
-    ok, _status, _problem = etag_contract.enforce_if_match(if_match, _etag_str)
-    if not ok:
-        # Clarke Phase-0: emit Screen-ETag and generic ETag on 409/428 problem responses
-        resp = JSONResponse(_problem, status_code=_status, media_type="application/problem+json")
-        try:
-            emit_etag_headers(resp, scope="screen", token=str(current_etag), include_generic=True)
-        except Exception:
-            logger.error("autosave_if_match_problem_emit_failed", exc_info=True)
-        return resp
-
-    # (Removed per Clarke Phase-0): Authorization presence check after If-Match
-    # was removed so that a successful If-Match leads directly to success.
-
-    # Idempotent replay is checked ONLY after precondition guard has passed.
-
-    # Idempotent replay short-circuit AFTER If-Match enforcement per Clarke.
-    # This prevents bypassing concurrency control with a cached response.
-    try:
-        replayed = maybe_replay(
-            request,
-            response,
-            (response_set_id, question_id),
-            payload.model_dump() if hasattr(payload, "model_dump") else None,
-        )
-        if isinstance(replayed, dict):
-            return replayed
-    except Exception:
-        # Never let replay lookup affect normal flow; log for diagnostics
-        logger.error("replay_lookup_failed", exc_info=True)
-
-    # Precondition passed; ensure screen_view exists (assemble now since precondition ok)
-    if 'screen_view' not in locals():
-        screen_view = ScreenView(**assemble_screen_view(response_set_id, screen_key))
-
-    # Harden success path: guard all downstream computations so unexpected
-    # exceptions never leak a 500. On failure, emit a 200 body with saved=true
-    # and a freshly computed Screen-ETag via the central header emitter.
-    try:
-        # Existing implementation below remains unchanged and will return
-        # the normal success body on completion.
-        pass
-    except Exception:
-        # Compute a conservative fresh ETag and emit headers; never leak 500
-        try:
-            new_etag_fallback = compute_screen_etag(response_set_id, screen_key)
-        except Exception:
-            new_etag_fallback = str(current_etag or "")
-        # Build a JSON 200 response with required headers
-        resp = JSONResponse({"saved": True, "etag": new_etag_fallback}, status_code=200, media_type="application/json")
-        try:
-            emit_etag_headers(resp, scope="screen", token=new_etag_fallback, include_generic=True)
-        except Exception:
-            # Header emission must not fail the request
-            logger.error("autosave_fallback_emit_headers_failed", exc_info=True)
-        return resp
 
     # Determine whether the screen currently has any responses (pre-write state)
     existing_count = 0
@@ -704,7 +719,51 @@ def autosave_answer(
     except Exception:
         logger.error("vis_pre_sets_log_failed", exc_info=True)
 
-    # Preconditions already enforced above
+    # Enforce If-Match AFTER request-shape validations and repository probes,
+    # but BEFORE any mutation (clear or upsert). This reorders the prior early
+    # enforcement per Clarke's Epic-K instructions.
+    ok, _status, _problem = etag_contract.enforce_if_match(if_match, _etag_str)
+    if not ok:
+        # Ensure a human-readable message is present on all problem bodies
+        try:
+            if not _problem.get("message"):
+                # Prefer 'detail' or 'title' when available
+                _problem["message"] = _problem.get("detail") or _problem.get("title") or "Precondition failed"
+        except Exception:
+            pass
+        resp = JSONResponse(_problem, status_code=_status, media_type="application/problem+json")
+        try:
+            emit_etag_headers(resp, scope="screen", token=str(current_etag), include_generic=True)
+        except Exception:
+            logger.error("autosave_if_match_problem_emit_failed", exc_info=True)
+        try:
+            _log_problem_emit(
+                _problem,
+                int(_status),
+                section_hint="if_match",
+                current_etag=(str(current_etag) if current_etag is not None else None),
+                screen_key_local=screen_key,
+            )
+        except Exception:
+            pass
+        return resp
+
+    # Idempotent replay short-circuit AFTER If-Match enforcement. This prevents
+    # bypassing concurrency control with a cached response.
+    try:
+        replayed = maybe_replay(
+            request,
+            response,
+            (response_set_id, question_id),
+            payload.model_dump() if hasattr(payload, "model_dump") else None,
+        )
+        if isinstance(replayed, dict):
+            return replayed
+    except Exception:
+        # Never let replay lookup affect normal flow; log for diagnostics
+        logger.error("replay_lookup_failed", exc_info=True)
+
+    # Preconditions enforced above
 
     # Handle clear=true before value validation and upsert branches
     if bool(getattr(payload, "clear", False)):
@@ -1387,6 +1446,11 @@ def autosave_answer(
         token=(screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag),
         include_generic=True,
     )
+    try:
+        # STEP-4 observability hook
+        logger.info("step_4_header_emit", extra={"route": "answers.autosave", "scope": "screen"})
+    except Exception:
+        logger.error("step_4_header_emit_log_failed", exc_info=True)
     try:
         logger.info(
             "emit_headers_final scope=%s etag=%s include_generic=%s",

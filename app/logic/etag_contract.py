@@ -64,6 +64,7 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
             "status": 428,
             "detail": "If-Match header is required for this operation",
             "code": "PRE_IF_MATCH_MISSING",
+            "message": "If-Match header is required for this operation",
         }
         # Instrumentation: log decision outcome before returning
         try:
@@ -93,9 +94,10 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
         if has_ctrl:
             problem = {
                 "title": "Precondition Failed",
-                "status": 412,
+                "status": 409,
                 "detail": "If-Match header has invalid format",
                 "code": "PRE_IF_MATCH_INVALID_FORMAT",
+                "message": "If-Match header has invalid format",
             }
             try:
                 logger.info(
@@ -105,13 +107,13 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
                         "if_match_raw": if_match_raw,
                         "if_match_norm": None,
                         "current": current_str,
-                        "status": 412,
+                        "status": 409,
                     },
                 )
             except Exception:
                 logger.error("etag_if_match_invalid_format_log_failed", exc_info=True)
             _log_enforce_decision("invalid_format", None)
-            return False, 412, problem
+            return False, 409, problem
     except Exception:  # pragma: no cover
         logger.error("etag_invalid_format_check_failed", exc_info=True)
 
@@ -126,15 +128,17 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
             "status": 412,
             "detail": "If-Match normalization error",
             "code": "RUN_IF_MATCH_NORMALIZATION_ERROR",
+            "message": "If-Match normalization error",
         }
         _log_enforce_decision("normalization_error", None)
         return False, 412, problem
     if norm_value is None or not str(norm_value).strip():
         problem = {
             "title": "Precondition Required",
-            "status": 428,
+            "status": 409,
             "detail": "If-Match contains no valid tokens",
             "code": "PRE_IF_MATCH_NO_VALID_TOKENS",
+            "message": "If-Match contains no valid tokens",
         }
         try:
             logger.info(
@@ -144,13 +148,13 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
                     "if_match_raw": if_match_raw,
                     "if_match_norm": norm_value,
                     "current": current_str,
-                    "status": 428,
+                "status": 409,
                 },
             )
         except Exception:
             logger.error("etag_if_match_no_tokens_log_failed", exc_info=True)
         _log_enforce_decision("no_valid_tokens", norm_value)
-        return False, 428, problem
+        return False, 409, problem
 
     # Compare using public comparator which applies canonical normalisation
     try:
@@ -181,12 +185,39 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
             "status": 409,
             "detail": "If-Match does not match current ETag",
             "code": "PRE_IF_MATCH_ETAG_MISMATCH",
+            "message": "If-Match does not match current ETag",
         }
         _log_enforce_decision("mismatch", if_match_norm)
         return False, 409, problem
 
     _log_enforce_decision("pass", if_match_norm)
     return True, 200, {}
+
+# Instrumentation wrapper: emit a consolidated 'etag.enforce' telemetry event
+# after each enforcement attempt without changing functional outcomes.
+try:
+    _enforce_impl = enforce_if_match  # keep reference to original implementation
+
+    def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bool, int, dict]:  # type: ignore[override]
+        ok, status_code, problem = _enforce_impl(if_match_header, current_etag)
+        try:
+            norm = normalise_if_match(if_match_header)
+        except Exception:  # pragma: no cover
+            norm = None
+        try:
+            logger.info(
+                "etag.enforce",
+                extra={
+                    "matched": bool(ok),
+                    "normalized_if_match": norm,
+                },
+            )
+        except Exception:  # pragma: no cover
+            logger.error("etag_enforce_telemetry_log_failed", exc_info=True)
+        return ok, status_code, problem
+except Exception:  # pragma: no cover
+    # In case rebinding fails (e.g., due to restricted environments), keep original
+    pass
 
 
 def emit_headers(response: Response, scope: str, etag: str, include_generic: bool) -> None:

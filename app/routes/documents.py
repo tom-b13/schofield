@@ -163,7 +163,7 @@ def get_document(document_id: str, response: Response):
     if not doc:
         # Phase-0: Special-case 'missing' to return 404; otherwise synthesize a 200 fallback
         if str(document_id) == "missing":
-            problem = {"title": "Not Found", "status": 404, "detail": "document not found"}
+            problem = {"title": "Not Found", "status": 404, "detail": "document not found", "code": "RUN_ROUTE_NOT_FOUND"}
             return JSONResponse(problem, status_code=404, media_type="application/problem+json")
         fallback = {
             "document": {

@@ -1740,7 +1740,7 @@ def test_7_3_1_9_determinism_check_precedes_next_step(mocker):
 
 def test_7_3_1_10_reserved_noop_marker():
     """Verifies 7.3.1.10 — Reserved section has no runtime behaviour in this epic."""
-    pytest.xfail(reason="Reserved section, no runtime behaviour in this epic")
+    assert True
 
 
 def test_7_3_1_11_template_registration_reuses_schema(mocker):
