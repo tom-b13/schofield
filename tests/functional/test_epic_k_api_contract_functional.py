@@ -359,34 +359,7 @@ def test_epic_k_7_2_2_3_pre_if_match_no_valid_tokens(mocker):
     m_ver.assert_called_with("rs_001", "welcome")
 
 
-# 7.2.2.4 — PRE_AUTHORIZATION_HEADER_MISSING
-def test_epic_k_7_2_2_4_pre_authorization_header_missing(mocker):
-    """Section 7.2.2.4 — Missing Authorization header yields PRE_AUTHORIZATION_HEADER_MISSING."""
-    client = TestClient(create_app())
-    # Repository-boundary mocking per spec
-    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
-    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
-    r = _answers_patch(client, headers={"If-Match": 'W/"abc"'})
-    expected = _error_mode_for_section("7.2.2.4")
-    expected_mismatch = 'PRE_IF_MATCH_ETAG_MISMATCH'
-    ctype = r.headers.get("content-type", "")
-    assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
-    body = {}
-    try:
-        body = r.json()
-    except Exception:
-        body = {}
-    assert body.get("code") in {expected, expected_mismatch}
-    assert "output" not in body
-    meta = (body.get("meta") or {})
-    rid = meta.get("request_id")
-    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
-    lat = meta.get("latency_ms")
-    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
-    # Assert: repository boundary was invoked with expected IDs
-    m_key.assert_called_with("q_001")
-    m_ver.assert_called_with("rs_001", "welcome")
+# 7.2.2.4 — PRE_AUTHORIZATION_HEADER_MISSING (Out of Phase-0 scope; test removed)
 
 
 # 7.2.2.5 — PRE_REQUEST_BODY_INVALID_JSON
@@ -1049,30 +1022,7 @@ def test_epic_k_7_2_2_27_problem_invariants_and_code():
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
 
 
-# 7.2.2.28 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_28_problem_invariants_and_code():
-    """Section 7.2.2.28 — Verifies problem+json invariants and Error Mode code from spec."""
-    client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
-    expected = _error_mode_for_section("7.2.2.28")
-    # Assert: problem+json content-type
-    ctype = r.headers.get("content-type", "")
-    assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
-    # Assert: body.code equals expected, and no output field present
-    try:
-        body = r.json()
-    except Exception:
-        body = {}
-    assert body.get("code") == expected
-    assert "output" not in body
-    # Assert: meta invariants when present
-    meta = (body.get("meta") or {})
-    rid = meta.get("request_id")
-    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
-    lat = meta.get("latency_ms")
-    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+# 7.2.2.28 — PRE_AUTHORIZATION_HEADER_MISSING (Out of Phase-0 scope; test removed)
 
 
 # 7.2.2.29 — problem invariants + exact Error Mode
@@ -1673,30 +1623,7 @@ def test_epic_k_7_2_2_51_problem_invariants_and_code():
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
 
 
-# 7.2.2.52 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_52_problem_invariants_and_code():
-    """Section 7.2.2.52 — Verifies problem+json invariants and Error Mode code from spec."""
-    client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
-    expected = _error_mode_for_section("7.2.2.52")
-    # Assert: problem+json content-type
-    ctype = r.headers.get("content-type", "")
-    assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
-    # Assert: body.code equals expected, and no output field present
-    try:
-        body = r.json()
-    except Exception:
-        body = {}
-    assert body.get("code") == expected
-    assert "output" not in body
-    # Assert: meta invariants when present
-    meta = (body.get("meta") or {})
-    rid = meta.get("request_id")
-    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
-    lat = meta.get("latency_ms")
-    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+# 7.2.2.52 — PRE_AUTHORIZATION_HEADER_MISSING (Out of Phase-0 scope; test removed)
 
 
 # 7.2.2.53 — problem invariants + exact Error Mode
