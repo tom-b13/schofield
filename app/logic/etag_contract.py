@@ -12,13 +12,17 @@ from fastapi import Response
 import logging
 
 from app.logic.etag import compare_etag
-from app.logic.etag_normalizer import normalise_if_match
+from app.logic.etag import normalize_if_match as normalise_if_match
 from app.logic.header_emitter import emit_etag_headers as _emit_etag_headers
 
 logger = logging.getLogger(__name__)
 
 
-def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bool, int, dict]:
+def enforce_if_match(
+    if_match_header: str | None,
+    current_etag: str,
+    allow_wildcard: bool = True,
+) -> tuple[bool, int, dict]:
     """Enforce If-Match against the provided current_etag.
 
     Returns a tuple: (ok, status_code, problem_json). On success, ok=True and
@@ -115,11 +119,10 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
     except Exception:  # pragma: no cover
         logger.error("etag_invalid_format_check_failed", exc_info=True)
 
-    # (2) Normalization: detect exceptions and empty-results
+    # (2) Normalization: get normalized token(s); handle empty-results versus mismatch
     try:
-        norm_value = normalise_if_match(if_match_header)
+        token = normalise_if_match(if_match_header)
     except Exception:
-        # Normalizer failure is a distinct run-time classification
         logger.error("etag_normalise_failed_strict", exc_info=True)
         problem = {
             "title": "Precondition Failed",
@@ -129,34 +132,71 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
         }
         _log_enforce_decision("normalization_error", None)
         return False, 412, problem
-    if norm_value is None or not str(norm_value).strip():
+    # Treat the presence of any syntactically valid token as non-empty tokens list
+    has_tokens = bool(token)
+    if not has_tokens:
+        # Normalized-empty: present header but yielded no valid tokens — 409 NO_VALID_TOKENS
         problem = {
-            "title": "Precondition Required",
-            "status": 428,
-            "detail": "If-Match contains no valid tokens",
+            "title": "Conflict",
+            "status": 409,
+            "detail": "If-Match does not match current ETag",
             "code": "PRE_IF_MATCH_NO_VALID_TOKENS",
         }
         try:
             logger.info(
                 "etag.if_match_decision",
                 extra={
-                    "outcome": "no_valid_tokens",
+                    "outcome": "normalized_empty",
                     "if_match_raw": if_match_raw,
-                    "if_match_norm": norm_value,
+                    "if_match_token": token,
                     "current": current_str,
-                    "status": 428,
+                    "status": 409,
                 },
             )
         except Exception:
             logger.error("etag_if_match_no_tokens_log_failed", exc_info=True)
-        _log_enforce_decision("no_valid_tokens", norm_value)
-        return False, 428, problem
+        _log_enforce_decision("normalized_empty", token)
+        return False, 409, problem
 
-    # Compare using public comparator which applies canonical normalisation
+    # CLARKE: FINAL_GUARD ENFORCE_COMPARE_PROBE
+    # Log normalized incoming/current tokens immediately before comparison to
+    # confirm normalization and parity behaviour.
     try:
-        matched = compare_etag(current_etag, if_match_header)
+        incoming_norm = normalise_if_match(if_match_header)
     except Exception:
-        # Log comparison failures as errors before treating as mismatch
+        incoming_norm = None
+    try:
+        current_norm = normalise_if_match(current_etag)
+    except Exception:
+        current_norm = None
+    try:
+        logger.info(
+            "etag.enforce.compare",
+            extra={
+                "incoming_norm": incoming_norm,
+                "current_norm": current_norm,
+            },
+        )
+    except Exception:  # pragma: no cover
+        logger.error("etag_enforce_compare_probe_log_failed", exc_info=True)
+    # Plain-text token log for easier grepping in default formatters
+    try:
+        logger.info(
+            "etag.enforce.compare.tokens incoming_norm=%s current_norm=%s",
+            incoming_norm,
+            current_norm,
+        )
+    except Exception:  # pragma: no cover
+        logger.error("etag_enforce_compare_tokens_log_failed", exc_info=True)
+
+    # Compare: string-based normalized equality; honor wildcard
+    try:
+        if allow_wildcard and token == "*":
+            matched = True
+        else:
+            curr_token = normalise_if_match(current_etag)
+            matched = bool(token) and (token == curr_token)
+    except Exception:
         logger.error("etag_compare_failed", exc_info=True)
         matched = False
     # Debug: log decision outcome before returning
@@ -176,12 +216,33 @@ def enforce_if_match(if_match_header: str | None, current_etag: str) -> tuple[bo
 
     if not matched:
         # 409 Conflict semantics for autosave answers per Clarke contract
+        # Non-empty tokens that do not match current_etag → ETAG_MISMATCH
         problem = {
             "title": "Conflict",
             "status": 409,
             "detail": "If-Match does not match current ETag",
             "code": "PRE_IF_MATCH_ETAG_MISMATCH",
         }
+        # Emit explicit token log on mismatch for postmortem correlation
+        try:
+            # Recompute normalized tokens defensively in case upstream probe failed
+            incoming_norm_mm = None
+            current_norm_mm = None
+            try:
+                incoming_norm_mm = normalise_if_match(if_match_header)
+            except Exception:
+                incoming_norm_mm = None
+            try:
+                current_norm_mm = normalise_if_match(current_etag)
+            except Exception:
+                current_norm_mm = None
+            logger.info(
+                "etag.if_match.mismatch.tokens incoming_norm=%s current_norm=%s",
+                incoming_norm_mm,
+                current_norm_mm,
+            )
+        except Exception:  # pragma: no cover
+            logger.error("etag_if_match_mismatch_tokens_log_failed", exc_info=True)
         _log_enforce_decision("mismatch", if_match_norm)
         return False, 409, problem
 

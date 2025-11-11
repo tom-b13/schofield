@@ -14,7 +14,7 @@ import logging
 
 from fastapi import APIRouter, Body, Header, Response, Request, Depends
 from fastapi.responses import JSONResponse
-from app.logic.etag import doc_etag, compute_document_list_etag
+from app.logic.etag import doc_etag, compute_document_list_etag, normalize_if_match
 from app.logic.docx_validation import is_valid_docx
 from app.logic.idempotency import get_idem_map, record_idem
 from app.logic.repository_documents import (
@@ -48,7 +48,7 @@ from app.logic.inmemory_state import (
 router = APIRouter()
 logger = logging.getLogger(__name__)
 from app.guards.precondition import precondition_guard
-from app.logic.header_emitter import emit_etag_headers
+from app.logic.header_emitter import emit_etag_headers, emit_reorder_diagnostics
 
 
 def _not_implemented(detail: str = "") -> JSONResponse:
@@ -291,6 +291,7 @@ def delete_document(document_id: str):
             }
         ]
     },
+    dependencies=[Depends(precondition_guard)],
 )
 async def put_document_content(
     document_id: str,
@@ -298,8 +299,6 @@ async def put_document_content(
     response: Response,  # injected by FastAPI
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     content_type: str | None = Header(default=None, alias="Content-Type"),
-    # Accept optional If-Match; enforce preconditions within handler
-    if_match: str | None = Header(default=None, alias="If-Match"),
 ):
     # Validate existence
     doc = repo_get_document(document_id, store=DOCUMENTS_STORE)  # type: ignore[arg-type]
@@ -339,29 +338,6 @@ async def put_document_content(
         )
 
     current_version = int(doc["version"])
-    # Enforce If-Match preconditions after content-type and idempotency checks
-    if not if_match:
-        return JSONResponse(
-            {
-                "title": "Precondition Required",
-                "status": 428,
-                "detail": "If-Match header is required",
-                "code": "PRE_IF_MATCH_MISSING_DOCUMENT",
-            },
-            status_code=428,
-            media_type="application/problem+json",
-        )
-    from app.logic.etag import compare_etag  # local import to avoid cycles at import-time
-    if not compare_etag(doc_etag(current_version), if_match):
-        return JSONResponse(
-            {
-                "title": "Precondition Failed",
-                "status": 412,
-                "detail": "If-Match does not match current ETag",
-            },
-            status_code=412,
-            media_type="application/problem+json",
-        )
     # Read raw body only after preconditions pass
     content = await request.body()
     # Validate DOCX-like content via helper
@@ -429,127 +405,14 @@ def get_document_content(document_id: str):
             }
         ]
     },
+    dependencies=[Depends(precondition_guard)],
 )
 def put_documents_order(
     body: dict = Body(...),
     request_id: str | None = Header(default=None, alias="X-Request-ID"),
-    # Make If-Match optional; precondition_guard enforces semantics
     if_match: str | None = Header(default=None, alias="If-Match"),
 ):
-    # Instrumentation: capture raw/normalized If-Match and current list etag when available
-    try:
-        from app.logic.etag import normalize_if_match as _dbg_norm
-    except Exception:  # pragma: no cover - defensive fallback
-        _dbg_norm = lambda v: (v or "")  # type: ignore[assignment]
-    try:
-        _ifm_norm_dbg = _dbg_norm(if_match)
-    except Exception:  # pragma: no cover - defensive fallback
-        _ifm_norm_dbg = str(if_match)
-    logger.info(
-        "reorder.precondition eval route=/api/v1/documents/order if_match_raw=%s if_match_norm=%s current_list_etag=%s",
-        str(if_match),
-        _ifm_norm_dbg,
-        str(current_list_etag) if 'current_list_etag' in locals() else None,
-    )
-    # Early If-Match precondition (must run before payload validation)
-    try:
-        from app.logic.etag import compare_etag as _cmp, normalize_if_match as _norm
-        from app.logic.header_emitter import emit_etag_headers as _emit, emit_reorder_diagnostics as _emit_diag
-    except Exception:
-        _cmp = None  # type: ignore[assignment]
-        _norm = lambda v: (v or "")  # type: ignore[assignment]
-        _emit = lambda resp, scope, token, include_generic=True: None  # type: ignore[assignment]
-        _emit_diag = lambda resp, list_etag, norm: None  # type: ignore[assignment]
-    try:
-        current_items = [
-            {
-                "document_id": doc["document_id"],
-                "title": doc["title"],
-                "order_number": int(doc["order_number"]),
-                "version": int(doc["version"]),
-            }
-            for doc in repo_list_documents(store=DOCUMENTS_STORE)  # type: ignore[arg-type]
-        ]
-        current_list_etag = compute_document_list_etag(current_items)
-    except Exception:
-        current_list_etag = None
-
-    # Missing If-Match → 428 with diagnostics and current list ETag
-    if not if_match:
-        logger.info("reorder.precondition branch=missing_if_match route=/api/v1/documents/order")
-        _resp_428 = JSONResponse(
-            {
-                "title": "Precondition Required",
-                "status": 428,
-                "detail": "If-Match header is required",
-                "code": "PRE_IF_MATCH_MISSING_LIST",
-            },
-            status_code=428,
-            media_type="application/problem+json",
-        )
-        try:
-            _emit(_resp_428, scope="document", token=str(current_list_etag or ""), include_generic=True)
-        except Exception:
-            pass
-        try:
-            _emit_diag(_resp_428, str(current_list_etag or ""), _norm(if_match))
-        except Exception:
-            pass
-        return _resp_428
-
-    # Stale If-Match → 412 with diagnostics and current list ETag
-    try:
-        _matches = bool(_cmp(current_list_etag, if_match)) if _cmp else False
-        if not _matches and _cmp:
-            # Accept match against any current document ETag (legacy compatibility)
-            try:
-                _docs_now = repo_list_documents(store=DOCUMENTS_STORE)  # type: ignore[arg-type]
-            except Exception:
-                _docs_now = []
-            for _d in _docs_now:
-                try:
-                    if _cmp(doc_etag(int(_d.get("version", 0))), if_match):
-                        _matches = True
-                        break
-                except Exception:
-                    continue
-    except Exception:
-        _matches = False
-
-    if not _matches:
-        logger.info(
-            "reorder.precondition branch=stale_if_match route=/api/v1/documents/order current_list_etag=%s",
-            str(current_list_etag),
-        )
-        _resp_412 = JSONResponse(
-            {
-                "title": "Precondition Failed",
-                "status": 412,
-                "detail": "list ETag mismatch",
-                "code": "IF_MATCH_MISMATCH",
-            },
-            status_code=412,
-            media_type="application/problem+json",
-        )
-        # Instrumentation: log problem code and diagnostics at 412 emission
-        try:
-            logger.info(
-                "reorder.412 problem_code=%s list_etag=%s if_match_norm=%s",
-                "IF_MATCH_MISMATCH",
-                str(current_list_etag or ""),
-                _norm(if_match),
-            )
-        except Exception:
-            pass
-        try:
-            _emit(_resp_412, scope="document", token=str(current_list_etag or ""), include_generic=True)
-        except Exception:
-            pass
-        try:
-            _emit_diag(_resp_412, str(current_list_etag or ""), _norm(if_match))
-        except Exception:
-            pass
-        return _resp_412
+    # All If-Match validation is delegated to precondition_guard
 
     # Validate payload structure (preconditions enforced by guard)
     if not isinstance(body, dict):
@@ -590,78 +453,7 @@ def put_documents_order(
             status_code=422,
             media_type="application/problem+json",
         )
-    # Enforce If-Match precondition inside handler before applying ordering per Clarke
-    try:
-        from app.logic.etag import compare_etag, normalize_if_match
-        from app.logic.header_emitter import emit_etag_headers, emit_reorder_diagnostics
-    except Exception:
-        compare_etag = None  # type: ignore[assignment]
-        normalize_if_match = lambda v: (v or "")  # type: ignore[assignment]
-        emit_etag_headers = lambda resp, scope, token, include_generic=True: None  # type: ignore[assignment]
-
-    try:
-        current_list_etag = compute_document_list_etag(
-            [
-                {
-                    "document_id": doc["document_id"],
-                    "title": doc["title"],
-                    "order_number": int(doc["order_number"]),
-                    "version": int(doc["version"]),
-                }
-                for doc in repo_list_documents(store=DOCUMENTS_STORE)  # type: ignore[arg-type]
-            ]
-        )
-    except Exception:
-        current_list_etag = None
-
-    # Accept If-Match that matches either the current list ETag OR any document ETag
-    try:
-        matches = bool(compare_etag(current_list_etag, if_match)) if compare_etag else False
-        if not matches and compare_etag:
-            # Compare against any current document version etag to preserve legacy parity
-            try:
-                current_docs = repo_list_documents(store=DOCUMENTS_STORE)  # type: ignore[arg-type]
-            except Exception:
-                current_docs = []
-            for _doc in current_docs:
-                try:
-                    if compare_etag(doc_etag(int(_doc.get("version", 0))), if_match):
-                        matches = True
-                        break
-                except Exception:
-                    continue
-    except Exception:
-        matches = False
-
-    if not matches:
-        problem = {
-            "title": "Precondition Failed",
-            "status": 412,
-            "detail": "list ETag mismatch",
-            # Align problem code with Epic K Phase-0 contract
-            "code": "IF_MATCH_MISMATCH",
-        }
-        resp = JSONResponse(problem, status_code=412, media_type="application/problem+json")
-        # Instrumentation: log problem code and diagnostics at 412 emission
-        try:
-            from app.logic.etag import normalize_if_match as _norm_ifm  # local import for logging only
-            logger.info(
-                "reorder.412 problem_code=%s list_etag=%s if_match_norm=%s",
-                problem.get("code"),
-                str(current_list_etag or ""),
-                _norm_ifm(if_match),
-            )
-        except Exception:
-            pass
-        try:
-            emit_etag_headers(resp, scope="document", token=str(current_list_etag or ""), include_generic=True)
-        except Exception:
-            pass
-        try:
-            emit_reorder_diagnostics(resp, str(current_list_etag or ""), normalize_if_match(if_match))
-        except Exception:
-            pass
-        return resp
+    # If-Match mismatch handling occurs in the guard and surfaces as 412/428
 
     # Apply ordering atomically
     repo_apply_ordering(proposed, store=DOCUMENTS_STORE)  # type: ignore[arg-type]
@@ -677,19 +469,15 @@ def put_documents_order(
     ]
     list_etag = compute_document_list_etag(items_out)
     resp = JSONResponse({"list": items_out, "list_etag": list_etag}, status_code=200)
-    # Use central emitter for ETag headers (preserves diagnostics via guard)
+    # Use central emitter for ETag headers (diagnostics handled by guard on errors)
     emit_etag_headers(resp, scope="document", token=list_etag, include_generic=True)
+    # Emit reorder diagnostics via centralized helper (no direct header assignments)
+    emit_reorder_diagnostics(resp, list_etag, normalize_if_match(if_match))
     logger.info(
         "reorder.precondition branch=success route=/api/v1/documents/order list_etag=%s",
         str(list_etag),
     )
-    # Emit diagnostics headers per Epic K Phase-0
-    try:
-        from app.logic.etag import normalize_if_match  # local import for consistency
-        from app.logic.header_emitter import emit_reorder_diagnostics as _emit_diag
-        _emit_diag(resp, list_etag, normalize_if_match(if_match))
-    except Exception:
-        pass
+    # Success response does not emit If-Match diagnostics from handler
     return resp
 
 

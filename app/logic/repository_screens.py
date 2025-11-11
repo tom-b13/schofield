@@ -239,17 +239,38 @@ def get_screen_title_and_order(questionnaire_id: str, screen_key: str) -> tuple[
 
 
 def question_exists_on_screen(question_id: str) -> bool:
-    """Return True if the given question_id exists in questionnaire_question.
+    """Return True if the given question token maps to a question row.
 
-    Used by routes to distinguish truly unknown questions from metadata lookup
-    issues when deciding between 404 and proceeding with an upsert.
+    Accepts both internal UUID `question_id` and external question tokens
+    (e.g., `external_qid` such as "q_001"). When the input parses as a UUID,
+    perform existence check against `question_id`; otherwise check against
+    `external_qid` to avoid misclassifying external ids as missing.
     """
+    token = str(question_id)
+    # Detect UUID-like tokens; fallback to external_qid lookup
+    is_uuid = False
+    try:
+        UUID(token)
+        is_uuid = True
+    except Exception:
+        is_uuid = False
+
     eng = get_engine()
     with eng.connect() as conn:
-        row = conn.execute(
-            sql_text("SELECT 1 FROM questionnaire_question WHERE question_id = :qid LIMIT 1"),
-            {"qid": question_id},
-        ).fetchone()
+        if is_uuid:
+            row = conn.execute(
+                sql_text(
+                    "SELECT 1 FROM questionnaire_question WHERE question_id = :qid LIMIT 1"
+                ),
+                {"qid": token},
+            ).fetchone()
+        else:
+            row = conn.execute(
+                sql_text(
+                    "SELECT 1 FROM questionnaire_question WHERE external_qid = :ext LIMIT 1"
+                ),
+                {"ext": token},
+            ).fetchone()
     return row is not None
 
 

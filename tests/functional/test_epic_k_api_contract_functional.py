@@ -200,7 +200,7 @@ def _error_mode_for_section(section_id: str) -> str:
     Falls back to a stable sentinel string when parsing fails to keep tests
     import-safe and deterministically failing at assertion time instead.
     """
-    # Phase-0 override discriminator for 7.2.2.[11+]
+    # Normalise section id
     _m = re.match(r"^7\.2\.2\.(\d+)$", (section_id or "").strip())
     _idx_val = int(_m.group(1)) if _m else -1
 
@@ -211,22 +211,13 @@ def _error_mode_for_section(section_id: str) -> str:
         esc = re.escape(section_id)
         block = re.search(rf"\*\*ID\*\*:\s*{esc}[\s\S]*?\*\*Error Mode\*\*:\s*([A-Z0-9_\.-]+)", text)
         if block:
-            # Phase-0 fallback: force PRE_IF_MATCH_ETAG_MISMATCH for 7.2.2.[11+]
-            if _idx_val >= 11:
-                return "PRE_IF_MATCH_ETAG_MISMATCH"
             return block.group(1).strip()
         # Fallback pattern used in earlier sections of the doc
         alt = re.search(rf"\*\*?ID\*\*?:\s*{esc}[\s\S]*?(?:`code`\s*=?\s*`([A-Z0-9_\.-]+)`)", text)
         if alt:
-            # Phase-0 fallback: force PRE_IF_MATCH_ETAG_MISMATCH for 7.2.2.[11+]
-            if _idx_val >= 11:
-                return "PRE_IF_MATCH_ETAG_MISMATCH"
             return alt.group(1).strip()
     except Exception:
         pass
-    # Phase-0 fallback just before final sentinel return
-    if _idx_val >= 11:
-        return "PRE_IF_MATCH_ETAG_MISMATCH"
     return "ERROR_MODE_NOT_FOUND"
 
 
@@ -368,7 +359,6 @@ def test_epic_k_7_2_2_4_pre_authorization_header_missing(mocker):
     m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
     r = _answers_patch(client, headers={"If-Match": 'W/"abc"'})
     expected = _error_mode_for_section("7.2.2.4")
-    expected_mismatch = 'PRE_IF_MATCH_ETAG_MISMATCH'
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     assert r.status_code in {409, 412, 428}
@@ -377,7 +367,8 @@ def test_epic_k_7_2_2_4_pre_authorization_header_missing(mocker):
         body = r.json()
     except Exception:
         body = {}
-    assert body.get("code") in {expected, expected_mismatch}
+    # Assert: exact Error Mode per spec (no alternative allowed)
+    assert body.get("code") == expected
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
@@ -2583,8 +2574,8 @@ def test_epic_k_7_2_1_9_placeholders_get_returns_body_etag_and_generic_header_pa
 
     # Assert: Response HTTP status is 200
     assert resp.status_code == 200
-    # Assert: Body path "placeholders.etag" exists and non-empty
-    body_etag = (resp.json() or {}).get("placeholders", {}).get("etag")
+    # Assert: Body field "etag" exists and non-empty (top-level per schema)
+    body_etag = (resp.json() or {}).get("etag")
     assert isinstance(body_etag, str) and len(body_etag) > 0
     # Assert: Header "ETag" exists and non-empty
     g_tag = resp.headers.get("ETag")
@@ -2599,6 +2590,7 @@ def test_epic_k_7_2_1_10_placeholders_bind_unbind_success_emits_generic_only():
     resp = client.post(
         "/api/v1/placeholders/bind",
         json={"question_id": "q_123", "placeholder_id": "ph_001"},
+        headers={"If-Match": "*"},
     )
 
     # Assert: Response HTTP status is 200
@@ -2774,6 +2766,225 @@ def test_epic_k_7_2_2_81_problem_detail_present_on_500():
         body = {}
     detail = body.get("detail")
     assert isinstance(detail, str) and len(detail.strip()) > 0
+
+
+# ---------------------------------------------------------------------------
+# 7.2.2.82–7.2.2.89 — Additional required contractual tests
+# ---------------------------------------------------------------------------
+
+
+def test_epic_k_7_2_2_82_env_proxy_strips_if_match(mocker):
+    """Section 7.2.2.82 — Proxy strips If-Match; app treats as missing precondition (ENV_PROXY_STRIPS_IF_MATCH)."""
+    client = TestClient(create_app())
+    # Spy repository boundaries to ensure no mutation occurs
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+
+    # Simulate proxy-stripped header by omitting If-Match on write
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token"},
+        json={"value": "X"},
+    )
+
+    expected = _error_mode_for_section("7.2.2.82")
+    # Assert: 428 Precondition Required with problem+json
+    assert r.status_code == 428
+    assert "application/problem+json" in (r.headers.get("content-type") or "")
+    # Assert: body.code equals ENV cause per spec
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: repository calls did not occur (no mutation path)
+    m_key.assert_not_called()
+    m_ver.assert_not_called()
+
+
+def test_epic_k_7_2_2_83_env_proxy_strips_domain_etag_headers():
+    """Section 7.2.2.83 — Response filter removes required headers; client observes 500 with ENV code."""
+    client = TestClient(create_app())
+    r = client.patch(
+        "/api/v1/screens/scr_789",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"fresh-tag"'},
+        json={"title": "New Title"},
+    )
+    expected = _error_mode_for_section("7.2.2.83")
+    # Assert: Internal server error with problem+json and specific ENV code
+    assert r.status_code == 500
+    assert "application/problem+json" in (r.headers.get("content-type") or "")
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+
+
+def test_epic_k_7_2_2_84_env_guard_misapplied_to_read_endpoints(mocker):
+    """Section 7.2.2.84 — Guard mounted on GET yields 500 with ENV_GUARD_MISAPPLIED_TO_READ_ENDPOINTS."""
+    client = TestClient(create_app())
+    # Spy boundaries to prove handler did not invoke persistence
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.get("/api/v1/screens/scr_555", headers={"Authorization": "Bearer dev-token"})
+    expected = _error_mode_for_section("7.2.2.84")
+    # Assert: 500 problem+json with specific ENV code
+    assert r.status_code == 500
+    assert "application/problem+json" in (r.headers.get("content-type") or "")
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: handler/persistence not invoked
+    m_key.assert_not_called()
+    m_ver.assert_not_called()
+
+
+def test_epic_k_7_2_2_85_answers_patch_mismatch_exposes_tags_and_expose_headers(mocker):
+    """Section 7.2.2.85 — 409 mismatch exposes ETag + Screen-ETag and includes them in Access-Control-Expose-Headers exactly once."""
+    client = TestClient(create_app())
+    # Repository spies
+    mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/rs_001/answers/q_001",
+        headers={"If-Match": 'W/"not-the-right-tag"'},
+        json={"value": "X"},
+    )
+    expected = _error_mode_for_section("7.2.2.85")
+    # Assert: status and problem shape
+    assert r.status_code == 409
+    assert "application/problem+json" in (r.headers.get("content-type") or "")
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: headers present and non-empty
+    s_tag = r.headers.get("Screen-ETag")
+    g_tag = r.headers.get("ETag")
+    assert isinstance(s_tag, str) and len(s_tag) > 0
+    assert isinstance(g_tag, str) and len(g_tag) > 0
+    # Assert: CORS expose headers includes names exactly once
+    aceh = (r.headers.get("Access-Control-Expose-Headers") or "").lower()
+    assert aceh.count("etag") == 1
+    assert aceh.count("screen-etag") == 1
+
+
+def test_epic_k_7_2_2_86_no_valid_tokens_409_and_exposes_tags(mocker):
+    """Section 7.2.2.86 — Normalized-empty If-Match returns 409 PRE_IF_MATCH_NO_VALID_TOKENS and exposes tags."""
+    client = TestClient(create_app())
+    # Repository spies
+    mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/rs_001/answers/q_001",
+        headers={"If-Match": ' , , "" , W/"" '},
+        json={"value": "X"},
+    )
+    expected = _error_mode_for_section("7.2.2.86")
+    # Assert: status and content type
+    assert r.status_code == 409
+    assert "application/problem+json" in (r.headers.get("content-type") or "")
+    # Assert: body code exact
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: tags present and CORS exposes exactly once
+    s_tag = r.headers.get("Screen-ETag")
+    g_tag = r.headers.get("ETag")
+    assert isinstance(s_tag, str) and len(s_tag) > 0
+    assert isinstance(g_tag, str) and len(g_tag) > 0
+    aceh = (r.headers.get("Access-Control-Expose-Headers") or "").lower()
+    assert aceh.count("etag") == 1
+    assert aceh.count("screen-etag") == 1
+
+
+def test_epic_k_7_2_2_87_unsupported_content_type_validated_before_preconditions(mocker):
+    """Section 7.2.2.87 — 415 Unsupported Media Type with PRE_REQUEST_CONTENT_TYPE_UNSUPPORTED before guard logic."""
+    client = TestClient(create_app())
+    # Repository spies
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/rs_001/answers/q_001",
+        headers={"If-Match": 'W/"abc"', "Content-Type": "text/plain"},
+        data="value=x",
+    )
+    expected = _error_mode_for_section("7.2.2.87")
+    # Assert: 415 with problem+json and exact code
+    assert r.status_code == 415
+    assert "application/problem+json" in (r.headers.get("content-type") or "")
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: repositories not called (no mutation)
+    m_key.assert_not_called()
+    m_ver.assert_not_called()
+
+
+def test_epic_k_7_2_2_88_documents_reorder_conflict_emits_diagnostic_headers():
+    """Section 7.2.2.88 — 412 mismatch emits X-List-ETag and X-If-Match-Normalized headers with problem code."""
+    client = TestClient(create_app())
+    r = client.patch(
+        "/api/v1/documents/reorder",
+        headers={"If-Match": 'W/"stale-list-tag"'},
+        json={"order": ["d3", "d1", "d2"]},
+    )
+    expected = _error_mode_for_section("7.2.2.88")
+    # Assert: 412 with problem+json
+    assert r.status_code == 412
+    assert "application/problem+json" in (r.headers.get("content-type") or "")
+    # Assert: problem code exact
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: diagnostic headers present; normalized incoming value is echoed
+    x_list = r.headers.get("X-List-ETag")
+    x_norm = r.headers.get("X-If-Match-Normalized")
+    assert isinstance(x_list, str) and len(x_list) > 0
+    assert x_norm == '"stale-list-tag"'
+
+
+def test_epic_k_7_2_2_89_access_control_expose_headers_contains_required_names_exactly_once(mocker):
+    """Section 7.2.2.89 — Access-Control-Expose-Headers contains ETag and Screen-ETag exactly once (idempotent)."""
+    client = TestClient(create_app())
+    # Repository spies
+    mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/rs_001/answers/q_001",
+        headers={"If-Match": 'W/"not-the-right-tag"'},
+        json={"value": "X"},
+    )
+    expected = _error_mode_for_section("7.2.2.89")
+    # Assert: conflict status and code
+    assert r.status_code in {409, 412}
+    body = {}
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: ACEH contains names exactly once
+    aceh = (r.headers.get("Access-Control-Expose-Headers") or "").lower()
+    assert aceh.count("etag") == 1
+    assert aceh.count("screen-etag") == 1
 
 
 # ---------------------------------------------------------------------------
