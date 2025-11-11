@@ -62,120 +62,18 @@ def safe_invoke_http(
 
 
 # ---------------------------------------------------------------------------
-# Behavioural flow harness for 7.3.x (stable, non-throwing)
+# Behavioural flow import wrapper for 7.3.x (use real project code when present)
 # ---------------------------------------------------------------------------
 
-def simulate_ui_adapter_flow(
-    scenario: str,
-    *,
-    mocks: t.Optional[dict] = None,
-) -> dict:
-    """Return a deterministic trace structure per scenario without performing I/O.
+def invoke_orchestrator_trace(scenario: str) -> dict:
+    """Return an empty, well-formed trace to ensure failing-by-default tests.
 
-    Implements minimal event/diagnostic/telemetry sequences for sections
-    7.3.1.1–7.3.1.22 and 7.3.2.1–7.3.2.7 to satisfy adjacency/count assertions.
-    Unknown scenarios fall back to the previous empty shape.
+    Clarke flagged 7.3.x tests as suspiciously passing via local stubs.
+    To stabilise and ensure red state in this TDD step, we avoid importing
+    any project code or emitting synthetic events. Tests assert on expected
+    sequencing and will therefore fail until implementation exists.
     """
-    scenario = (scenario or "").strip()
-
-    scenarios: dict[str, dict] = {
-        # 7.3.1.x — Client/orchestrator sequencing
-        "7.3.1.1": {"events": [{"name": "response_set_created"}, {"name": "screen_view_fetch"}]},
-        "7.3.1.2": {"events": [{"name": "screen_view_fetch"}, {"name": "store_hydration"}]},
-        "7.3.1.3": {"events": [{"name": "store_hydration"}, {"name": "autosave_subscriber_start"}]},
-        "7.3.1.4": {"events": [{"name": "debounce_window_complete"}, {"name": "answers_patch_call"}]},
-        "7.3.1.5": {"events": [{"name": "answers_patch_success"}, {"name": "screen_apply"}]},
-        "7.3.1.6": {"events": [{"name": "bind_unbind_success"}, {"name": "screen_refresh_apply"}]},
-        "7.3.1.7": {"events": [{"name": "active_screen_change"}, {"name": "working_tag_rotation"}]},
-        "7.3.1.8": {"events": [{"name": "poll_tick_etag_changed"}, {"name": "screen_load"}]},
-        "7.3.1.9": {"events": [{"name": "tab_visible"}, {"name": "light_refresh"}]},
-        "7.3.1.10": {"events": [{"name": "write_success_with_multi_scope_headers"}, {"name": "per_scope_etag_store_update"}]},
-        "7.3.1.11": {"events": [{"name": "per_scope_etag_store_update"}, {"name": "inject_fresh_if_match_next_write"}]},
-        "7.3.1.12": {"events": [{"name": "light_refresh_304"}, {"name": "polling_continue"}]},
-        "7.3.1.13": {"events": [{"name": "answers_post_success"}, {"name": "screen_apply"}]},
-        "7.3.1.14": {"events": [{"name": "answers_delete_success"}, {"name": "screen_apply"}]},
-        "7.3.1.15": {"events": [{"name": "document_reorder_success"}, {"name": "document_list_refresh_apply"}]},
-        "7.3.1.16": {"events": [{"name": "precondition_guard_any_match_success"}, {"name": "mutation_invoked"}]},
-        "7.3.1.17": {"events": [{"name": "precondition_guard_wildcard_success"}, {"name": "mutation_invoked"}]},
-        "7.3.1.18": {"events": [{"name": "runtime_json_success"}, {"name": "client_header_read"}]},
-        "7.3.1.19": {"events": [{"name": "authoring_json_success"}, {"name": "client_header_read"}]},
-        "7.3.1.20": {"events": [{"name": "csv_download_success"}, {"name": "tag_handling"}]},
-        "7.3.1.21": {"events": [{"name": "mutation_complete"}, {"name": "emit_logging"}]},
-        "7.3.1.22": {"events": [{"name": "screen_get_complete"}, {"name": "legacy_token_parity_detector"}]},
-
-        # 7.3.2.x — Environmental fault scenarios
-        "7.3.2.1": {
-            "events": [{"name": "step_4_header_emit"}, {"name": "error_handler"}],
-            "diagnostics": {"error_mode": "ENV_CORS_EXPOSE_HEADERS_MISCONFIGURED"},
-            "telemetry": [{"code": "ENV_CORS_EXPOSE_HEADERS_MISCONFIGURED", "success": False}],
-        },
-        "7.3.2.2": {
-            "events": [
-                {"name": "step_2_precondition_enforce"},
-                {"name": "step_3_mutation"},
-                {"name": "step_4_header_emit"},
-                {"name": "step_5_body_mirrors"},
-            ],
-            "diagnostics": {"error_mode": "ENV_LOGGING_SINK_UNAVAILABLE_ENFORCE"},
-            "telemetry": [{"code": "ENV_LOGGING_SINK_UNAVAILABLE_ENFORCE", "success": False}],
-        },
-        "7.3.2.3": {
-            "events": [
-                {"name": "step_4_header_emit"},
-                {"name": "finalise_response"},
-                {"name": "step_5_body_mirrors"},
-            ],
-            "diagnostics": {"error_mode": "ENV_LOGGING_SINK_UNAVAILABLE_EMIT"},
-            "telemetry": [{"code": "ENV_LOGGING_SINK_UNAVAILABLE_EMIT", "success": False}],
-        },
-        "7.3.2.4": {
-            "events": [
-                {"name": "step_4_header_emit"},
-                {"name": "step_4_halt_due_to_egress_strip"},
-            ],
-            "diagnostics": {"error_mode": "ENV_PROXY_STRIPS_DOMAIN_ETAG_HEADERS"},
-            "telemetry": [],
-        },
-        "7.3.2.5": {
-            "events": [{"name": "preflight_halt"}],
-            "diagnostics": {"error_mode": "ENV_CORS_ALLOW_HEADERS_MISSING_IF_MATCH", "halted_at": "PREFLIGHT"},
-            "telemetry": [],
-        },
-        "7.3.2.6": {
-            "events": [
-                {"name": "step_2_precondition_enforce"},
-                {"name": "missing_precondition_branch"},
-            ],
-            "diagnostics": {"error_mode": "ENV_PROXY_STRIPS_IF_MATCH"},
-            "telemetry": [],
-        },
-        "7.3.2.7": {
-            "events": [
-                {"name": "step_2_precondition_enforce"},
-                {"name": "guard_misapplied_halt"},
-            ],
-            "diagnostics": {"error_mode": "ENV_GUARD_MISAPPLIED_TO_READ_ENDPOINTS"},
-            "telemetry": [],
-        },
-    }
-
-    # Use the predefined scenarios mapping above; do not override here
-    if scenario in scenarios:
-        base = {"events": [], "diagnostics": {}, "telemetry": [], "calls": {}}
-        spec = scenarios[scenario]
-        out = base | {k: spec.get(k, base.get(k)) for k in base.keys()}
-        # Ensure 7.3.1.20 excludes apply events explicitly
-        if scenario == "7.3.1.20":
-            out["events"] = [e for e in out["events"] if e.get("name") not in {"screen_apply", "list_apply"}]
-        return out
-
-    # Default empty trace for unknown scenarios
-    return {
-        "events": [],  # list of {"name": str, "at": str, ...}
-        "diagnostics": {},  # e.g., {"error_mode": "...", "halted_at": "STEP_4"}
-        "telemetry": [],  # list of {"code": str, "success": bool}
-        "calls": {},  # probe counts for boundaries
-    }
+    return {"events": [], "diagnostics": {}, "telemetry": [], "calls": {}}
 
 
 def _event_names(trace: dict) -> list[str]:
@@ -200,10 +98,6 @@ def _error_mode_for_section(section_id: str) -> str:
     Falls back to a stable sentinel string when parsing fails to keep tests
     import-safe and deterministically failing at assertion time instead.
     """
-    # Phase-0 override discriminator for 7.2.2.[11+]
-    _m = re.match(r"^7\.2\.2\.(\d+)$", (section_id or "").strip())
-    _idx_val = int(_m.group(1)) if _m else -1
-
     try:
         spec_path = Path(__file__).resolve().parents[2] / "docs" / "Epic K - API Contract and Versioning.md"
         text = spec_path.read_text(encoding="utf-8")
@@ -211,23 +105,46 @@ def _error_mode_for_section(section_id: str) -> str:
         esc = re.escape(section_id)
         block = re.search(rf"\*\*ID\*\*:\s*{esc}[\s\S]*?\*\*Error Mode\*\*:\s*([A-Z0-9_\.-]+)", text)
         if block:
-            # Phase-0 fallback: force PRE_IF_MATCH_ETAG_MISMATCH for 7.2.2.[11+]
-            if _idx_val >= 11:
-                return "PRE_IF_MATCH_ETAG_MISMATCH"
             return block.group(1).strip()
         # Fallback pattern used in earlier sections of the doc
         alt = re.search(rf"\*\*?ID\*\*?:\s*{esc}[\s\S]*?(?:`code`\s*=?\s*`([A-Z0-9_\.-]+)`)", text)
         if alt:
-            # Phase-0 fallback: force PRE_IF_MATCH_ETAG_MISMATCH for 7.2.2.[11+]
-            if _idx_val >= 11:
-                return "PRE_IF_MATCH_ETAG_MISMATCH"
             return alt.group(1).strip()
     except Exception:
         pass
-    # Phase-0 fallback just before final sentinel return
-    if _idx_val >= 11:
-        return "PRE_IF_MATCH_ETAG_MISMATCH"
     return "ERROR_MODE_NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# Expected status mapping helper for 7.2.2.x (tighten permissive checks)
+# ---------------------------------------------------------------------------
+
+def _expected_status_for_error_code(code: t.Optional[str]) -> int:
+    """Map Epic K error codes to exact HTTP statuses per route contract.
+
+    Defaults to 409 for unknown codes on answers routes to keep tests failing
+    deterministically until implementation aligns with spec.
+    """
+    mapping: dict[str, int] = {
+        # Precondition header issues
+        "PRE_IF_MATCH_MISSING": 428,
+        "PRE_IF_MATCH_INVALID_FORMAT": 400,
+        "PRE_IF_MATCH_NO_VALID_TOKENS": 409,
+        # Request payload/params validation
+        "PRE_REQUEST_BODY_INVALID_JSON": 400,
+        "PRE_REQUEST_BODY_SCHEMA_MISMATCH": 422,
+        "PRE_PATH_PARAM_INVALID": 400,
+        "PRE_QUERY_PARAM_INVALID": 400,
+        "PRE_RESOURCE_NOT_FOUND": 404,
+        # Runtime/guard failures
+        "RUN_IF_MATCH_NORMALIZATION_ERROR": 400,
+        "RUN_PRECONDITION_CHECK_MISORDERED": 500,
+        "RUN_CONCURRENCY_CHECK_FAILED": 409,
+        "RUN_DOMAIN_HEADER_EMISSION_FAILED": 500,
+        "RUN_SCREEN_VIEW_MISSING_IN_BODY": 500,
+        "RUN_ETAG_PARITY_CALCULATION_FAILED": 500,
+    }
+    return mapping.get((code or "").strip(), 409)
 
 
 # ---------------------------------------------------------------------------
@@ -242,14 +159,16 @@ def _assert_problem_invariants(r, expected_code: str) -> None:
     # Assert: Content-Type includes application/problem+json
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: Status belongs to the allowed contract set
-    assert r.status_code in {409, 412, 428}
     # Assert: Body contains specific error code for this section
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
+    # Assert: exact HTTP status per error code to match route contract
+    expected_status = _expected_status_for_error_code(body.get("code"))
+    assert r.status_code == expected_status
+    # Assert: Section-specific error code is present
     assert body.get("code") == expected_code
     # Assert: No "output" field on problem bodies
     assert "output" not in body
@@ -276,19 +195,27 @@ def test_epic_k_7_2_2_1_pre_if_match_missing(mocker):
     # Repository-boundary mocking per spec: return a stable screen key and version
     m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
     m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
-    r = _answers_patch(client, headers={}, json_payload={"value": "x"})
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token"},  # Missing If-Match on purpose
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.1")
     _ = expected  # prevent linter complaining when assert expanded below
     # Assert: problem+json content-type, status in set, specific code, no output, meta shape
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype  # correct problem media type
-    assert r.status_code in {409, 412, 428}  # allowed contract statuses
+    # Assert: exact HTTP status per spec — 428 Precondition Required
+    assert r.status_code == 428
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected  # specific error mode code for this section
+    # Assert: human-readable message is present and non-empty per spec
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body  # problem payload has no output field
     meta = body.get("meta", {}) or {}
     rid = meta.get("request_id")
@@ -296,8 +223,8 @@ def test_epic_k_7_2_2_1_pre_if_match_missing(mocker):
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)  # non-negative latency when present
     # Assert: repository boundary was invoked with expected IDs
-    m_key.assert_called_with("q_001")
-    m_ver.assert_called_with("rs_001", "welcome")
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.2 — PRE_IF_MATCH_INVALID_FORMAT
@@ -307,18 +234,27 @@ def test_epic_k_7_2_2_2_pre_if_match_invalid_format(mocker):
     # Repository-boundary mocking per spec
     m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
     m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
-    r = _answers_patch(client, headers={"If-Match": "\x00invalid"})
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": "\x00invalid"},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.2")
     # Inline invariant assertions
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
@@ -326,8 +262,8 @@ def test_epic_k_7_2_2_2_pre_if_match_invalid_format(mocker):
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
     # Assert: repository boundary was invoked with expected IDs
-    m_key.assert_called_with("q_001")
-    m_ver.assert_called_with("rs_001", "welcome")
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.3 — PRE_IF_MATCH_NO_VALID_TOKENS
@@ -337,17 +273,32 @@ def test_epic_k_7_2_2_3_pre_if_match_no_valid_tokens(mocker):
     # Repository-boundary mocking per spec
     m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
     m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
-    r = _answers_patch(client, headers={"If-Match": " , , \"\" , W/\"\" "})
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": " , , \"\" , W/\"\" "},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.3")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status derived from error code mapping (answers mismatch → 409)
+    _body_tmp = {}
+    try:
+        _body_tmp = r.json()
+    except Exception:
+        _body_tmp = {}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
@@ -355,8 +306,8 @@ def test_epic_k_7_2_2_3_pre_if_match_no_valid_tokens(mocker):
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
     # Assert: repository boundary was invoked with expected IDs
-    m_key.assert_called_with("q_001")
-    m_ver.assert_called_with("rs_001", "welcome")
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.4 — PRE_AUTHORIZATION_HEADER_MISSING (Out of Phase-0 scope; test removed)
@@ -372,15 +323,21 @@ def test_epic_k_7_2_2_5_pre_request_body_invalid_json(mocker):
 
     # Send an invalid JSON payload by bypassing json= and using data=
     r = client.patch(
-        "/api/v1/response-sets/rs_001/answers/q_001",
-        headers={"If-Match": 'W/"abc"', "Content-Type": "application/json"},
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={
+            "Authorization": "Bearer dev-token",
+            "If-Match": 'W/"abc"',
+            "Content-Type": "application/json",
+        },
         data="{not-json}",
     )
     expected = _error_mode_for_section("7.2.2.5")
     # Assert: problem+json invariants per spec
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype  # correct media type
-    assert r.status_code in {409, 412, 428}  # allowed statuses
+    # Assert: exact HTTP status equals mapping for this section's Error Mode (400)
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
@@ -394,8 +351,8 @@ def test_epic_k_7_2_2_5_pre_request_body_invalid_json(mocker):
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
     # Assert: repository boundary was invoked with expected IDs
-    m_key.assert_called_with("q_001")
-    m_ver.assert_called_with("rs_001", "welcome")
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.6 — PRE_REQUEST_BODY_SCHEMA_MISMATCH
@@ -405,18 +362,27 @@ def test_epic_k_7_2_2_6_pre_request_body_schema_mismatch(mocker):
     # Repository-boundary mocking per Clarke
     m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
     m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
-    r = _answers_patch(client, headers={"If-Match": 'W/"abc"'}, json_payload={"value": {"nested": "obj"}})
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"abc"'},
+        json={"value": {"nested": "obj"}},
+    )
     expected = _error_mode_for_section("7.2.2.6")
     # Assert: problem+json invariants per spec
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode (422)
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
@@ -424,8 +390,8 @@ def test_epic_k_7_2_2_6_pre_request_body_schema_mismatch(mocker):
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
     # Assert: repository boundary was invoked with expected IDs
-    m_key.assert_called_with("q_001")
-    m_ver.assert_called_with("rs_001", "welcome")
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.7 — PRE_PATH_PARAM_INVALID
@@ -435,17 +401,26 @@ def test_epic_k_7_2_2_7_pre_path_param_invalid(mocker):
     # Repository-boundary mocking; assert invocation with invalid path is still wired
     m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
     m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
-    r = _answers_patch(client, headers={"If-Match": 'W/"abc"'}, q="invalid path!")
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"abc"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.7")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode (400)
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
@@ -453,8 +428,8 @@ def test_epic_k_7_2_2_7_pre_path_param_invalid(mocker):
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
     # Assert: repository boundary called with provided invalid identifier and resolved screen
-    m_key.assert_called_with("invalid path!")
-    m_ver.assert_called_with("rs_001", "welcome")
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.8 — PRE_QUERY_PARAM_INVALID
@@ -465,14 +440,16 @@ def test_epic_k_7_2_2_8_pre_query_param_invalid(mocker):
     m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
     m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
     r = client.patch(
-        "/api/v1/response-sets/rs_001/answers/q_001?mode=unexpected",
-        headers={"If-Match": 'W/"abc"'},
+        "/api/v1/response-sets/resp_123/answers/q_456?mode=unexpected",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"abc"'},
         json={"value": "x"},
     )
     expected = _error_mode_for_section("7.2.2.8")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode (400)
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
@@ -486,8 +463,8 @@ def test_epic_k_7_2_2_8_pre_query_param_invalid(mocker):
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
     # Assert: repository boundary was invoked with expected IDs
-    m_key.assert_called_with("q_001")
-    m_ver.assert_called_with("rs_001", "welcome")
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.9 — PRE_RESOURCE_NOT_FOUND
@@ -497,11 +474,17 @@ def test_epic_k_7_2_2_9_pre_resource_not_found(mocker):
     # Repository-boundary mocking
     m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
     m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
-    r = _answers_patch(client, headers={"If-Match": 'W/"abc"'}, q="missing_question")
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"abc"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.9")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode (404)
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
@@ -515,8 +498,8 @@ def test_epic_k_7_2_2_9_pre_resource_not_found(mocker):
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
     # Assert: repository boundary was invoked with expected IDs
-    m_key.assert_called_with("missing_question")
-    m_ver.assert_called_with("rs_001", "welcome")
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.10 — RUN_IF_MATCH_NORMALIZATION_ERROR
@@ -526,11 +509,17 @@ def test_epic_k_7_2_2_10_run_if_match_normalization_error(mocker):
     # Repository-boundary mocking
     m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
     m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
-    r = _answers_patch(client, headers={"If-Match": 'W/"unterminated'})
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"unterminated'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.10")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode (400)
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
@@ -544,8 +533,8 @@ def test_epic_k_7_2_2_10_run_if_match_normalization_error(mocker):
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
     # Assert: repository boundary was invoked with expected IDs
-    m_key.assert_called_with("q_001")
-    m_ver.assert_called_with("rs_001", "welcome")
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.11 — RUN_PRECONDITION_CHECK_MISORDERED
@@ -555,11 +544,16 @@ def test_epic_k_7_2_2_11_run_precondition_check_misordered(mocker):
     # Repository-boundary mocking
     m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
     m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
-    r = _answers_patch(client, headers={"If-Match": 'W/"abc"'})
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"abc"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.11")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
@@ -573,8 +567,8 @@ def test_epic_k_7_2_2_11_run_precondition_check_misordered(mocker):
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
     # Assert: repository boundary was invoked with expected IDs
-    m_key.assert_called_with("q_001")
-    m_ver.assert_called_with("rs_001", "welcome")
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.12 — Reserved per spec (explicit invariants only)
@@ -592,7 +586,8 @@ def test_epic_k_7_2_2_12_run_concurrency_check_failed(mocker):
     expected = _error_mode_for_section("7.2.2.12")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
@@ -629,7 +624,8 @@ def test_epic_k_7_2_2_13_run_domain_header_emission_failed(mocker):
     expected = _error_mode_for_section("7.2.2.13")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
@@ -661,7 +657,8 @@ def test_epic_k_7_2_2_14_run_screen_view_missing_in_body(mocker):
     expected = _error_mode_for_section("7.2.2.14")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
@@ -679,136 +676,208 @@ def test_epic_k_7_2_2_14_run_screen_view_missing_in_body(mocker):
     m_ver.assert_called_with("resp_123", "welcome")
 
 
-def test_epic_k_7_2_2_15_problem_invariants_and_code():
+def test_epic_k_7_2_2_15_problem_invariants_and_code(mocker):
     """Section 7.2.2.15 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.15")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
-def test_epic_k_7_2_2_16_problem_invariants_and_code():
+def test_epic_k_7_2_2_16_problem_invariants_and_code(mocker):
     """Section 7.2.2.16 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.16")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
-def test_epic_k_7_2_2_17_problem_invariants_and_code():
+def test_epic_k_7_2_2_17_problem_invariants_and_code(mocker):
     """Section 7.2.2.17 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.17")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
-def test_epic_k_7_2_2_18_problem_invariants_and_code():
+def test_epic_k_7_2_2_18_problem_invariants_and_code(mocker):
     """Section 7.2.2.18 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.18")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
-def test_epic_k_7_2_2_19_problem_invariants_and_code():
+def test_epic_k_7_2_2_19_problem_invariants_and_code(mocker):
     """Section 7.2.2.19 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.19")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
-def test_epic_k_7_2_2_20_problem_invariants_and_code():
+def test_epic_k_7_2_2_20_problem_invariants_and_code(mocker):
     """Section 7.2.2.20 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.20")
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     body = {}
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     meta = (body.get("meta") or {})
     rid = meta.get("request_id")
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 def _problem_test_common(section_id: str, *, if_match: str = 'W/"mismatch"') -> None:
@@ -823,8 +892,9 @@ def _problem_test_common(section_id: str, *, if_match: str = 'W/"mismatch"') -> 
     # Assert: Content-Type is problem+json
     ctype = response.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: Status is one of the allowed set
-    assert response.status_code in {409, 412, 428}
+    # Assert: Status equals spec-driven mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(_error_mode_for_section(section_id))
+    assert response.status_code == expected_status
     # Assert: Body code equals expected and no output field
     try:
         body = response.json()
@@ -841,22 +911,32 @@ def _problem_test_common(section_id: str, *, if_match: str = 'W/"mismatch"') -> 
 
 
 # 7.2.2.21 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_21_problem_invariants_and_code():
+def test_epic_k_7_2_2_21_problem_invariants_and_code(mocker):
     """Section 7.2.2.21 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.21")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -864,25 +944,37 @@ def test_epic_k_7_2_2_21_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.22 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_22_problem_invariants_and_code():
+def test_epic_k_7_2_2_22_problem_invariants_and_code(mocker):
     """Section 7.2.2.22 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.22")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -890,25 +982,37 @@ def test_epic_k_7_2_2_22_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.23 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_23_problem_invariants_and_code():
+def test_epic_k_7_2_2_23_problem_invariants_and_code(mocker):
     """Section 7.2.2.23 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.23")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -916,25 +1020,37 @@ def test_epic_k_7_2_2_23_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.24 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_24_problem_invariants_and_code():
+def test_epic_k_7_2_2_24_problem_invariants_and_code(mocker):
     """Section 7.2.2.24 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.24")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -942,25 +1058,37 @@ def test_epic_k_7_2_2_24_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.25 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_25_problem_invariants_and_code():
+def test_epic_k_7_2_2_25_problem_invariants_and_code(mocker):
     """Section 7.2.2.25 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.25")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -968,25 +1096,37 @@ def test_epic_k_7_2_2_25_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.26 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_26_problem_invariants_and_code():
+def test_epic_k_7_2_2_26_problem_invariants_and_code(mocker):
     """Section 7.2.2.26 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.26")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -994,25 +1134,37 @@ def test_epic_k_7_2_2_26_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.27 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_27_problem_invariants_and_code():
+def test_epic_k_7_2_2_27_problem_invariants_and_code(mocker):
     """Section 7.2.2.27 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.27")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1020,28 +1172,40 @@ def test_epic_k_7_2_2_27_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.28 — PRE_AUTHORIZATION_HEADER_MISSING (Out of Phase-0 scope; test removed)
 
 
 # 7.2.2.29 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_29_problem_invariants_and_code():
+def test_epic_k_7_2_2_29_problem_invariants_and_code(mocker):
     """Section 7.2.2.29 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.29")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1049,25 +1213,37 @@ def test_epic_k_7_2_2_29_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.30 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_30_problem_invariants_and_code():
+def test_epic_k_7_2_2_30_problem_invariants_and_code(mocker):
     """Section 7.2.2.30 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.30")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1075,25 +1251,37 @@ def test_epic_k_7_2_2_30_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.31 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_31_problem_invariants_and_code():
+def test_epic_k_7_2_2_31_problem_invariants_and_code(mocker):
     """Section 7.2.2.31 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.31")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1101,25 +1289,37 @@ def test_epic_k_7_2_2_31_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.32 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_32_problem_invariants_and_code():
+def test_epic_k_7_2_2_32_problem_invariants_and_code(mocker):
     """Section 7.2.2.32 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.32")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
-    # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1127,25 +1327,37 @@ def test_epic_k_7_2_2_32_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.33 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_33_problem_invariants_and_code():
+def test_epic_k_7_2_2_33_problem_invariants_and_code(mocker):
     """Section 7.2.2.33 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.33")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1153,25 +1365,37 @@ def test_epic_k_7_2_2_33_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.34 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_34_problem_invariants_and_code():
+def test_epic_k_7_2_2_34_problem_invariants_and_code(mocker):
     """Section 7.2.2.34 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.34")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1179,25 +1403,37 @@ def test_epic_k_7_2_2_34_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.35 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_35_problem_invariants_and_code():
+def test_epic_k_7_2_2_35_problem_invariants_and_code(mocker):
     """Section 7.2.2.35 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.35")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1205,25 +1441,37 @@ def test_epic_k_7_2_2_35_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.36 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_36_problem_invariants_and_code():
+def test_epic_k_7_2_2_36_problem_invariants_and_code(mocker):
     """Section 7.2.2.36 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.36")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1231,25 +1479,37 @@ def test_epic_k_7_2_2_36_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.37 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_37_problem_invariants_and_code():
+def test_epic_k_7_2_2_37_problem_invariants_and_code(mocker):
     """Section 7.2.2.37 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.37")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1257,25 +1517,37 @@ def test_epic_k_7_2_2_37_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.38 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_38_problem_invariants_and_code():
+def test_epic_k_7_2_2_38_problem_invariants_and_code(mocker):
     """Section 7.2.2.38 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.38")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1283,25 +1555,37 @@ def test_epic_k_7_2_2_38_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.39 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_39_problem_invariants_and_code():
+def test_epic_k_7_2_2_39_problem_invariants_and_code(mocker):
     """Section 7.2.2.39 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.39")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1309,25 +1593,37 @@ def test_epic_k_7_2_2_39_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.40 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_40_problem_invariants_and_code():
+def test_epic_k_7_2_2_40_problem_invariants_and_code(mocker):
     """Section 7.2.2.40 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.40")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1335,25 +1631,37 @@ def test_epic_k_7_2_2_40_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.41 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_41_problem_invariants_and_code():
+def test_epic_k_7_2_2_41_problem_invariants_and_code(mocker):
     """Section 7.2.2.41 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.41")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1361,25 +1669,37 @@ def test_epic_k_7_2_2_41_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.42 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_42_problem_invariants_and_code():
+def test_epic_k_7_2_2_42_problem_invariants_and_code(mocker):
     """Section 7.2.2.42 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.42")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1387,25 +1707,37 @@ def test_epic_k_7_2_2_42_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.43 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_43_problem_invariants_and_code():
+def test_epic_k_7_2_2_43_problem_invariants_and_code(mocker):
     """Section 7.2.2.43 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.43")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1413,25 +1745,37 @@ def test_epic_k_7_2_2_43_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.44 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_44_problem_invariants_and_code():
+def test_epic_k_7_2_2_44_problem_invariants_and_code(mocker):
     """Section 7.2.2.44 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.44")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1439,25 +1783,37 @@ def test_epic_k_7_2_2_44_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.45 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_45_problem_invariants_and_code():
+def test_epic_k_7_2_2_45_problem_invariants_and_code(mocker):
     """Section 7.2.2.45 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.45")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1465,25 +1821,37 @@ def test_epic_k_7_2_2_45_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.46 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_46_problem_invariants_and_code():
+def test_epic_k_7_2_2_46_problem_invariants_and_code(mocker):
     """Section 7.2.2.46 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.46")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1491,25 +1859,37 @@ def test_epic_k_7_2_2_46_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.47 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_47_problem_invariants_and_code():
+def test_epic_k_7_2_2_47_problem_invariants_and_code(mocker):
     """Section 7.2.2.47 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.47")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1517,25 +1897,37 @@ def test_epic_k_7_2_2_47_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.48 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_48_problem_invariants_and_code():
+def test_epic_k_7_2_2_48_problem_invariants_and_code(mocker):
     """Section 7.2.2.48 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.48")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1543,25 +1935,37 @@ def test_epic_k_7_2_2_48_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.49 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_49_problem_invariants_and_code():
+def test_epic_k_7_2_2_49_problem_invariants_and_code(mocker):
     """Section 7.2.2.49 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.49")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1569,25 +1973,37 @@ def test_epic_k_7_2_2_49_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.50 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_50_problem_invariants_and_code():
+def test_epic_k_7_2_2_50_problem_invariants_and_code(mocker):
     """Section 7.2.2.50 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.50")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1595,25 +2011,37 @@ def test_epic_k_7_2_2_50_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.51 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_51_problem_invariants_and_code():
+def test_epic_k_7_2_2_51_problem_invariants_and_code(mocker):
     """Section 7.2.2.51 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.51")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1621,28 +2049,40 @@ def test_epic_k_7_2_2_51_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.52 — PRE_AUTHORIZATION_HEADER_MISSING (Out of Phase-0 scope; test removed)
 
 
 # 7.2.2.53 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_53_problem_invariants_and_code():
+def test_epic_k_7_2_2_53_problem_invariants_and_code(mocker):
     """Section 7.2.2.53 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.53")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1650,25 +2090,37 @@ def test_epic_k_7_2_2_53_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.54 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_54_problem_invariants_and_code():
+def test_epic_k_7_2_2_54_problem_invariants_and_code(mocker):
     """Section 7.2.2.54 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.54")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1676,25 +2128,37 @@ def test_epic_k_7_2_2_54_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.55 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_55_problem_invariants_and_code():
+def test_epic_k_7_2_2_55_problem_invariants_and_code(mocker):
     """Section 7.2.2.55 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.55")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1702,25 +2166,37 @@ def test_epic_k_7_2_2_55_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.56 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_56_problem_invariants_and_code():
+def test_epic_k_7_2_2_56_problem_invariants_and_code(mocker):
     """Section 7.2.2.56 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.56")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1728,25 +2204,37 @@ def test_epic_k_7_2_2_56_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.57 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_57_problem_invariants_and_code():
+def test_epic_k_7_2_2_57_problem_invariants_and_code(mocker):
     """Section 7.2.2.57 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.57")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1754,25 +2242,37 @@ def test_epic_k_7_2_2_57_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.58 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_58_problem_invariants_and_code():
+def test_epic_k_7_2_2_58_problem_invariants_and_code(mocker):
     """Section 7.2.2.58 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.58")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1780,25 +2280,37 @@ def test_epic_k_7_2_2_58_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.59 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_59_problem_invariants_and_code():
+def test_epic_k_7_2_2_59_problem_invariants_and_code(mocker):
     """Section 7.2.2.59 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.59")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1806,25 +2318,37 @@ def test_epic_k_7_2_2_59_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.60 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_60_problem_invariants_and_code():
+def test_epic_k_7_2_2_60_problem_invariants_and_code(mocker):
     """Section 7.2.2.60 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.60")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1832,25 +2356,37 @@ def test_epic_k_7_2_2_60_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.61 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_61_problem_invariants_and_code():
+def test_epic_k_7_2_2_61_problem_invariants_and_code(mocker):
     """Section 7.2.2.61 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.61")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1858,25 +2394,37 @@ def test_epic_k_7_2_2_61_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.62 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_62_problem_invariants_and_code():
+def test_epic_k_7_2_2_62_problem_invariants_and_code(mocker):
     """Section 7.2.2.62 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.62")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1884,25 +2432,37 @@ def test_epic_k_7_2_2_62_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.63 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_63_problem_invariants_and_code():
+def test_epic_k_7_2_2_63_problem_invariants_and_code(mocker):
     """Section 7.2.2.63 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.63")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1910,25 +2470,37 @@ def test_epic_k_7_2_2_63_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.64 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_64_problem_invariants_and_code():
+def test_epic_k_7_2_2_64_problem_invariants_and_code(mocker):
     """Section 7.2.2.64 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.64")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1936,25 +2508,37 @@ def test_epic_k_7_2_2_64_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.65 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_65_problem_invariants_and_code():
+def test_epic_k_7_2_2_65_problem_invariants_and_code(mocker):
     """Section 7.2.2.65 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.65")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1962,25 +2546,37 @@ def test_epic_k_7_2_2_65_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.66 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_66_problem_invariants_and_code():
+def test_epic_k_7_2_2_66_problem_invariants_and_code(mocker):
     """Section 7.2.2.66 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.66")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -1988,25 +2584,37 @@ def test_epic_k_7_2_2_66_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.67 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_67_problem_invariants_and_code():
+def test_epic_k_7_2_2_67_problem_invariants_and_code(mocker):
     """Section 7.2.2.67 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.67")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2014,25 +2622,37 @@ def test_epic_k_7_2_2_67_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.68 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_68_problem_invariants_and_code():
+def test_epic_k_7_2_2_68_problem_invariants_and_code(mocker):
     """Section 7.2.2.68 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.68")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2040,25 +2660,37 @@ def test_epic_k_7_2_2_68_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.69 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_69_problem_invariants_and_code():
+def test_epic_k_7_2_2_69_problem_invariants_and_code(mocker):
     """Section 7.2.2.69 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.69")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2066,25 +2698,37 @@ def test_epic_k_7_2_2_69_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.70 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_70_problem_invariants_and_code():
+def test_epic_k_7_2_2_70_problem_invariants_and_code(mocker):
     """Section 7.2.2.70 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.70")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2092,25 +2736,37 @@ def test_epic_k_7_2_2_70_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.71 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_71_problem_invariants_and_code():
+def test_epic_k_7_2_2_71_problem_invariants_and_code(mocker):
     """Section 7.2.2.71 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.71")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2118,25 +2774,37 @@ def test_epic_k_7_2_2_71_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.72 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_72_problem_invariants_and_code():
+def test_epic_k_7_2_2_72_problem_invariants_and_code(mocker):
     """Section 7.2.2.72 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.72")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2144,25 +2812,37 @@ def test_epic_k_7_2_2_72_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.73 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_73_problem_invariants_and_code():
+def test_epic_k_7_2_2_73_problem_invariants_and_code(mocker):
     """Section 7.2.2.73 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.73")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2170,25 +2850,37 @@ def test_epic_k_7_2_2_73_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.74 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_74_problem_invariants_and_code():
+def test_epic_k_7_2_2_74_problem_invariants_and_code(mocker):
     """Section 7.2.2.74 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.74")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2196,25 +2888,37 @@ def test_epic_k_7_2_2_74_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.75 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_75_problem_invariants_and_code():
+def test_epic_k_7_2_2_75_problem_invariants_and_code(mocker):
     """Section 7.2.2.75 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.75")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2222,25 +2926,37 @@ def test_epic_k_7_2_2_75_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.76 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_76_problem_invariants_and_code():
+def test_epic_k_7_2_2_76_problem_invariants_and_code(mocker):
     """Section 7.2.2.76 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.76")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2248,25 +2964,37 @@ def test_epic_k_7_2_2_76_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.77 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_77_problem_invariants_and_code():
+def test_epic_k_7_2_2_77_problem_invariants_and_code(mocker):
     """Section 7.2.2.77 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.77")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2274,25 +3002,37 @@ def test_epic_k_7_2_2_77_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.78 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_78_problem_invariants_and_code():
+def test_epic_k_7_2_2_78_problem_invariants_and_code(mocker):
     """Section 7.2.2.78 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.78")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2300,25 +3040,37 @@ def test_epic_k_7_2_2_78_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # 7.2.2.79 — problem invariants + exact Error Mode
-def test_epic_k_7_2_2_79_problem_invariants_and_code():
+def test_epic_k_7_2_2_79_problem_invariants_and_code(mocker):
     """Section 7.2.2.79 — Verifies problem+json invariants and Error Mode code from spec."""
     client = TestClient(create_app())
-    r = _answers_patch(client, headers={"If-Match": 'W/"mismatch"'})
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
     expected = _error_mode_for_section("7.2.2.79")
     # Assert: problem+json content-type
     ctype = r.headers.get("content-type", "")
     assert "application/problem+json" in ctype
     # Assert: status code is within allowed set
-    assert r.status_code in {409, 412, 428}
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
     # Assert: body.code equals expected, and no output field present
     try:
         body = r.json()
     except Exception:
         body = {}
     assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
     assert "output" not in body
     # Assert: meta invariants when present
     meta = (body.get("meta") or {})
@@ -2326,6 +3078,8 @@ def test_epic_k_7_2_2_79_problem_invariants_and_code():
     assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
     lat = meta.get("latency_ms")
     assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 
 # ---------------------------------------------------------------------------
@@ -2671,11 +3425,12 @@ def test_epic_k_7_2_2_80_problem_title_present_on_404():
     """Section 7.2.2.80 — Problem+JSON title is present and surfaced to the user (404)."""
     client = TestClient(create_app())
     r = client.get("/api/v1/documents/missing")
-    # Assert: Status code is 404
+    expected = _error_mode_for_section("7.2.2.80")
+    # Assert: Status code is exactly 404 per spec
     assert r.status_code == 404
     # Assert: Content-Type is application/problem+json
     assert "application/problem+json" in (r.headers.get("content-type") or "")
-    # Assert: Problem JSON has non-empty title
+    # Assert: Problem JSON has non-empty title and exact Error Mode code
     body = {}
     try:
         body = r.json()
@@ -2683,17 +3438,25 @@ def test_epic_k_7_2_2_80_problem_title_present_on_404():
         body = {}
     title = body.get("title")
     assert isinstance(title, str) and len(title.strip()) > 0
+    assert body.get("code") == expected
+    # Assert: Meta invariants when present (request_id optional string, non-negative latency)
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
 
 
 def test_epic_k_7_2_2_81_problem_detail_present_on_500():
     """Section 7.2.2.81 — Problem+JSON detail is present and surfaced to the user (500)."""
     client = TestClient(create_app())
     r = client.post("/api/v1/settings", json={"dark": True})
-    # Assert: Status code is 500
+    expected = _error_mode_for_section("7.2.2.81")
+    # Assert: Status code is exactly 500 per spec
     assert r.status_code == 500
     # Assert: Content-Type is application/problem+json
     assert "application/problem+json" in (r.headers.get("content-type") or "")
-    # Assert: Problem JSON has non-empty detail
+    # Assert: Problem JSON has non-empty detail and exact Error Mode code
     body = {}
     try:
         body = r.json()
@@ -2701,7 +3464,337 @@ def test_epic_k_7_2_2_81_problem_detail_present_on_500():
         body = {}
     detail = body.get("detail")
     assert isinstance(detail, str) and len(detail.strip()) > 0
+    assert body.get("code") == expected
+    # Assert: Meta invariants when present (request_id optional string, non-negative latency)
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
 
+
+# ---------------------------------------------------------------------------
+# 7.2.2.82–7.2.2.89 — Missing per Clarke; add problem invariants + code tests
+# ---------------------------------------------------------------------------
+
+
+def test_epic_k_7_2_2_82_problem_invariants_and_code(mocker):
+    """Section 7.2.2.82 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
+    expected = _error_mode_for_section("7.2.2.82")
+    # Assert: Content-Type includes application/problem+json
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
+    # Assert: Body JSON contains exact Error Mode code for this section
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
+    # Assert: Problem payload must not include an "output" field
+    assert "output" not in body
+    # Assert: Meta invariants — request_id optionally present, latency non-negative when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
+
+
+def test_epic_k_7_2_2_83_problem_invariants_and_code(mocker):
+    """Section 7.2.2.83 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
+    expected = _error_mode_for_section("7.2.2.83")
+    # Assert: Content-Type includes application/problem+json
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
+    # Assert: Body JSON contains exact Error Mode code for this section
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
+    # Assert: Problem payload must not include an "output" field
+    assert "output" not in body
+    # Assert: Meta invariants — request_id optionally present, latency non-negative when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
+
+
+def test_epic_k_7_2_2_84_problem_invariants_and_code(mocker):
+    """Section 7.2.2.84 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
+    expected = _error_mode_for_section("7.2.2.84")
+    # Assert: Content-Type includes application/problem+json
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
+    # Assert: Body JSON contains exact Error Mode code for this section
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
+    # Assert: Problem payload must not include an "output" field
+    assert "output" not in body
+    # Assert: Meta invariants — request_id optionally present, latency non-negative when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
+
+
+def test_epic_k_7_2_2_85_problem_invariants_and_code(mocker):
+    """Section 7.2.2.85 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
+    expected = _error_mode_for_section("7.2.2.85")
+    # Assert: Content-Type includes application/problem+json
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
+    # Assert: Body JSON contains exact Error Mode code for this section
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
+    # Assert: Problem payload must not include an "output" field
+    assert "output" not in body
+    # Assert: Meta invariants — request_id optionally present, latency non-negative when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
+
+
+def test_epic_k_7_2_2_86_problem_invariants_and_code(mocker):
+    """Section 7.2.2.86 — Verifies problem+json invariants and Error Mode code from spec."""
+    client = TestClient(create_app())
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
+    expected = _error_mode_for_section("7.2.2.86")
+    # Assert: Content-Type includes application/problem+json
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
+    # Assert: Body JSON contains exact Error Mode code for this section
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
+    # Assert: tag exposure headers are present and non-empty
+    etag = r.headers.get("ETag")
+    screen_etag = r.headers.get("Screen-ETag")
+    assert isinstance(etag, str) and etag.strip() != ""
+    assert isinstance(screen_etag, str) and screen_etag.strip() != ""
+    # Assert: Access-Control-Expose-Headers contains both exactly once
+    aceh = r.headers.get("Access-Control-Expose-Headers", "")
+    items = [x.strip().lower() for x in aceh.split(",") if x.strip()]
+    assert items.count("etag") == 1
+    assert items.count("screen-etag") == 1
+    # Assert: Problem payload must not include an "output" field
+    assert "output" not in body
+    # Assert: Meta invariants — request_id optionally present, latency non-negative when present
+    meta = (body.get("meta") or {})
+    rid = meta.get("request_id")
+    assert (rid is None) or (isinstance(rid, str) and len(rid) > 0)
+    lat = meta.get("latency_ms")
+    assert (lat is None) or (isinstance(lat, (int, float)) and lat >= 0)
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
+
+
+def test_epic_k_7_2_2_87_request_content_type_unsupported(mocker):
+    """Section 7.2.2.87 — Unsupported Content-Type yields 415 with PRE_REQUEST_CONTENT_TYPE_UNSUPPORTED.
+
+    Sends text/plain body and asserts repository boundaries were not invoked.
+    """
+    client = TestClient(create_app())
+    # Repo spies must not be invoked for content-type validation failure
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="ignored")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=0)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={
+            "Authorization": "Bearer dev-token",
+            "If-Match": 'W/"abc"',
+            "Content-Type": "text/plain",
+        },
+        data="raw body that is not JSON",
+    )
+    expected = _error_mode_for_section("7.2.2.87")
+    # Assert: status 415 Unsupported Media Type
+    assert r.status_code == 415
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: error code matches PRE_REQUEST_CONTENT_TYPE_UNSUPPORTED and includes message
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
+    # Assert: repositories were not touched
+    m_key.assert_not_called()
+    m_ver.assert_not_called()
+
+
+def test_epic_k_7_2_2_88_documents_reorder_precondition_failure_emits_diagnostics(mocker):
+    """Section 7.2.2.88 — Documents reorder with stale If-Match yields 412 and diagnostic headers.
+
+    Asserts X-List-ETag and X-If-Match-Normalized presence and values.
+    """
+    client = TestClient(create_app())
+    # Repo boundaries are not used for document reorder; verify not called
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="ignored")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=0)
+    # Use a deliberately awkward If-Match value to exercise normalisation
+    raw_if_match = 'W/"  StaleTag  "\t'
+    r = client.patch(
+        "/api/v1/documents/reorder",
+        headers={"If-Match": raw_if_match},
+        json={"order": ["doc_b", "doc_a"], "list_id": "list_1"},
+    )
+    expected = _error_mode_for_section("7.2.2.88")
+    # Assert: 412 Precondition Failed for document routes on mismatch
+    assert r.status_code == 412
+    # Assert: problem+json content-type
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: error code and presence of human-readable message
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
+    # Assert: diagnostic headers present
+    list_etag = r.headers.get("X-List-ETag")
+    assert isinstance(list_etag, str) and list_etag.strip() != ""
+    norm = r.headers.get("X-If-Match-Normalized")
+    assert isinstance(norm, str) and norm.strip() != ""
+    # Assert: normalized value reflects canonical token
+    assert norm == "StaleTag"
+    m_key.assert_not_called()
+    m_ver.assert_not_called()
+
+
+def test_epic_k_7_2_2_89_expose_headers_contains_domain_and_generic_once(mocker):
+    """Section 7.2.2.89 — Access-Control-Expose-Headers includes ETag and Screen-ETag exactly once.
+
+    Also asserts both headers are present and non-empty on the response.
+    """
+    client = TestClient(create_app())
+    m_key = mocker.patch("app.logic.repository_screens.get_screen_key_for_question", return_value="welcome")
+    m_ver = mocker.patch("app.logic.repository_answers.get_screen_version", return_value=1)
+    r = client.patch(
+        "/api/v1/response-sets/resp_123/answers/q_456",
+        headers={"Authorization": "Bearer dev-token", "If-Match": 'W/"mismatch"'},
+        json={"value": "x"},
+    )
+    expected = _error_mode_for_section("7.2.2.89")
+    # Assert: problem+json and error code presence
+    ctype = r.headers.get("content-type", "")
+    assert "application/problem+json" in ctype
+    # Assert: exact HTTP status equals mapping for this section's Error Mode
+    expected_status = _expected_status_for_error_code(expected)
+    assert r.status_code == expected_status
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    assert body.get("code") == expected
+    # Assert: human-readable message is present and non-empty
+    msg = body.get("message")
+    assert isinstance(msg, str) and msg.strip() != ""
+    # Assert: header presence and exposure list contains both exactly once
+    etag = r.headers.get("ETag")
+    screen_etag = r.headers.get("Screen-ETag")
+    assert isinstance(etag, str) and etag.strip() != ""
+    assert isinstance(screen_etag, str) and screen_etag.strip() != ""
+    aceh = r.headers.get("Access-Control-Expose-Headers", "")
+    items = [x.strip().lower() for x in aceh.split(",") if x.strip()]
+    assert items.count("etag") == 1
+    assert items.count("screen-etag") == 1
+    m_key.assert_called_with("q_456")
+    m_ver.assert_called_with("resp_123", "welcome")
 
 # ---------------------------------------------------------------------------
 # 7.3.1.x — Behavioural tests (client/orchestrator sequencing)
@@ -2710,7 +3803,7 @@ def test_epic_k_7_2_2_81_problem_detail_present_on_500():
 
 def test_epic_k_7_3_1_1_load_screen_view_after_run_start():
     """Section 7.3.1.1 — Response set creation triggers initial screen load."""
-    trace = simulate_ui_adapter_flow("7.3.1.1", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.1")
     names = _event_names(trace)
     # Assert: screen view fetch invoked once immediately after response set creation completes
     assert names.count("screen_view_fetch") == 1
@@ -2719,7 +3812,7 @@ def test_epic_k_7_3_1_1_load_screen_view_after_run_start():
 
 def test_epic_k_7_3_1_2_store_hydration_after_screen_view_fetch():
     """Section 7.3.1.2 — Screen view fetch triggers store hydration."""
-    trace = simulate_ui_adapter_flow("7.3.1.2", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.2")
     names = _event_names(trace)
     # Assert: store hydration invoked once immediately after screen view fetch completes
     assert names.count("store_hydration") == 1
@@ -2728,7 +3821,7 @@ def test_epic_k_7_3_1_2_store_hydration_after_screen_view_fetch():
 
 def test_epic_k_7_3_1_3_autosave_subscriber_activation_after_hydration():
     """Section 7.3.1.3 — Store hydration triggers autosave subscriber start."""
-    trace = simulate_ui_adapter_flow("7.3.1.3", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.3")
     names = _event_names(trace)
     # Assert: autosave starts once immediately after store hydration completes
     assert names.count("autosave_subscriber_start") == 1
@@ -2737,7 +3830,7 @@ def test_epic_k_7_3_1_3_autosave_subscriber_activation_after_hydration():
 
 def test_epic_k_7_3_1_4_debounced_save_triggers_patch():
     """Section 7.3.1.4 — Debounced local change triggers PATCH call."""
-    trace = simulate_ui_adapter_flow("7.3.1.4", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.4")
     names = _event_names(trace)
     # Assert: PATCH invoked once immediately after debounce window completes
     assert names.count("answers_patch_call") == 1
@@ -2746,7 +3839,7 @@ def test_epic_k_7_3_1_4_debounced_save_triggers_patch():
 
 def test_epic_k_7_3_1_5_successful_patch_triggers_screen_apply():
     """Section 7.3.1.5 — PATCH success triggers screen apply."""
-    trace = simulate_ui_adapter_flow("7.3.1.5", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.5")
     names = _event_names(trace)
     # Assert: screen apply invoked once immediately after PATCH success
     assert names.count("screen_apply") == 1
@@ -2755,7 +3848,7 @@ def test_epic_k_7_3_1_5_successful_patch_triggers_screen_apply():
 
 def test_epic_k_7_3_1_6_binding_success_triggers_screen_refresh():
     """Section 7.3.1.6 — Bind/unbind success triggers screen refresh apply."""
-    trace = simulate_ui_adapter_flow("7.3.1.6", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.6")
     names = _event_names(trace)
     # Assert: screen refresh apply invoked once immediately after bind/unbind success
     assert names.count("screen_refresh_apply") == 1
@@ -2764,7 +3857,7 @@ def test_epic_k_7_3_1_6_binding_success_triggers_screen_refresh():
 
 def test_epic_k_7_3_1_7_active_screen_change_rotates_working_tag():
     """Section 7.3.1.7 — Active screen change rotates working tag."""
-    trace = simulate_ui_adapter_flow("7.3.1.7", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.7")
     names = _event_names(trace)
     # Assert: working tag rotation invoked once immediately after active screen change
     assert names.count("working_tag_rotation") == 1
@@ -2773,7 +3866,7 @@ def test_epic_k_7_3_1_7_active_screen_change_rotates_working_tag():
 
 def test_epic_k_7_3_1_8_short_poll_tick_triggers_conditional_refresh():
     """Section 7.3.1.8 — Poll tick ETag change triggers screen load."""
-    trace = simulate_ui_adapter_flow("7.3.1.8", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.8")
     names = _event_names(trace)
     # Assert: screen load invoked once immediately after detecting tag change
     assert names.count("screen_load") == 1
@@ -2782,7 +3875,7 @@ def test_epic_k_7_3_1_8_short_poll_tick_triggers_conditional_refresh():
 
 def test_epic_k_7_3_1_9_tab_focus_triggers_conditional_refresh():
     """Section 7.3.1.9 — Tab focus triggers light refresh step."""
-    trace = simulate_ui_adapter_flow("7.3.1.9", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.9")
     names = _event_names(trace)
     # Assert: light refresh invoked once immediately after tab visibility handling
     assert names.count("light_refresh") == 1
@@ -2791,7 +3884,7 @@ def test_epic_k_7_3_1_9_tab_focus_triggers_conditional_refresh():
 
 def test_epic_k_7_3_1_10_multi_scope_headers_trigger_store_updates():
     """Section 7.3.1.10 — Multi-scope headers trigger per-scope updates."""
-    trace = simulate_ui_adapter_flow("7.3.1.10", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.10")
     names = _event_names(trace)
     # Assert: per-scope ETag store update invoked once immediately after success response
     assert names.count("per_scope_etag_store_update") == 1
@@ -2800,7 +3893,7 @@ def test_epic_k_7_3_1_10_multi_scope_headers_trigger_store_updates():
 
 def test_epic_k_7_3_1_11_inject_fresh_if_match_after_header_update():
     """Section 7.3.1.11 — Per-scope update triggers next-write header injection."""
-    trace = simulate_ui_adapter_flow("7.3.1.11", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.11")
     names = _event_names(trace)
     # Assert: header injection occurs once immediately after per-scope store update
     assert names.count("inject_fresh_if_match_next_write") == 1
@@ -2809,7 +3902,7 @@ def test_epic_k_7_3_1_11_inject_fresh_if_match_after_header_update():
 
 def test_epic_k_7_3_1_12_continue_polling_after_304():
     """Section 7.3.1.12 — Light refresh 304 continues polling loop."""
-    trace = simulate_ui_adapter_flow("7.3.1.12", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.12")
     names = _event_names(trace)
     # Assert: polling continue invoked once immediately after handling 304
     assert names.count("polling_continue") == 1
@@ -2818,7 +3911,7 @@ def test_epic_k_7_3_1_12_continue_polling_after_304():
 
 def test_epic_k_7_3_1_13_answers_post_success_triggers_screen_apply():
     """Section 7.3.1.13 — POST success triggers screen apply."""
-    trace = simulate_ui_adapter_flow("7.3.1.13", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.13")
     names = _event_names(trace)
     # Assert: screen apply invoked once immediately after POST success
     assert names.count("screen_apply") == 1
@@ -2827,7 +3920,7 @@ def test_epic_k_7_3_1_13_answers_post_success_triggers_screen_apply():
 
 def test_epic_k_7_3_1_14_answers_delete_success_triggers_screen_apply():
     """Section 7.3.1.14 — DELETE success triggers screen apply."""
-    trace = simulate_ui_adapter_flow("7.3.1.14", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.14")
     names = _event_names(trace)
     # Assert: screen apply invoked once immediately after DELETE success
     assert names.count("screen_apply") == 1
@@ -2836,7 +3929,7 @@ def test_epic_k_7_3_1_14_answers_delete_success_triggers_screen_apply():
 
 def test_epic_k_7_3_1_15_document_reorder_success_triggers_list_refresh():
     """Section 7.3.1.15 — Reorder success triggers document list refresh/apply."""
-    trace = simulate_ui_adapter_flow("7.3.1.15", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.15")
     names = _event_names(trace)
     # Assert: document list refresh/apply invoked once immediately after reorder success
     assert names.count("document_list_refresh_apply") == 1
@@ -2845,7 +3938,7 @@ def test_epic_k_7_3_1_15_document_reorder_success_triggers_list_refresh():
 
 def test_epic_k_7_3_1_16_any_match_precondition_success_triggers_mutation():
     """Section 7.3.1.16 — Any-match guard success triggers mutation."""
-    trace = simulate_ui_adapter_flow("7.3.1.16", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.16")
     names = _event_names(trace)
     # Assert: mutation invoked once immediately after any-match precondition success
     assert names.count("mutation_invoked") == 1
@@ -2854,7 +3947,7 @@ def test_epic_k_7_3_1_16_any_match_precondition_success_triggers_mutation():
 
 def test_epic_k_7_3_1_17_wildcard_precondition_success_triggers_mutation():
     """Section 7.3.1.17 — Wildcard precondition success triggers mutation."""
-    trace = simulate_ui_adapter_flow("7.3.1.17", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.17")
     names = _event_names(trace)
     # Assert: mutation invoked once immediately after wildcard precondition success
     assert names.count("mutation_invoked") == 1
@@ -2863,7 +3956,7 @@ def test_epic_k_7_3_1_17_wildcard_precondition_success_triggers_mutation():
 
 def test_epic_k_7_3_1_18_runtime_json_success_triggers_header_read():
     """Section 7.3.1.18 — Runtime success triggers client header-read/tag handling."""
-    trace = simulate_ui_adapter_flow("7.3.1.18", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.18")
     names = _event_names(trace)
     # Assert: client header-read invoked once immediately after runtime JSON success
     assert names.count("client_header_read") == 1
@@ -2872,7 +3965,7 @@ def test_epic_k_7_3_1_18_runtime_json_success_triggers_header_read():
 
 def test_epic_k_7_3_1_19_authoring_json_success_triggers_header_read():
     """Section 7.3.1.19 — Authoring success triggers client header-read/tag handling."""
-    trace = simulate_ui_adapter_flow("7.3.1.19", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.19")
     names = _event_names(trace)
     # Assert: client header-read invoked once immediately after authoring JSON success
     assert names.count("client_header_read") == 1
@@ -2881,7 +3974,7 @@ def test_epic_k_7_3_1_19_authoring_json_success_triggers_header_read():
 
 def test_epic_k_7_3_1_20_non_json_download_triggers_tag_handling_without_apply():
     """Section 7.3.1.20 — Download success triggers tag handling; no screen/list apply."""
-    trace = simulate_ui_adapter_flow("7.3.1.20", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.20")
     names = _event_names(trace)
     # Assert: tag handling invoked once immediately after download handling completes
     assert names.count("tag_handling") == 1
@@ -2893,7 +3986,7 @@ def test_epic_k_7_3_1_20_non_json_download_triggers_tag_handling_without_apply()
 
 def test_epic_k_7_3_1_21_successful_guarded_write_logs_in_order():
     """Section 7.3.1.21 — Guarded write success triggers emit-logging after mutation."""
-    trace = simulate_ui_adapter_flow("7.3.1.21", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.21")
     names = _event_names(trace)
     # Assert: emit-logging invoked once immediately after mutation completes
     assert names.count("emit_logging") == 1
@@ -2902,7 +3995,7 @@ def test_epic_k_7_3_1_21_successful_guarded_write_logs_in_order():
 
 def test_epic_k_7_3_1_22_legacy_token_parity_does_not_trigger_extra_refresh():
     """Section 7.3.1.22 — Unchanged legacy token does not trigger extra refresh/rotation."""
-    trace = simulate_ui_adapter_flow("7.3.1.22", mocks={})
+    trace = invoke_orchestrator_trace("7.3.1.22")
     names = _event_names(trace)
     # Assert: detector invoked once immediately after screen GET completes
     assert names.count("legacy_token_parity_detector") == 1
@@ -2918,7 +4011,7 @@ def test_epic_k_7_3_1_22_legacy_token_parity_does_not_trigger_extra_refresh():
 
 def test_epic_k_7_3_2_1_cors_expose_headers_misconfiguration_halts_at_step4():
     """Section 7.3.2.1 — CORS expose-headers misconfig halts at STEP-4; prevents STEP-5."""
-    trace = simulate_ui_adapter_flow("7.3.2.1", mocks={})
+    trace = invoke_orchestrator_trace("7.3.2.1")
     names = _event_names(trace)
     diags = trace.get("diagnostics", {})
     telemetry = trace.get("telemetry", [])
@@ -2937,7 +4030,7 @@ def test_epic_k_7_3_2_1_cors_expose_headers_misconfiguration_halts_at_step4():
 
 def test_epic_k_7_3_2_2_logging_sink_unavailable_during_precondition_does_not_alter_flow():
     """Section 7.3.2.2 — Telemetry failure during STEP-2 does not alter flow."""
-    trace = simulate_ui_adapter_flow("7.3.2.2", mocks={})
+    trace = invoke_orchestrator_trace("7.3.2.2")
     names = _event_names(trace)
     diags = trace.get("diagnostics", {})
     telemetry = trace.get("telemetry", [])
@@ -2958,7 +4051,7 @@ def test_epic_k_7_3_2_2_logging_sink_unavailable_during_precondition_does_not_al
 
 def test_epic_k_7_3_2_3_logging_sink_unavailable_during_header_emit_does_not_block_finalisation():
     """Section 7.3.2.3 — Telemetry failure during STEP-4 does not block finalisation."""
-    trace = simulate_ui_adapter_flow("7.3.2.3", mocks={})
+    trace = invoke_orchestrator_trace("7.3.2.3")
     names = _event_names(trace)
     telemetry = trace.get("telemetry", [])
     diags = trace.get("diagnostics", {})
@@ -2976,7 +4069,7 @@ def test_epic_k_7_3_2_3_logging_sink_unavailable_during_header_emit_does_not_blo
 
 def test_epic_k_7_3_2_4_proxy_strips_domain_etag_headers_halts_at_step4():
     """Section 7.3.2.4 — Egress policy stripping domain ETags halts at STEP-4; prevents STEP-5 and finalisation."""
-    trace = simulate_ui_adapter_flow("7.3.2.4", mocks={})
+    trace = invoke_orchestrator_trace("7.3.2.4")
     names = _event_names(trace)
     diags = trace.get("diagnostics", {})
     # Assert: STEP-4 detection halts once immediately
@@ -2993,7 +4086,7 @@ def test_epic_k_7_3_2_4_proxy_strips_domain_etag_headers_halts_at_step4():
 
 def test_epic_k_7_3_2_5_preflight_missing_if_match_blocks_before_step2():
     """Section 7.3.2.5 — OPTIONS preflight omitting If-Match blocks before STEP-2."""
-    trace = simulate_ui_adapter_flow("7.3.2.5", mocks={})
+    trace = invoke_orchestrator_trace("7.3.2.5")
     names = _event_names(trace)
     diags = trace.get("diagnostics", {})
     # Assert: pipeline halts during preflight before STEP-2
@@ -3010,7 +4103,7 @@ def test_epic_k_7_3_2_5_preflight_missing_if_match_blocks_before_step2():
 
 def test_epic_k_7_3_2_6_proxy_strips_if_match_on_ingress_halts_at_step2_missing_precondition():
     """Section 7.3.2.6 — Ingress strips If-Match → guard missing-precondition branch; mutation prevented."""
-    trace = simulate_ui_adapter_flow("7.3.2.6", mocks={})
+    trace = invoke_orchestrator_trace("7.3.2.6")
     names = _event_names(trace)
     diags = trace.get("diagnostics", {})
     # Assert: STEP-2 invoked once and halts immediately on missing-precondition branch
@@ -3027,7 +4120,7 @@ def test_epic_k_7_3_2_6_proxy_strips_if_match_on_ingress_halts_at_step2_missing_
 
 def test_epic_k_7_3_2_7_guard_misapplied_to_read_endpoints_halts_at_step2():
     """Section 7.3.2.7 — Guard misapplied to GET halts at STEP-2; prevents handler and headers."""
-    trace = simulate_ui_adapter_flow("7.3.2.7", mocks={})
+    trace = invoke_orchestrator_trace("7.3.2.7")
     names = _event_names(trace)
     diags = trace.get("diagnostics", {})
     # Assert: STEP-2 invoked once (misapplied) and halts immediately
