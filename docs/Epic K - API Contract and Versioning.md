@@ -1670,27 +1670,6 @@ EARS-Refs: E1, E2, U13
 **AC-Ref**: 6.2.2.3
 **Error Mode**: PRE_IF_MATCH_NO_VALID_TOKENS
 
----
-
-**ID**: 7.2.2.4
-**Title**: Sad path #04 for AC 6.2.2.4
-**Purpose**: Verify contractual failure behaviour aligned to AC 6.2.2.4 with explicit error surface and externally observable contract.
-**Test Data**: 
-- HTTP method: PATCH
-- URL: /api/v1/response-sets/resp_123/answers/q_456
-- Headers: Authorization: Bearer dev-token; If-Match: "invalid"
-- Body (JSON): { "value": "X" }
-**Mocking**: 
-- Mock persistence layer at the repository boundary to simulate the specific failure: return current tag 'W/"fresh-tag"' when asked; raise exceptions only where the error mode implies runtime failure; otherwise let real validation execute.
-- Assert repository mock is invoked with question_id "q_456" and response_set_id "resp_123".
-- Do not mock request normalisation or ETag comparison logic; execute real code to exercise contract surfaces.
-**Assertions**:
-- Status code equals one of 409, 412, or 428 as defined by contract for this AC.
-- Response meta includes stable `request_id` and non-negative `latency_ms` when applicable.
-- Error payload includes `code` equal to `PRE_AUTHORIZATION_HEADER_MISSING` and a human-readable `message` mentioning the failing precondition or parity surface.
-- No `output` field is present when `status = "error"`.
-**AC-Ref**: 6.2.2.4
-**Error Mode**: PRE_AUTHORIZATION_HEADER_MISSING
 
 ---
 
@@ -2200,26 +2179,6 @@ EARS-Refs: E1, E2, U13
 
 ---
 
-**ID**: 7.2.2.28
-**Title**: Sad path #28 for AC 6.2.2.28
-**Purpose**: Verify contractual failure behaviour aligned to AC 6.2.2.28 with explicit error surface and externally observable contract.
-**Test Data**: 
-- HTTP method: PATCH
-- URL: /api/v1/response-sets/resp_123/answers/q_456
-- Headers: Authorization: Bearer dev-token; If-Match: "invalid"
-- Body (JSON): { "value": "X" }
-**Mocking**: 
-- Mock persistence layer at the repository boundary to simulate the specific failure: return current tag 'W/"fresh-tag"' when asked; raise exceptions only where the error mode implies runtime failure; otherwise let real validation execute.
-- Assert repository mock is invoked with question_id "q_456" and response_set_id "resp_123".
-- Do not mock request normalisation or ETag comparison logic; execute real code to exercise contract surfaces.
-**Assertions**:
-- Status code equals one of 409, 412, or 428 as defined by contract for this AC.
-- Response meta includes stable `request_id` and non-negative `latency_ms` when applicable.
-- Error payload includes `code` equal to `PRE_AUTHORIZATION_HEADER_MISSING` and a human-readable `message` mentioning the failing precondition or parity surface.
-- No `output` field is present when `status = "error"`.
-**AC-Ref**: 6.2.2.28
-**Error Mode**: PRE_AUTHORIZATION_HEADER_MISSING
-
 ---
 
 **ID**: 7.2.2.29
@@ -2727,26 +2686,6 @@ EARS-Refs: E1, E2, U13
 **Error Mode**: PRE_IF_MATCH_NO_VALID_TOKENS
 
 ---
-
-**ID**: 7.2.2.52
-**Title**: Sad path #52 for AC 6.2.2.52
-**Purpose**: Verify contractual failure behaviour aligned to AC 6.2.2.52 with explicit error surface and externally observable contract.
-**Test Data**: 
-- HTTP method: PATCH
-- URL: /api/v1/response-sets/resp_123/answers/q_456
-- Headers: Authorization: Bearer dev-token; If-Match: "invalid"
-- Body (JSON): { "value": "X" }
-**Mocking**: 
-- Mock persistence layer at the repository boundary to simulate the specific failure: return current tag 'W/"fresh-tag"' when asked; raise exceptions only where the error mode implies runtime failure; otherwise let real validation execute.
-- Assert repository mock is invoked with question_id "q_456" and response_set_id "resp_123".
-- Do not mock request normalisation or ETag comparison logic; execute real code to exercise contract surfaces.
-**Assertions**:
-- Status code equals one of 409, 412, or 428 as defined by contract for this AC.
-- Response meta includes stable `request_id` and non-negative `latency_ms` when applicable.
-- Error payload includes `code` equal to `PRE_AUTHORIZATION_HEADER_MISSING` and a human-readable `message` mentioning the failing precondition or parity surface.
-- No `output` field is present when `status = "error"`.
-**AC-Ref**: 6.2.2.52
-**Error Mode**: PRE_AUTHORIZATION_HEADER_MISSING
 
 ---
 
