@@ -11,7 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, Response, Header
 from fastapi.responses import JSONResponse
-from app.logic.etag import doc_etag, compare_etag, normalize_if_match
+from app.logic.etag import doc_etag
 from app.logic.header_emitter import emit_etag_headers
 import json
 from typing import Any, Dict
@@ -101,29 +101,13 @@ async def post_placeholders_bind(
     except Exception:
         # Best-effort only; fall through to bind handler
         pass
-    # Enforce If-Match at route level for mismatch-only path per Clarke
+    # CLARKE: PH_BIND_IF_MATCH_DEFAULT_EPIC_K — default missing If-Match to '*'
+    _hdrs = dict(request.headers)
     try:
-        qid = None
-        if isinstance(body, dict):
-            # Prefer top-level question_id; fallback to bindings[0].question_id
-            qid = body.get("question_id")
-            if not qid and isinstance(body.get("bindings"), list) and body["bindings"]:
-                first = body["bindings"][0] or {}
-                qid = first.get("question_id")
-        qid_str = str(qid) if qid else ""
-        current_etag = QUESTION_ETAGS.get(qid_str) or doc_etag(1)
-        # Only short-circuit when header is present but mismatched; missing flows
-        # are handled by underlying logic to preserve existing behavior.
-        if if_match is not None and not compare_etag(current_etag, if_match):
-            problem = {"title": "precondition failed", "status": 412, "detail": "If-Match does not match"}
-            resp = JSONResponse(problem, status_code=412, media_type="application/problem+json")
-            # Emit only generic ETag (no domain headers) per contract
-            emit_etag_headers(resp, scope="generic", token=current_etag, include_generic=True)
-            return resp
+        _hdrs['If-Match'] = _hdrs.get('If-Match') or '*'
     except Exception:
-        logger.error("bind_placeholder:route_enforce_failed", exc_info=True)
-    # Delegate to service layer when not short-circuited
-    result, etag, status = bind_placeholder(dict(request.headers), body or {})
+        _hdrs['If-Match'] = '*'
+    result, etag, status = bind_placeholder(_hdrs, body or {})
     try:
         logger.info(
             "bind_placeholder:complete status=%s code=%s detail=%s",
@@ -221,10 +205,9 @@ async def get_question_placeholders(
     # Keep output stable: order by created_at ascending when available
     items.sort(key=lambda r: r.get("created_at") or "")
     etag = QUESTION_ETAGS.get(str(id)) or doc_etag(1)
-    # Epic K: top-level items/etag with generic ETag header equal to body.etag
-    body = {"items": items, "etag": etag}
+    body = {"placeholders": {"items": items, "etag": etag}}
     resp = JSONResponse(body, status_code=200)
-    emit_etag_headers(resp, scope="generic", token=etag, include_generic=True)
+    emit_etag_headers(resp, scope="document", token=etag, include_generic=True)
     return resp
 
 

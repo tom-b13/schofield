@@ -154,28 +154,6 @@ def create_app() -> FastAPI:
         # For all other routes, defer to the prior logging handler to preserve behavior
         return await _log_request_validation_error(request, exc)
 
-    # Unwrap HTTPException detail dict into top-level problem+json; preserve headers/status
-    from fastapi import HTTPException as _HTTPException  # local import to avoid widening public API
-
-    @app.exception_handler(_HTTPException)  # type: ignore[misc]
-    async def _unwrap_http_exception(request: Request, exc: _HTTPException):  # noqa: D401
-        try:
-            if isinstance(exc.detail, dict):
-                try:
-                    hdrs = dict(exc.headers) if exc.headers else None
-                except Exception:
-                    hdrs = exc.headers or None
-                return JSONResponse(
-                    exc.detail,
-                    status_code=int(exc.status_code or 500),
-                    media_type="application/problem+json",
-                    headers=hdrs,
-                )
-        except Exception:
-            logger.error("http_exception_unwrap_failed", exc_info=True)
-        # Fallback: preserve default detail shape
-        return JSONResponse({"detail": exc.detail}, status_code=int(exc.status_code or 500), headers=exc.headers)
-
     # Architectural stub: response schema validation middleware registration
     class ResponseSchemaValidator:  # pragma: no cover - static detection stub
         def __init__(self, app: FastAPI, **kwargs):
