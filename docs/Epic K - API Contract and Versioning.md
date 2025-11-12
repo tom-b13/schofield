@@ -1519,6 +1519,62 @@ Assertions:
 (2) Handlers do not set these headers directly.
 AC-Ref: 6.1.36.
 
+7.1.37
+Title: Guard enforces ordered preconditions with first-failure semantics
+Purpose: Prove the guard implements the exact check order and that handlers are not responsible for PRE_* logic.
+Test Data: app/guards/precondition.py. Named helpers _check_content_type, _check_if_match_presence, _parse_if_match, _compare_etag.
+Mocking: None. Static and reflective inspection of function bodies and call graph.
+Assertions: (1) Guard function calls helpers in the exact order listed; (2) No handler or wrapper module imports these helpers; (3) Guard code path never sets success headers.
+AC-Ref: 6.1.32
+
+7.1.38
+Title: 415 Content-Type is enforced pre-body on write routes
+Purpose: Ensure Content-Type validation occurs before any body parsing and only for write routes that expect a body.
+Test Data: Route modules registering answers/documents writes; app factory/router composition.
+Mocking: None. Static inspection of route signatures and dependency/middleware order.
+Assertions: (1) Write routes do not declare Pydantic body params; (2) A pre-body guard or dependency is mounted before any body parsing; (3) Wrapper modules contain no PRE_* branches and at most media type coercion.
+AC-Ref: 6.1.33 and 6.1.37
+
+7.1.39
+Title: PRE_* lives only in the guard
+Purpose: Enforce single ownership of preconditions.
+Test Data: app/routes/**, wrappers, handlers.
+Mocking: None. Static search for If-Match parsing, normalisation, comparison, or PRE_* literals.
+Assertions: (1) No route/wrapper parses or compares If-Match; (2) No PRE_* constants referenced outside the guard; (3) No RUN_* used in guard failure branches.
+AC-Ref: 6.1.34 and 6.1.35
+
+7.1.40
+Title: Canonical status mapping is declared and used
+Purpose: Lock 428 missing, 409 invalid format, and 409 vs 412 mismatch mapping.
+Test Data: Guard mapping table and call sites.
+Mocking: None. Static inspection.
+Assertions: (1) Mapping table contains keys for missing, invalid_format, mismatch_answers, mismatch_documents; (2) Answers/screens mismatch path resolves to 409; documents reorder mismatch resolves to 412; (3) No RUN_* in guarded failure paths.
+AC-Ref: 6.1.35
+
+7.1.41
+Title: Reorder diagnostics emitted only by header emitter
+Purpose: Ensure X-List-ETag and X-If-Match-Normalized come from the shared emitter.
+Test Data: Reorder failure path handler(s); app/logic/header_emitter.py.
+Mocking: None. Static import and call-site inspection.
+Assertions: (1) Handler imports emit_etag_headers; (2) Handler does not set diagnostic headers directly; (3) Emitter exposes both diagnostics.
+AC-Ref: 6.1.36
+
+7.1.37
+Title: Write routes avoid signature-level body models
+Purpose: Prevent framework pre-parsing before the guard.
+Test Data: Route function definitions for all write endpoints.
+Mocking: None. AST inspection of parameters and annotations.
+Assertions: (1) No Pydantic model parameters or Body(...) appear in write route signatures; (2) Request parameter is present; (3) Body parsing helpers are invoked only after guard success (static call-order where detectable).
+AC-Ref: 6.1.37
+
+7.1.42
+Title: If-Match presence helper trims and treats blanks as missing
+Purpose: Lock presence semantics to map blanks to 428.
+Test Data: Guard presence helper implementation and its usage.
+Mocking: None. Static inspection for .strip() and conditional mapping to missing.
+Assertions: (1) Presence helper uses trimming; (2) Whitespace-only values are classified as missing; (3) Presence helper executes before parsing/normalisation.
+AC-Ref: 6.1.38
+
 7.2.1.1 Runtime screen GET returns domain + generic tags (parity)
 Purpose: Verify that a runtime screen GET includes both Screen-ETag and ETag headers with identical values.
 Test data: HTTP GET /api/v1/response-sets/rs_001/screens/welcome
@@ -3834,6 +3890,166 @@ Test Data: runtime screen GET for intro; baseline captured from pre-refactor bui
 Mocking: Mock the runtime GET to return a dummy success response sufficient to allow sequencing to continue.
 Assertions: Assert invoked once immediately after screen GET completes (tag-change detection), and not before.
 AC-Ref: 6.3.1.22
+
+7.3.2.8
+Title: text/plain write triggers 415 and short-circuits pre-body
+Purpose: Validate that 415 takes precedence even if If-Match is present, and that nothing downstream (guard, repos, success emitter) runs.
+Test Data:
+• Route: POST /answers/{screen}/...
+• Request headers: Content-Type: text/plain, If-Match: "abcd"
+• Body: any plain text payload (ignored)
+Mocking:
+• Router: real app wiring.
+• Repo: spy on mutation repo(s); expect 0 calls.
+• Guard: spy on precondition_guard entry (e.g., guards.precondition.guard or an exported dispatch hook); expect 0 calls.
+• Emitter: spy on app.logic.header_emitter.emit_etag_headers; expect 0 calls.
+• (Optional) Telemetry: spy on precondition.fail if logger injectable.
+Assertions:
+• Response: 415 with Content-Type: application/problem+json.
+• Problem JSON: code = PRE_REQUEST_CONTENT_TYPE_UNSUPPORTED (or equivalent field per spec), title present, non-empty detail, status=415.
+• Headers: no success ETag/Screen-ETag.
+• Repo spy: not called.
+• Guard spy: not called (proves pre-body pipeline produced the error).
+• Emitter spy: not called.
+• (Optional) Telemetry: precondition.fail{chosen_failure=content_type} recorded exactly once.
+AC-Ref: 6.1.32; 6.1.33
+Error Mode: PRE_REQUEST_CONTENT_TYPE_UNSUPPORTED
+
+7.3.2.9
+Title: application/json with missing or blank If-Match yields 428 (pre-body)
+Purpose: Validate presence semantics and precedence: blank/missing If-Match maps to 428 and halts before guard, repos, or emitter.
+Test Data:
+• Route: PATCH /answers/{screen}/...
+• Request headers: Content-Type: application/json, If-Match omitted or set to whitespace " "
+• Body: minimal valid JSON for the route
+Mocking:
+• Repo: spy; expect 0 calls.
+• Guard: spy on guard entry; expect 0 calls.
+• Emitter: spy on emit_etag_headers; expect 0 calls.
+• (Optional) Telemetry: spy on precondition.fail.
+Assertions:
+• Response: 428 application/problem+json.
+• Problem JSON: code = PRE_IF_MATCH_MISSING, title present, status=428.
+• Headers: no success ETag/Screen-ETag.
+• Repo spy: not called.
+• Guard spy: not called (proves early pre-body presence check).
+• Emitter spy: not called.
+• (Optional) Telemetry: precondition.fail{chosen_failure=missing} recorded once.
+AC-Ref: 6.1.32; 6.1.38
+Error Mode: PRE_IF_MATCH_MISSING
+
+7.3.2.10
+Title: application/json with invalid If-Match format yields 409 (no compare)
+Purpose: Validate that invalid format halts at 409 without attempting compare or mutation.
+Test Data:
+• Route: PATCH /answers/{screen}/...
+• Request headers: Content-Type: application/json, If-Match: not-a-token
+• Body: minimal valid JSON
+Mocking:
+• Repo: spy; expect 0 calls.
+• Guard: spy on guard entry; expect 1 call.
+• Emitter: spy on emit_etag_headers; expect 0 calls.
+• (Optional) Telemetry: spy on precondition.fail.
+Assertions:
+• Response: 409 application/problem+json.
+• Problem JSON: code = PRE_IF_MATCH_INVALID_FORMAT, status=409.
+• Headers: no success ETag/Screen-ETag.
+• Repo spy: not called.
+• Guard spy: called once (pre-body/guard owns invalid-format).
+• Emitter spy: not called.
+• (Optional) Telemetry: precondition.fail{chosen_failure=invalid_format} recorded once.
+AC-Ref: 6.1.32; 6.1.35
+Error Mode: PRE_IF_MATCH_INVALID_FORMAT
+
+7.3.2.11
+Title: If-Match normalises to empty list → 409 invalid format
+Purpose: Validate that tokens which normalise to “none” (e.g., If-Match: , ,) are treated as invalid format and halted at 409 without compare.
+Test Data:
+• Route: PATCH /answers/{screen}/...
+• Headers: Content-Type: application/json, If-Match: , ,
+• Body: minimal valid JSON
+Mocking:
+• Repo: spy; expect 0 calls.
+• Guard: spy on guard entry; expect 1 call.
+• Emitter: spy on emit_etag_headers; expect 0 calls.
+• (Optional) Telemetry: spy on precondition.fail.
+Assertions:
+• Response: 409 application/problem+json.
+• Problem JSON: code = PRE_IF_MATCH_INVALID_FORMAT, status=409.
+• Headers: no success ETag/Screen-ETag.
+• Repo spy: not called.
+• Guard spy: called once.
+• Emitter spy: not called.
+• (Optional) Telemetry: precondition.fail{chosen_failure=invalid_format} recorded once.
+AC-Ref: 6.1.32; 6.1.35; 6.1.38
+Error Mode: PRE_IF_MATCH_INVALID_FORMAT
+
+7.3.2.12
+Title: answers/screens stale token yields 409 mismatch (no diagnostics)
+Purpose: Validate mismatch split: non-reorder routes return 409 without reorder diagnostics or mutation.
+Test Data:
+• Route: PATCH /answers/{screen}/... (or screens write)
+• Headers: Content-Type: application/json, If-Match: "stale" (normalises validly)
+• Body: minimal valid JSON
+Mocking:
+• Repo: mutation spy; expect 0 calls.
+• Guard: spy on guard entry; expect 1 call.
+• Emitter: spy on emit_etag_headers; expect 0 calls.
+• Current-ETag adapter: stub to return "current" (≠ "stale").
+• (Optional) Telemetry: spy on guard.mismatch or precondition.fail{chosen_failure=mismatch_answers}.
+Assertions:
+• Response: 409 application/problem+json.
+• Problem JSON: code = PRE_IF_MATCH_ETAG_MISMATCH, status=409.
+• Headers: no X-List-ETag, no X-If-Match-Normalized, no success ETag/Screen-ETag.
+• Repo spy: not called.
+• Guard spy: called once.
+• Emitter spy: not called (diagnostics are reorder-only).
+• (Optional) Telemetry: mismatch event recorded once.
+AC-Ref: 6.1.32; 6.1.35
+Error Mode: PRE_IF_MATCH_ETAG_MISMATCH
+
+7.3.2.13
+Title: documents reorder stale token yields 412 with diagnostics via emitter
+Purpose: Validate mismatch split and that diagnostics are emitted only via the shared emitter on reorder.
+Test Data:
+• Route: POST /documents/{id}/reorder
+• Headers: Content-Type: application/json, If-Match: "stale"
+• Body: minimal valid JSON (e.g., a new order array)
+Mocking:
+• Repo: mutation spy; expect 0 calls.
+• Guard: spy on guard entry; expect 1 call.
+• Emitter: spy on emit_etag_headers; expect 1 call with args that cause X-List-ETag and (when applicable) X-If-Match-Normalized.
+• Current-List-ETag adapter: stub to return different tag from header.
+• (Optional) Telemetry: guard.mismatch recorded.
+Assertions:
+• Response: 412 application/problem+json.
+• Problem JSON: code = PRE_IF_MATCH_ETAG_MISMATCH, status=412.
+• Headers: present and non-empty X-List-ETag and, if normalisation occurred, X-If-Match-Normalized; no success ETag/Document-ETag.
+• Repo spy: not called.
+• Guard spy: called once.
+• Emitter spy: called once (diagnostics via emitter, not direct header sets).
+• (Optional) Telemetry: mismatch event recorded once.
+AC-Ref: 6.1.32; 6.1.35; 6.1.36
+Error Mode: PRE_IF_MATCH_ETAG_MISMATCH
+
+7.3.2.14
+Title: valid preconditions allow handler to run and success headers emit via central emitter
+Purpose: Prove pass-through on success: guard passes; handler mutates; emitter sets success headers; no diagnostics.
+Test Data:
+• Route: representative write (answers/screens or documents)
+• Headers: Content-Type: application/json, If-Match matching current tag.
+• Body: minimal valid JSON
+Mocking:
+• Repo: mutation spy; expect ≥1 call.
+• Guard: spy on guard entry; expect 1 call.
+• Emitter: spy on emit_etag_headers; expect 1 call for success headers; assert no diagnostic emission.
+Assertions:
+• Response: 2xx; success headers (ETag + correct domain header) present and non-empty; no X-List-ETag/X-If-Match-Normalized.
+• Repo spy: called.
+• Guard spy: called once.
+• Emitter spy: called once for success headers.
+AC-Ref: 6.1.32; 6.1.36
+Error Mode: n/a (happy path verification within this suite)
 
 7.3.2.1
 Title: CORS expose-headers misconfiguration halts header emission (STEP-4) and prevents body mirrors (STEP-5)
