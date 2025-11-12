@@ -525,6 +525,26 @@ Refs: create_app; Headers policy; Global error handling
 Production modules in app/guards and app/logic/repository_* contain no hardcoded test ids, UUID keyed fallback maps, or references to test harness symbols; repositories and guard rely only on real data sources and public helpers.
 Refs: Guard isolation; Compatibility constraints; Repository isolation
 
+6.1.32 Precedence order lives in the guard
+The write-route guard executes checks in this exact order with first-failure semantics: Content-Type, If-Match presence, If-Match format, ETag mismatch. The guard either fails or passes; it never emits success headers.
+Refs: STEP-2.
+
+6.1.33 Guard owns 415 before body parsing
+Unsupported request media type for write routes that expect a body is enforced inside the guard before any body parsing or validation, so 415 cannot be pre-empted by 422.
+Refs: STEP-2.
+
+6.1.34 No precondition checks in wrappers or handlers
+No wrappers or route handlers parse, normalise or compare If-Match, and they do not raise PRE_* problems. Wrappers may perform media-type coercion only and must not short-circuit with PRE_*.
+Refs: STEP-2.
+
+6.1.35 Canonical status mapping and taxonomy
+Mapping is central and route-kind driven: PRE_IF_MATCH_MISSING maps to 428 everywhere; PRE_IF_MATCH_INVALID_FORMAT maps to 409; PRE_IF_MATCH_ETAG_MISMATCH maps to 409 for answers or screens and 412 for document reorder. Guarded failures must not emit RUN_* codes.
+Refs: STEP-2, STEP-4.
+
+6.1.36 Reorder diagnostics via shared emitter
+On document reorder mismatch, diagnostics headers X-List-ETag and X-If-Match-Normalized are emitted via app.logic.header_emitter.emit_etag_headers, not handcrafted in handlers.
+Refs: STEP-4.
+
 # 6.2.1.1 Runtime screen GET returns domain + generic tags (parity)
 
 **Given** a runtime JSON GET for a screen, **when** the request succeeds, **then** the response includes both headers and they carry the same value.
@@ -1443,6 +1463,61 @@ Assertions:
 (4) Secondary regex scan flags UUIDs or the special literals only when they appear in likely behavioural contexts not caught by AST, such as f-strings assigned to return values. Avoid flagging placeholders in parameterised SQL or logs.
 (5) On violation, the test reports file and line span with a remediation hint that directs replacing fallbacks with DB lookups or moving forced behaviours into test fixtures.
 AC-Ref: 6.1.31
+
+7.1.32
+Title: Guard enforces first-failure precedence for write routes
+Purpose: Prove the guard encodes the fixed check order and first-failure semantics and never emits success headers.
+Test Data: Source path app/guards/precondition.py. Named helpers expected: _check_content_type, _check_if_match_presence, _parse_if_match, _compare_etag.
+Mocking: None. Static code inspection and AST walk.
+Assertions:
+(1) The guard calls the named helpers in source order: content type, presence, parse, compare.
+(2) Each helper can trigger an early return or raise that prevents subsequent helpers from running.
+(3) No code in the guard sets success headers; success header emission is absent from the guard file.
+AC-Ref: 6.1.32.
+
+7.1.33
+Title: Content-Type 415 is enforced in the guard before body parsing
+Purpose: Ensure 415 media type validation is owned by the guard and precedes any body parsing or validation that could yield 422.
+Test Data: App factory, wrappers under app/http/**, and app/guards/precondition.py.
+Mocking: None. Static inspection.
+Assertions:
+(1) precondition_guard contains a Content-Type check for write routes that expect a body.
+(2) The check is positioned before any body parsing or validation code paths invoked by the route.
+(3) No ASGI wrapper or decorator short-circuits with PRE_* or performs its own If-Match checks; wrappers, if present, only coerce media type.
+AC-Ref: 6.1.33.
+
+7.1.34
+Title: No normalise or compare ETag in routes or wrappers
+Purpose: Enforce single source of truth for preconditions.
+Test Data: app/routes/** write routes, app/http/** wrappers, app/guards/precondition.py.
+Mocking: None. Static search and AST.
+Assertions:
+(1) No route or wrapper imports If-Match parsing utilities or compares tokens.
+(2) Only the guard imports and uses the If-Match normaliser and comparison helpers.
+(3) Routes and wrappers do not raise PRE_* problem types.
+AC-Ref: 6.1.34.
+
+7.1.35
+Title: Canonical PRE_* mapping includes invalid-format and route-kind split
+Purpose: Lock 428 for missing, 409 for invalid format, 409 versus 412 for mismatch by route kind, and exclude RUN_* from guarded failures.
+Test Data: app/config/error_mapping.py and guard usage.
+Mocking: None. Static inspection.
+Assertions:
+(1) Mapping defines PRE_IF_MATCH_MISSING → 428 for all families.
+(2) Mapping defines PRE_IF_MATCH_INVALID_FORMAT → 409.
+(3) Mapping defines PRE_IF_MATCH_ETAG_MISMATCH → 409 for answers or screens and 412 for document reorder, selected by route-kind not ad-hoc logic.
+(4) Guard failure paths reference only PRE_; no RUN_ appears in guard or wrapper failure branches.
+AC-Ref: 6.1.35.
+
+7.1.36
+Title: Reorder diagnostics emitted through app.logic.header_emitter.emit_etag_headers
+Purpose: Ensure mismatch diagnostics for reorder are central and consistent.
+Test Data: app/logic/header_emitter.py and document reorder failure path call sites.
+Mocking: Prefer static usage checks; optionally spy in a narrow dynamic test.
+Assertions:
+(1) Document reorder error path calls app.logic.header_emitter.emit_etag_headers to attach X-List-ETag and X-If-Match-Normalized.
+(2) Handlers do not set these headers directly.
+AC-Ref: 6.1.36.
 
 7.2.1.1 Runtime screen GET returns domain + generic tags (parity)
 Purpose: Verify that a runtime screen GET includes both Screen-ETag and ETag headers with identical values.
