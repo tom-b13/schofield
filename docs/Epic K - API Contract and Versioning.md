@@ -513,6 +513,18 @@ Refs: STEP-2; U13
 Route pipelines must be ordered such that repository/DB access occurs only after guard success (short-circuit on failure).
 Refs: STEP-2; U18, U19
 
+6.1.29 Global Problem+JSON handlers are registered
+Global exception handlers are registered in create_app to return application/problem+json for framework 404 and 405, FastAPI HTTPException, RequestValidationError, and unexpected Exception, without altering successful 2xx paths.
+Refs: create_app; RFC7807; Global error handling; Standards; Handler strategy
+
+6.1.30 Request ID middleware applied
+A request id middleware is registered so all JSON error responses include X-Request-Id and preserve configured CORS expose headers.
+Refs: create_app; Headers policy; Global error handling
+
+6.1.31 No test-coupled fallbacks in guard and repositories
+Production modules in app/guards and app/logic/repository_* contain no hardcoded test ids, UUID keyed fallback maps, or references to test harness symbols; repositories and guard rely only on real data sources and public helpers.
+Refs: Guard isolation; Compatibility constraints; Repository isolation
+
 # 6.2.1.1 Runtime screen GET returns domain + generic tags (parity)
 
 **Given** a runtime JSON GET for a screen, **when** the request succeeds, **then** the response includes both headers and they carry the same value.
@@ -1325,12 +1337,19 @@ Mocking: None.
 Assertions: (1) No parsing/normalising/comparing If-Match; (2) No construction of precondition problem bodies.
 AC-Ref: 6.1.19; EARS: U18.
 
-7.1.20 Stable problem+json mapping for preconditions
-Purpose: Centralised mapping from guard.
-Test Data: Guard error mapping + one answers route (409/428) and one documents route (412/428).
-Mocking: None.
-Assertions: (1) Missing If-Match → 428 with code=PRE_IF_MATCH_MISSING; (2) Mismatch → route’s historic status (409 answers / 412 documents) with code=PRE_IF_MATCH_ETAG_MISMATCH; (3) Shapes invariant.
-AC-Ref: 6.1.20; EARS: E8, E9.
+7.1.20 Stable Problem+JSON mapping for preconditions (centralized)
+- Purpose: Verify precondition code/status mapping is centralized and consumed by the guard (no hardcoding in guard).
+- Test Data: Static inspection of source modules.
+- Mocking: None (static import + AST).
+- Assertions:
+    - app/config/error_mapping.py exists and is importable.
+    - PRECONDITION_ERROR_MAP is a dict with keys: missing, mismatch_answers, mismatch_documents.
+    - Values match:
+    - missing: code=PRE_IF_MATCH_MISSING, status=428
+    - mismatch_answers: code=PRE_IF_MATCH_ETAG_MISMATCH, status=409
+    - mismatch_documents: code=PRE_IF_MATCH_ETAG_MISMATCH, status=412
+- app/guards/precondition.py imports PRECONDITION_ERROR_MAP from app.config.error_mapping.
+- Optional negative check: guard does not hardcode these codes/statuses in problem construction (it should use the mapping).
 
 7.1.21 OpenAPI declares If-Match as required on write routes
 Purpose: Contract visibility in spec.
@@ -1389,6 +1408,41 @@ Test Data: Source path: app/guards/precondition.py. Static analysis via AST of t
 Mocking: None. Static code inspection only.
 Assertions: (1) No module-scope Import/ImportFrom targets any module matching app.logic.repository_*; (2) If any such import exists, the test fails and reports offending line numbers; (3) No indirect module-scope imports of repositories via wildcard or alias (e.g., from app.logic import repository_answers as repo).
 AC-Ref: 6.1.18; EARS: U19.
+
+7.1.29
+Title: Global Problem+JSON handlers are registered in create_app
+Purpose: Verify the app registers shared handlers for Problem+JSON at the framework boundaries, without asserting behavioural shaping.
+Test Data: App factory entry point exposing create_app(); handler module with the Problem factory and constants, for example app/http/problem.py.
+Mocking: None. Static and reflective inspection only.
+Assertions:
+(1) create_app() returns an ASGI app whose exception_handlers includes keys for starlette.exceptions.HTTPException, fastapi.exceptions.RequestValidationError, and builtins.Exception. A single HTTPException handler covers 404 and 405 without separate keys.
+(2) For each mapped key, the handler originates from an allowed module set configured in the test (for example {app.http.problem, app.http.errors}). Accept direct functions, partials, or thin wrappers as long as handler.module resolves into the allowlist.
+(3) The handler module exposes a constant used by the handlers indicating RFC7807 usage, for example PROBLEM_MEDIA_TYPE set to "application/problem+json", or the handlers reference a shared Problem factory symbol from the allowed module. Do not perform a dry call and do not require a specific default response class.
+AC-Ref: 6.1.29
+
+7.1.30
+Title: Request ID middleware is registered at app startup
+Purpose: Ensure there is exactly one request id middleware so all JSON error responses can include X-Request-Id.
+Test Data: App factory entry point exposing create_app(); middleware class location, for example app/http/request_id.py with class RequestIdMiddleware.
+Mocking: None. Static and reflective inspection only.
+Assertions:
+(1) The returned app contains a request id middleware either in app.user_middleware or in the assembled app.middleware_stack. Detect by class name or MRO rather than exact import path.
+(2) Exactly one instance is registered.
+(3) The middleware is not sourced from tests.* modules and is not conditionally injected by tests. Do not ban other dev or test middlewares globally.
+AC-Ref: 6.1.30
+
+7.1.31
+Title: No test coupled fallbacks or harness leakage in repositories and guard
+Purpose: Enforce that production code does not embed hardcoded test ids, fallback maps keyed by UUIDs, or references to test harnesses in repository modules and the precondition guard.
+Test Data: Source files to scan: app/logic/repository_.py, app/guards/precondition.py, and narrowly targeted app/logic/.py that return domain data. Exclude migrations, docs, and tests.
+Mocking: None. Use AST analysis plus a secondary raw text scan for f-strings. Ignore comments and docstrings.
+Assertions:
+(1) No ast.Dict literal has ast.Constant string keys that match a strict 36 character UUID regex or the literal "q_001" in the targeted modules.
+(2) No ast.Constant string equal to any known test id or "q_001" appears in return expressions or equality conditions that drive behaviour in these modules. Allow benign usage in logging messages and format templates.
+(3) No ast.Import or ast.ImportFrom from tests.* and no symbol references to section_17_36, invoke_orchestrator_trace, X-EpicK-ForceError, or force_error.
+(4) Secondary regex scan flags UUIDs or the special literals only when they appear in likely behavioural contexts not caught by AST, such as f-strings assigned to return values. Avoid flagging placeholders in parameterised SQL or logs.
+(5) On violation, the test reports file and line span with a remediation hint that directs replacing fallbacks with DB lookups or moving forced behaviours into test fixtures.
+AC-Ref: 6.1.31
 
 7.2.1.1 Runtime screen GET returns domain + generic tags (parity)
 Purpose: Verify that a runtime screen GET includes both Screen-ETag and ETag headers with identical values.
@@ -1670,6 +1724,27 @@ EARS-Refs: E1, E2, U13
 **AC-Ref**: 6.2.2.3
 **Error Mode**: PRE_IF_MATCH_NO_VALID_TOKENS
 
+---
+
+**ID**: 7.2.2.4
+**Title**: Sad path #04 for AC 6.2.2.4
+**Purpose**: Verify contractual failure behaviour aligned to AC 6.2.2.4 with explicit error surface and externally observable contract.
+**Test Data**: 
+- HTTP method: PATCH
+- URL: /api/v1/response-sets/resp_123/answers/q_456
+- Headers: Authorization: Bearer dev-token; If-Match: "invalid"
+- Body (JSON): { "value": "X" }
+**Mocking**: 
+- Mock persistence layer at the repository boundary to simulate the specific failure: return current tag 'W/"fresh-tag"' when asked; raise exceptions only where the error mode implies runtime failure; otherwise let real validation execute.
+- Assert repository mock is invoked with question_id "q_456" and response_set_id "resp_123".
+- Do not mock request normalisation or ETag comparison logic; execute real code to exercise contract surfaces.
+**Assertions**:
+- Status code equals one of 409, 412, or 428 as defined by contract for this AC.
+- Response meta includes stable `request_id` and non-negative `latency_ms` when applicable.
+- Error payload includes `code` equal to `PRE_AUTHORIZATION_HEADER_MISSING` and a human-readable `message` mentioning the failing precondition or parity surface.
+- No `output` field is present when `status = "error"`.
+**AC-Ref**: 6.2.2.4
+**Error Mode**: PRE_AUTHORIZATION_HEADER_MISSING
 
 ---
 
@@ -2179,6 +2254,26 @@ EARS-Refs: E1, E2, U13
 
 ---
 
+**ID**: 7.2.2.28
+**Title**: Sad path #28 for AC 6.2.2.28
+**Purpose**: Verify contractual failure behaviour aligned to AC 6.2.2.28 with explicit error surface and externally observable contract.
+**Test Data**: 
+- HTTP method: PATCH
+- URL: /api/v1/response-sets/resp_123/answers/q_456
+- Headers: Authorization: Bearer dev-token; If-Match: "invalid"
+- Body (JSON): { "value": "X" }
+**Mocking**: 
+- Mock persistence layer at the repository boundary to simulate the specific failure: return current tag 'W/"fresh-tag"' when asked; raise exceptions only where the error mode implies runtime failure; otherwise let real validation execute.
+- Assert repository mock is invoked with question_id "q_456" and response_set_id "resp_123".
+- Do not mock request normalisation or ETag comparison logic; execute real code to exercise contract surfaces.
+**Assertions**:
+- Status code equals one of 409, 412, or 428 as defined by contract for this AC.
+- Response meta includes stable `request_id` and non-negative `latency_ms` when applicable.
+- Error payload includes `code` equal to `PRE_AUTHORIZATION_HEADER_MISSING` and a human-readable `message` mentioning the failing precondition or parity surface.
+- No `output` field is present when `status = "error"`.
+**AC-Ref**: 6.2.2.28
+**Error Mode**: PRE_AUTHORIZATION_HEADER_MISSING
+
 ---
 
 **ID**: 7.2.2.29
@@ -2686,6 +2781,26 @@ EARS-Refs: E1, E2, U13
 **Error Mode**: PRE_IF_MATCH_NO_VALID_TOKENS
 
 ---
+
+**ID**: 7.2.2.52
+**Title**: Sad path #52 for AC 6.2.2.52
+**Purpose**: Verify contractual failure behaviour aligned to AC 6.2.2.52 with explicit error surface and externally observable contract.
+**Test Data**: 
+- HTTP method: PATCH
+- URL: /api/v1/response-sets/resp_123/answers/q_456
+- Headers: Authorization: Bearer dev-token; If-Match: "invalid"
+- Body (JSON): { "value": "X" }
+**Mocking**: 
+- Mock persistence layer at the repository boundary to simulate the specific failure: return current tag 'W/"fresh-tag"' when asked; raise exceptions only where the error mode implies runtime failure; otherwise let real validation execute.
+- Assert repository mock is invoked with question_id "q_456" and response_set_id "resp_123".
+- Do not mock request normalisation or ETag comparison logic; execute real code to exercise contract surfaces.
+**Assertions**:
+- Status code equals one of 409, 412, or 428 as defined by contract for this AC.
+- Response meta includes stable `request_id` and non-negative `latency_ms` when applicable.
+- Error payload includes `code` equal to `PRE_AUTHORIZATION_HEADER_MISSING` and a human-readable `message` mentioning the failing precondition or parity surface.
+- No `output` field is present when `status = "error"`.
+**AC-Ref**: 6.2.2.52
+**Error Mode**: PRE_AUTHORIZATION_HEADER_MISSING
 
 ---
 
