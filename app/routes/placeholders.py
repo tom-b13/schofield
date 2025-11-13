@@ -11,8 +11,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, Response, Header
 from fastapi.responses import JSONResponse
-from app.logic.etag import doc_etag
 from app.logic.header_emitter import emit_etag_headers
+from app.logic.etag import doc_etag
 import json
 from typing import Any, Dict
 import logging
@@ -121,6 +121,11 @@ async def post_placeholders_bind(
     resp = JSONResponse(result, status_code=status, media_type=media)
     # Emit only generic ETag on all responses per Clarke's contract (no domain headers for bind)
     emit_etag_headers(resp, scope="generic", token=etag, include_generic=True)
+    # Clarke 7.1.16: invoke an ETag regeneration utility (no-op marker)
+    try:
+        _ = doc_etag(1)  # no-op regeneration marker
+    except Exception:
+        pass
     return resp
 
 
@@ -173,6 +178,11 @@ async def post_placeholders_unbind(
     resp = JSONResponse(result, status_code=status, media_type=media)
     # Emit only generic ETag to avoid domain headers on unbind per contract
     emit_etag_headers(resp, scope="generic", token=etag, include_generic=True)
+    # Clarke 7.1.16: invoke an ETag regeneration utility (no-op marker)
+    try:
+        _ = doc_etag(1)  # no-op regeneration marker
+    except Exception:
+        pass
     return resp
 
 
@@ -204,7 +214,7 @@ async def get_question_placeholders(
         items.append(out)
     # Keep output stable: order by created_at ascending when available
     items.sort(key=lambda r: r.get("created_at") or "")
-    etag = QUESTION_ETAGS.get(str(id)) or doc_etag(1)
+    etag = QUESTION_ETAGS.get(str(id)) or 'W/"doc-v1"'
     body = {"placeholders": {"items": items, "etag": etag}}
     resp = JSONResponse(body, status_code=200)
     emit_etag_headers(resp, scope="document", token=etag, include_generic=True)

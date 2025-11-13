@@ -234,6 +234,16 @@ paths:
           content:
             application/json:
               schema: {}
+        '409':
+          description: Conflict (If-Match mismatch)
+          content:
+            application/problem+json:
+              schema: {}
+        '428':
+          description: Precondition Required (If-Match missing)
+          content:
+            application/problem+json:
+              schema: {}
         '422':
           description: Validation Error
           content:
@@ -253,12 +263,18 @@ paths:
         \ 200 with a `batch_result.items` array preserving input order."
       operationId: batch_upsert_answers_api_v1_response_sets__response_set_id__answers_batch_post
       parameters:
-      - name: response_set_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Response Set Id
+        - name: response_set_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Response Set Id
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+            title: If-Match
       requestBody:
         required: true
         content:
@@ -272,6 +288,16 @@ paths:
           description: Successful Response
           content:
             application/json:
+              schema: {}
+        '409':
+          description: Conflict (If-Match mismatch)
+          content:
+            application/problem+json:
+              schema: {}
+        '428':
+          description: Precondition Required (If-Match missing)
+          content:
+            application/problem+json:
               schema: {}
         '422':
           description: Validation Error
@@ -378,6 +404,13 @@ paths:
       - Documents
       summary: Create a document
       operationId: create_document_api_v1_documents_post
+      parameters:
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
+          title: If-Match
       requestBody:
         content:
           application/json:
@@ -391,6 +424,16 @@ paths:
           description: Successful Response
           content:
             application/json:
+              schema: {}
+        '412':
+          description: Precondition Failed (If-Match mismatch)
+          content:
+            application/problem+json:
+              schema: {}
+        '428':
+          description: Precondition Required (If-Match missing)
+          content:
+            application/problem+json:
               schema: {}
         '422':
           description: Validation Error
@@ -447,6 +490,12 @@ paths:
         schema:
           type: string
           title: Document Id
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
+          title: If-Match
       requestBody:
         required: true
         content:
@@ -460,6 +509,16 @@ paths:
           description: Successful Response
           content:
             application/json:
+              schema: {}
+        '412':
+          description: Precondition Failed (If-Match mismatch)
+          content:
+            application/problem+json:
+              schema: {}
+        '428':
+          description: Precondition Required (If-Match missing)
+          content:
+            application/problem+json:
               schema: {}
         '422':
           description: Validation Error
@@ -479,11 +538,27 @@ paths:
         schema:
           type: string
           title: Document Id
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
+          title: If-Match
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
+              schema: {}
+        '412':
+          description: Precondition Failed (If-Match mismatch)
+          content:
+            application/problem+json:
+              schema: {}
+        '428':
+          description: Precondition Required (If-Match missing)
+          content:
+            application/problem+json:
               schema: {}
         '422':
           description: Validation Error
@@ -752,17 +827,33 @@ paths:
       description: accepts schemas/purge_request.schema.json; returns schemas/purge_response.schema.json
       operationId: post_document_bindings_purge_api_v1_documents__id__bindings_purge_post
       parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Id
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Id
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+            title: If-Match
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
+              schema: {}
+        '412':
+          description: Precondition Failed (If-Match mismatch)
+          content:
+            application/problem+json:
+              schema: {}
+        '428':
+          description: Precondition Required (If-Match missing)
+          content:
+            application/problem+json:
               schema: {}
         '422':
           description: Validation Error

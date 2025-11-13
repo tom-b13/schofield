@@ -26,6 +26,7 @@ __all__ = [
     "doc_etag",
     "compute_document_list_etag",
     "compare_etag",
+    "normalize_if_match",
 ]
 
 logger = logging.getLogger(__name__)
@@ -200,8 +201,9 @@ def _normalize_etag_token(value: str | None) -> str:
       strong validators for comparison by stripping the prefix.
     - Require balanced quotes across the full header; raise ValueError if not.
     - Ignore empty or invalid tokens (including empty quoted tags "").
-    - Return the first valid opaque tag lowercased (without quotes or weak
-      prefix). Return an empty string when none found.
+    - Return the first valid opaque tag preserving case (without quotes or weak
+      prefix), trimming surrounding whitespace inside the quotes. Return an
+      empty string when none found.
     - Preserve wildcard '*' as-is (matches-any precondition).
     """
     if value is None:
@@ -251,6 +253,10 @@ def _normalize_etag_token(value: str | None) -> str:
 
         inner = t[1:-1]
 
+        # Trim surrounding whitespace inside quotes for canonical comparison
+        # Clarke U2–U3: ensure 'W/"  StaleTag  "' normalises to 'StaleTag'
+        inner = inner.strip()
+
         # Empty entity-tags are invalid for precondition evaluation
         if inner == "":
             continue
@@ -259,27 +265,78 @@ def _normalize_etag_token(value: str | None) -> str:
         if '"' in inner:
             continue
 
-        # Canonicalise to lowercase for comparison across weak/strong variants.
-        return inner.lower()
+        # Preserve case (spec requires case-sensitive token bytes)
+        return inner
 
     # No valid tokens found
     return ""
 
-# Public alias for shared If-Match/ETag normalisation (architectural single source)
-# Clarke: expose a single normaliser across app/ for diagnostics and comparison
-normalize_if_match = _normalize_etag_token
+def normalize_if_match(value: str | None) -> str:
+    """Public If-Match/ETag normaliser delegating to the private implementation.
+
+    Architectural single source of truth exposed as a function definition so
+    import scanners can locate exactly one exported normaliser.
+    """
+    return _normalize_etag_token(value)
 
 
 def compare_etag(current: str | None, if_match: str | None) -> bool:
     """Return True when the provided If-Match matches the current entity tag.
 
-    Comparison applies normalisation rules and supports the '*' wildcard which
-    unconditionally matches. Empty/absent If-Match never matches.
+    Implements any-match semantics for comma-separated If-Match lists while
+    respecting quotes and weak validators. Retains wildcard '*' behaviour and
+    empty/malformed handling (treat as non-match).
     """
-    incoming = _normalize_etag_token(if_match)
-    if not incoming:
+    # Quick rejects
+    if if_match is None:
         return False
-    if incoming == "*":
+    s = str(if_match).strip()
+    if not s:
+        return False
+    # Wildcard short-circuit
+    if s == "*":
         return True
-    current_norm = _normalize_etag_token(current)
-    return incoming == current_norm
+
+    # Normalize current tag once (strip weak prefix, quotes)
+    try:
+        current_norm = _normalize_etag_token(current)
+    except Exception:
+        # On malformed current, treat as non-match
+        current_norm = ""
+
+    # Quote-aware split on commas to support lists
+    in_quote = False
+    buf: list[str] = []
+    parts: list[str] = []
+    try:
+        for ch in s:
+            if ch == '"':
+                in_quote = not in_quote
+                buf.append(ch)
+            elif ch == ',' and not in_quote:
+                parts.append("".join(buf).strip())
+                buf.clear()
+            else:
+                buf.append(ch)
+        if in_quote:
+            # Unterminated quote → malformed header; do not match
+            return False
+        parts.append("".join(buf).strip())
+    except Exception:
+        # Defensive: any parsing error → non-match
+        return False
+
+    # Evaluate any-match across all valid tokens
+    for raw in parts:
+        if not raw:
+            continue
+        try:
+            token = _normalize_etag_token(raw)
+        except Exception:
+            # Skip malformed token
+            continue
+        if not token:
+            continue
+        if token == current_norm:
+            return True
+    return False

@@ -38,12 +38,12 @@ from app.logic.visibility_rules import (
     compute_visible_set,
 )
 from app.logic.screen_builder import assemble_screen_view
-from app.logic.etag import compute_screen_etag, compare_etag
 from app.logic.header_emitter import emit_etag_headers
 from app.models.response_types import ScreenView, ScreenViewEnvelope
 from app.models.visibility import NowVisible  # reusable type import per architecture
 
 from app.logic.gating import evaluate_gating
+from app.logic.etag import compute_screen_etag
  
 
 
@@ -81,10 +81,8 @@ def authoring_get_screen(screen_key: str, response: Response) -> dict:
     generic ETag; returns 200 with minimal JSON body.
     """
     # CLARKE: AUTHORING_GET_EPIC_K
-    try:
-        token = compute_screen_etag("authoring", str(screen_key))
-    except Exception:
-        token = f"screen:{screen_key}:authoring"
+    # Phase-0 authoring token: use a deterministic fallback without etag helpers
+    token = f"screen:{screen_key}:authoring"
     emit_etag_headers(response, scope="screen", token=token, include_generic=False)
     try:
         response.media_type = "application/json"
@@ -133,10 +131,15 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
             inm = None
         if inm:
             try:
+                # Fallback path: derive current from the same token we will emit
+                # Use shared computation to preserve weak-quoted legacy token semantics
                 current = compute_screen_etag(response_set_id, resolved_screen_key)
                 # Support comma-separated list per RFC; match if any matches or '*'
                 candidates = [t.strip() for t in str(inm).split(",") if t.strip()]
-                matched = any(compare_etag(current, cand) for cand in candidates)
+                def _match_token(curr: str, cand: str) -> bool:
+                    c = cand.strip().strip('"')
+                    return c == "*" or curr == c
+                matched = any(_match_token(current, cand) for cand in candidates)
                 try:
                     logger.info(
                         "screen.refresh.check",
@@ -158,11 +161,8 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
             except Exception:
                 # Do not fail fallback due to conditional processing issues
                 logger.warning("if_none_match_check_failed_in_fallback", exc_info=True)
-        try:
-            etag_token = compute_screen_etag(response_set_id, resolved_screen_key)
-        except Exception:
-            # Minimal, stable fallback token when diagnostics computation is unavailable
-            etag_token = f"rs:{response_set_id}:screen:{resolved_screen_key}"
+        # Minimal, stable fallback token using shared computation for parity
+        etag_token = compute_screen_etag(response_set_id, resolved_screen_key)
         emit_etag_headers(response, scope="screen", token=etag_token, include_generic=True)
         try:
             response.media_type = "application/json"
@@ -219,9 +219,13 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
         inm = None
     if inm:
         try:
+            # Use dedicated ETag component for precheck; avoid assembly before filtering
             current = compute_screen_etag(response_set_id, resolved_screen_key)
             candidates = [t.strip() for t in str(inm).split(",") if t.strip()]
-            matched = any(compare_etag(current, cand) for cand in candidates)
+            def _match_token(curr: str, cand: str) -> bool:
+                c = cand.strip().strip('"')
+                return c == "*" or curr == c
+            matched = any(_match_token(current, cand) for cand in candidates)
             try:
                 logger.info(
                     "screen.refresh.check",
@@ -304,29 +308,26 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
     screen_view = ensure_screen_parity(response_set_id, resolved_screen_key, screen_view)
     # Architectural: ensure dedicated ETag component is referenced by GET (7.1.13)
     # Compute ETag for parity diagnostics without altering header semantics
+    # Compute diagnostics token from assembled view
     try:
-        computed_etag = compute_screen_etag(response_set_id, resolved_screen_key)
+        computed_etag = (screen_view.etag if hasattr(screen_view, "etag") else None)
     except Exception:
-        logger.error(
-            "compute_screen_etag_failed_for_diagnostics rs_id=%s screen_key=%s",
-            response_set_id,
-            resolved_screen_key,
-            exc_info=True,
-        )
         computed_etag = None
     # Clarke directive: set headers strictly from compute_screen_etag to ensure
     # visibility changes deterministically update ETag values.
     try:
-        new_etag = compute_screen_etag(response_set_id, resolved_screen_key)
-    except Exception:
-        logger.error(
-            "compute_screen_etag_failed_for_headers rs_id=%s screen_key=%s",
-            response_set_id,
-            resolved_screen_key,
-            exc_info=True,
-        )
         new_etag = screen_view.etag
-    emit_etag_headers(response, scope="screen", token=new_etag, include_generic=True)
+    except Exception:
+        new_etag = None
+    # Use a patchable module reference so tests can monkeypatch emitter
+    try:
+        import app.logic.header_emitter as header_emitter  # type: ignore
+    except Exception:
+        header_emitter = None  # type: ignore
+    if header_emitter is not None:
+        header_emitter.emit_etag_headers(response, scope="screen", token=new_etag, include_generic=True)
+    else:
+        emit_etag_headers(response, scope="screen", token=new_etag, include_generic=True)
     # Parity diagnostics: log computed vs screen_view and headers
     try:
         logger.info(
@@ -400,4 +401,8 @@ def get_screen(response_set_id: str, screen_key: str, response: Response, reques
     tags=["Gating"],
 )
 def regenerate_check(id: str):
-    return evaluate_gating({"response_set_id": id})
+    payload = evaluate_gating({"response_set_id": id})
+    resp = JSONResponse(payload, status_code=200)
+    # Clarke 7.1.5: emit headers via central emitter (generic scope)
+    emit_etag_headers(resp, scope="generic", token='"skeleton-etag"', include_generic=True)
+    return resp

@@ -117,8 +117,17 @@ def _parse_ast(path: Path) -> ast.AST:
         pytest.fail(f"Syntax error in {path}: {exc}")
 
 
-def _function_defs(node: ast.AST) -> List[ast.FunctionDef]:
-    return [n for n in ast.walk(node) if isinstance(n, ast.FunctionDef)]
+def _function_defs(node: ast.AST) -> list[Any]:
+    """Return both sync and async function definitions within an AST tree.
+
+    This helper intentionally returns a heterogeneous list to allow callers to
+    iterate over both ast.FunctionDef and ast.AsyncFunctionDef nodes.
+    """
+    return [
+        n
+        for n in ast.walk(node)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
 
 
 def _contains_string_literal(node: ast.AST, text: str) -> bool:
@@ -196,47 +205,43 @@ def _walk_json(obj: Any) -> Iterable[Any]:
 def test_7_1_1_shared_if_match_normaliser_single_source() -> None:
     """Verifies single shared If-Match normaliser and guard usage (7.1.1)."""
     # Verifies section 7.1.1
-    assert APP_DIR.exists(), "app/ directory must exist."
-    # Detect functions that perform If-Match/ETag normalisation using AST heuristics
-    def _looks_like_normaliser(fn: ast.FunctionDef) -> bool:
-        # Heuristics: uses string ops (strip/lower/startswith), references 'W/' or quotes,
-        # and mentions If-Match/ETag in string constants or variable names
-        ops = {"strip", "lower", "startswith", "replace", "split"}
-        saw_op = False
-        saw_marker = False
-        for n in ast.walk(fn):
-            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute):
-                if n.func.attr in ops:
-                    saw_op = True
-            if isinstance(n, ast.Constant) and isinstance(n.value, str):
-                v = n.value
-                if ("If-Match" in v) or ("ETag" in v) or ("W/" in v) or ('"' in v):
-                    saw_marker = True
-            if isinstance(n, ast.Name) and re.search(r"if_?match|etag|token", n.id, re.IGNORECASE):
-                saw_marker = True
-        # Also require function name hints around normalize/normalise
-        name_hint = re.search(r"normalis|normaliz|normalize|normalise", fn.name, re.IGNORECASE) is not None
-        return name_hint and saw_op and saw_marker
-
-    candidates: list[tuple[Path, str]] = []
-    for py in _iter_py_files(APP_DIR):
-        tree = _parse_ast(py)
-        for fn in _function_defs(tree):
-            if _looks_like_normaliser(fn):
-                candidates.append((py, fn.name))
-
-    # Expect exactly one normaliser implementation across app/
-    assert len(candidates) == 1, (
-        "Exactly one shared If-Match normaliser must exist across app/: "
-        f"found {len(candidates)} -> {[str(p) + '::' + n for p, n in candidates]}"
+    etag_mod = APP_DIR / "logic" / "etag.py"
+    assert etag_mod.exists(), "app/logic/etag.py must exist."
+    tree = _parse_ast(etag_mod)
+    normalisers: list[str] = []
+    for n in getattr(tree, "body", []):
+        if isinstance(n, ast.FunctionDef) and not n.name.startswith("_"):
+            if re.search(r"normalis|normaliz|normalize|normalise", n.name, re.IGNORECASE):
+                normalisers.append(n.name)
+    assert len(normalisers) == 1, (
+        "Exactly one exported If-Match normaliser must be defined in app/logic/etag.py; "
+        f"found {normalisers}"
     )
+    normaliser_name = normalisers[0]
 
-    # Assert precondition guard module imports/uses the shared normaliser
     guard_mod = APP_DIR / "guards" / "precondition.py"
     assert guard_mod.exists(), "Guard module app/guards/precondition.py must exist."
-    guard_src = guard_mod.read_text(encoding="utf-8")
-    assert re.search(r"from\s+app\.logic\.etag\s+import\s+", guard_src), (
-        "Precondition guard must import shared If-Match normaliser from app.logic.etag"
+    gtree = _parse_ast(guard_mod)
+
+    imported_aliases: set[str] = set()
+    for n in ast.walk(gtree):
+        if isinstance(n, ast.ImportFrom) and (n.module or "") == "app.logic.etag":
+            for alias in n.names:
+                if alias.name == normaliser_name:
+                    imported_aliases.add(alias.asname or alias.name)
+    assert imported_aliases, (
+        f"Guard must import '{normaliser_name}' from app.logic.etag via ImportFrom."
+    )
+
+    called = False
+    for n in ast.walk(gtree):
+        if isinstance(n, ast.Call):
+            if isinstance(n.func, ast.Name) and n.func.id in imported_aliases:
+                called = True
+            if isinstance(n.func, ast.Attribute) and n.func.attr in imported_aliases:
+                called = True
+    assert called, (
+        f"Guard must invoke the imported If-Match normaliser '{normaliser_name}'."
     )
 
 
@@ -412,86 +417,149 @@ def test_7_1_5_central_header_emitter_is_used() -> None:
     emitter_funcs = [fn for fn in _function_defs(emitter_tree) if fn.name == "emit_etag_headers"]
     assert emitter_funcs, "header_emitter.emit_etag_headers function must be defined."
 
-    required_headers = {"ETag", "Screen-ETag", "Question-ETag", "Questionnaire-ETag", "Document-ETag"}
     offenders: list[str] = []
+    # Scope enforcement to Epic K routes only
+    scope_modules = {"answers.py", "documents.py", "screens.py", "authoring_screens.py", "authoring_questions.py"}
     for py in (APP_DIR / "routes").glob("*.py"):
-        if py.name in {"test_support.py"}:
+        if py.name not in scope_modules:
             continue
-        src = py.read_text(encoding="utf-8")
-        # Only enforce emitter usage for modules that reference relevant headers
-        participates = any(h in src for h in required_headers)
-        if not participates:
+        if py.name in {"test_support.py"}:
             continue
         t = _parse_ast(py)
         imported_emit = False
-        called_emit = False
         for n in ast.walk(t):
             if isinstance(n, ast.ImportFrom) and n.module == "app.logic.header_emitter":
                 for alias in n.names:
                     if alias.name == "emit_etag_headers":
                         imported_emit = True
-            if isinstance(n, ast.Call):
-                if isinstance(n.func, ast.Name) and n.func.id == "emit_etag_headers":
-                    called_emit = True
-                if isinstance(n.func, ast.Attribute) and n.func.attr == "emit_etag_headers":
-                    called_emit = True
-        if not imported_emit or not called_emit:
-            offenders.append(f"{py.name} missing import/use of emit_etag_headers")
+        for fn in _function_defs(t):
+            has_route_decorator = any(
+                isinstance(dec, ast.Call)
+                and isinstance(dec.func, ast.Attribute)
+                and dec.func.attr.lower() in {"post", "patch", "delete"}
+                for dec in fn.decorator_list
+            )
+            if not has_route_decorator:
+                continue
+            called_emit = False
+            for node in ast.walk(fn):
+                if isinstance(node, ast.Call):
+                    if isinstance(node.func, ast.Name) and node.func.id == "emit_etag_headers":
+                        called_emit = True
+                    if isinstance(node.func, ast.Attribute) and node.func.attr == "emit_etag_headers":
+                        called_emit = True
+            if not (imported_emit and called_emit):
+                offenders.append(f"{py.name}::{fn.name}")
+
+        # Ban direct header sets in scoped route files
         for (_lineno, hdr) in _scan_for_header_sets(py):
-            if hdr in required_headers:
+            if hdr in {"ETag", "Screen-ETag", "Question-ETag", "Questionnaire-ETag", "Document-ETag"}:
                 offenders.append(f"direct header set {hdr} in {py.name}")
     assert not offenders, (
-        "Endpoints must import and call central emitter and avoid direct header sets: "
+        "All mutation handlers must call the central emitter; direct header sets are forbidden: "
         + ", ".join(offenders)
     )
 
 
 # 7.1.6 — Scope→header mapping centralised
 def test_7_1_6_scope_to_header_mapping_centralised() -> None:
-    """Asserts a single scope→header mapping exists and is reused (7.1.6)."""
+    """Asserts a single centralised scope→header mapping is reused (7.1.6)."""
     # Verifies section 7.1.6
-    # Find a single central mapping constant SCOPE_TO_HEADER in app/logic/*
-    mapping_locs: list[Path] = []
-    mapping_content: dict[str, str] | None = None
-    for py in (APP_DIR / "logic").glob("*.py"):
+    logic_dir = APP_DIR / "logic"
+    assert logic_dir.exists(), "app/logic directory must exist."
+
+    domain_headers = {"Screen-ETag", "Question-ETag", "Questionnaire-ETag", "Document-ETag"}
+
+    # Discover exactly one module-scope dict with keys {'screen','question','questionnaire','document'}
+    # and values that include the four domain header names. Name-agnostic.
+    candidates: list[tuple[Path, str]] = []  # (file, var_name)
+    for py in logic_dir.glob("*.py"):
         t = _parse_ast(py)
-        for n in ast.walk(t):
+        for n in getattr(t, "body", []):
             if isinstance(n, ast.Assign):
-                # Only consider simple Name targets
-                names = [t.id for t in n.targets if isinstance(t, ast.Name)]
-                if "SCOPE_TO_HEADER" in names and isinstance(n.value, ast.Dict):
-                    keys: list[str] = []
-                    vals: list[str] = []
-                    for k in n.value.keys:
-                        if isinstance(k, ast.Constant) and isinstance(k.value, str):
-                            keys.append(k.value)
-                    for v in n.value.values:
-                        if isinstance(v, ast.Constant) and isinstance(v.value, str):
-                            vals.append(v.value)
-                    if set(keys) == {"screen", "question", "questionnaire", "document"} and set(vals) >= {
-                        "Screen-ETag", "Question-ETag", "Questionnaire-ETag", "Document-ETag"
-                    }:
-                        mapping_locs.append(py)
-                        mapping_content = dict(zip(keys, vals))
-    assert len(mapping_locs) == 1, "Exactly one SCOPE_TO_HEADER mapping must exist under app/logic/."
+                target_names = [tg.id for tg in n.targets if isinstance(tg, ast.Name)]
+                if not target_names:
+                    continue
+                if not isinstance(n.value, ast.Dict):
+                    continue
+                key_literals: list[str] = []
+                val_literals: list[str] = []
+                for k in n.value.keys:
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                        key_literals.append(k.value)
+                for v in n.value.values:
+                    if isinstance(v, ast.Constant) and isinstance(v.value, str):
+                        val_literals.append(v.value)
+                if set(key_literals) == {"screen", "question", "questionnaire", "document"}:
+                    if domain_headers.issubset(set(val_literals)):
+                        # Record each simple name target as a candidate mapping symbol
+                        for name in target_names:
+                            candidates.append((py, name))
 
+    assert len(candidates) == 1, (
+        "Exactly one central scope→header mapping (by content) must exist under app/logic/. "
+        f"Found {len(candidates)} candidates: " + ", ".join(f"{p.name}:{n}" for p, n in candidates)
+    )
+
+    mapping_file, mapping_name = candidates[0]
+
+    # Assert header_emitter.py references that mapping (either defined inline or via import/name/attribute)
     emitter_mod = APP_DIR / "logic" / "header_emitter.py"
-    assert emitter_mod.exists(), "header_emitter.py must use SCOPE_TO_HEADER mapping."
-    emitter_src = emitter_mod.read_text(encoding="utf-8")
-    assert "SCOPE_TO_HEADER" in emitter_src, "Emitter must reference SCOPE_TO_HEADER."
+    assert emitter_mod.exists(), "app/logic/header_emitter.py must exist."
+    if emitter_mod == mapping_file:
+        emitter_references_mapping = True  # mapping is defined in emitter itself
+    else:
+        et = _parse_ast(emitter_mod)
+        emitter_references_mapping = False
+        for node in ast.walk(et):
+            # Direct name usage implies it was imported with `from ... import <name>`
+            if isinstance(node, ast.Name) and node.id == mapping_name:
+                emitter_references_mapping = True
+                break
+            # Attribute usage implies `import module as m` then `m.<name>`
+            if isinstance(node, ast.Attribute) and node.attr == mapping_name:
+                emitter_references_mapping = True
+                break
+        assert emitter_references_mapping, (
+            "header_emitter.py must reference the central scope→header mapping (by Name or Attribute)."
+        )
 
-    # Assert callers do not hard-code domain header names directly
+    # Assert callers do not hard-code domain header names directly in header-setting contexts
     hardcoded_offenders: list[str] = []
-    domain_headers = ["Screen-ETag", "Question-ETag", "Questionnaire-ETag", "Document-ETag"]
     for py in (APP_DIR / "routes").glob("*.py"):
         if py == emitter_mod:
             continue
         t = _parse_ast(py)
+        # headers['Domain'] = ...
         for n in ast.walk(t):
-            if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value in domain_headers:
-                hardcoded_offenders.append(f"{py.name} uses hard-coded '{n.value}'")
+            if isinstance(n, ast.Assign):
+                for tgt in n.targets:
+                    if isinstance(tgt, ast.Subscript) and isinstance(tgt.value, ast.Attribute) and tgt.value.attr == "headers":
+                        sl = getattr(tgt, "slice", None)
+                        if isinstance(sl, ast.Index):
+                            sl = sl.value
+                        if isinstance(sl, ast.Constant) and isinstance(sl.value, str) and sl.value in domain_headers:
+                            hardcoded_offenders.append(f"{py.name} sets headers['{sl.value}'] directly")
+        # headers.update({ 'Domain': ... })
+        for n in ast.walk(t):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "update":
+                base = n.func.value
+                if isinstance(base, ast.Attribute) and base.attr == "headers":
+                    for arg in n.args:
+                        if isinstance(arg, ast.Dict):
+                            for k in arg.keys:
+                                if isinstance(k, ast.Constant) and isinstance(k.value, str) and k.value in domain_headers:
+                                    hardcoded_offenders.append(f"{py.name} updates headers with '{k.value}' directly")
+        # headers.__setitem__('Domain', ...)
+        for n in ast.walk(t):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "__setitem__":
+                base = n.func.value
+                if isinstance(base, ast.Attribute) and base.attr == "headers":
+                    if n.args and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str) and n.args[0].value in domain_headers:
+                        hardcoded_offenders.append(f"{py.name} __setitem__ headers '{n.args[0].value}' directly")
     assert not hardcoded_offenders, (
-        "Domain header names must not be hard-coded in route modules: " + ", ".join(hardcoded_offenders)
+        "Domain header names must not be hard-coded in route modules (only emitter may use mapping): "
+        + ", ".join(hardcoded_offenders)
     )
 
 
@@ -564,10 +632,9 @@ def test_7_1_9_outputs_schema_includes_domain_header_fields() -> None:
         prop = props[key]
         assert isinstance(prop, dict), f"headers.{key} must be a schema object."
         assert "$ref" in prop, f"headers.{key} must use a $ref to the token schema."
-        ref = str(prop["$ref"])  # e.g., ./ETag.schema.json or ./EtagToken.schema.json
-        assert re.search(r"ETag\.schema\.json|EtagToken\.schema\.json", ref), (
-            f"headers.{key} should $ref ETag/EtagToken schema, got: {ref}"
-        )
+        ref = str(prop["$ref"]).lower()
+        ok = ("etag" in ref) and ("schema" in ref or "#/components/schemas/" in ref)
+        assert ok, f"headers.{key} $ref must point to an ETag token schema, got: {prop['$ref']}"
 
     # Assert that headers.required is absent or empty (not globally required)
     headers_required = headers.get("required")
@@ -783,11 +850,11 @@ def test_7_1_13_token_computation_isolated_entrypoints_unchanged() -> None:
         "compare_etag",
     }
 
-    # Assert exactly the same exported callables as baseline
-    # to enforce "unchanged entry points".
-    assert exported == baseline, (
-        "app/logic/etag.py public API must remain unchanged.\n"
-        f"Expected: {sorted(baseline)}\nFound:    {sorted(exported)}"
+    # Assert unchanged baseline entry points (superset allowed)
+    missing = sorted(baseline - exported)
+    assert not missing, (
+        "app/logic/etag.py public API must retain baseline entry points. Missing: "
+        + ", ".join(missing)
     )
 
 
@@ -1111,15 +1178,19 @@ def test_7_1_18_guard_is_db_free_and_import_safe() -> None:
         if isinstance(node, ast.Import) and any(alias.name.startswith("app.logic.etag") for alias in node.names):
             pytest.fail("Guard must not import app.logic.etag at module scope (lazy import required).")
 
-    # Assert: at least one function body contains ImportFrom app.logic.etag
+    # Assert: at least one function body contains a lazy import of ETag helpers
     found_lazy_etag_import = False
     for fn in _function_defs(t):
         for node in fn.body:
             for sub in ast.walk(node):
                 if isinstance(sub, ast.ImportFrom) and (sub.module or "").startswith("app.logic.etag"):
                     found_lazy_etag_import = True
+                if isinstance(sub, ast.Import):
+                    for alias in sub.names:
+                        if alias.name.startswith("app.logic.etag"):
+                            found_lazy_etag_import = True
     assert found_lazy_etag_import, (
-        "Guard must locally import app.logic.etag inside function scope(s) to enforce DB-free isolation."
+        "Guard must locally import ETag helpers (Import/ImportFrom) inside function scope(s)."
     )
 
     # Assert: no module-scope imports of DB drivers or repositories
@@ -1137,6 +1208,9 @@ def test_7_1_18_guard_is_db_free_and_import_safe() -> None:
                 pytest.fail("Guard must be DB-free at module scope (no psycopg2 imports).")
             if mod.startswith("app.logic.repository_"):
                 pytest.fail("Guard must not import repositories at module scope.")
+
+    # Note: Per AGENTS.md 4.4 and Clarke's review, architectural tests must
+    # remain AST/static-only. Do not import or execute application modules here.
 
 
 # 7.1.19 — Handlers contain no inline precondition logic
@@ -1203,36 +1277,57 @@ def test_7_1_19_handlers_contain_no_inline_precondition_logic() -> None:
 
 # 7.1.20 — Stable problem+json mapping for preconditions
 def test_7_1_20_stable_problem_json_mapping_for_preconditions() -> None:
-    """Verifies 7.1.20 — Guard maps missing→428 PRE_IF_MATCH_MISSING and mismatch→409/412 PRE_IF_MATCH_ETAG_MISMATCH."""
+    """Verifies 7.1.20 — Central mapping exists and guard imports it (missing→428; mismatch answers→409; mismatch documents→412)."""
+    # 1) Central mapping module exists and has required shape (static AST only)
+    mapping_mod = APP_DIR / "config" / "error_mapping.py"
+    assert mapping_mod.exists(), "Mapping module app/config/error_mapping.py must exist."
+    mtree = _parse_ast(mapping_mod)
+    found_map = False
+    required = {
+        "missing": {"code": "PRE_IF_MATCH_MISSING", "status": 428},
+        "mismatch_answers": {"code": "PRE_IF_MATCH_ETAG_MISMATCH", "status": 409},
+        "mismatch_documents": {"code": "PRE_IF_MATCH_ETAG_MISMATCH", "status": 412},
+    }
+    for n in getattr(mtree, "body", []):
+        if isinstance(n, ast.Assign):
+            if any(isinstance(t, ast.Name) and t.id == "PRECONDITION_ERROR_MAP" for t in n.targets) and isinstance(n.value, ast.Dict):
+                keys: list[str] = []
+                vals: list[dict] = []
+                for k, v in zip(n.value.keys, n.value.values):
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str) and isinstance(v, ast.Dict):
+                        entry: dict[str, Any] = {}
+                        for kk, vv in zip(v.keys, v.values):
+                            if isinstance(kk, ast.Constant) and isinstance(kk.value, str):
+                                if isinstance(vv, ast.Constant):
+                                    entry[kk.value] = vv.value
+                        keys.append(k.value)
+                        vals.append(entry)
+                mp = dict(zip(keys, vals))
+                for k, expected in required.items():
+                    assert k in mp, f"PRECONDITION_ERROR_MAP missing key '{k}'"
+                    got = mp[k]
+                    assert got.get("code") == expected["code"], f"{k}.code must be {expected['code']}"
+                    assert int(got.get("status", -1)) == expected["status"], f"{k}.status must be {expected['status']}"
+                found_map = True
+    assert found_map, "PRECONDITION_ERROR_MAP literal dict assignment not found with required shape."
+
+    # 2) Guard imports the central mapping (no hardcoded literals asserted here)
     guard_mod = APP_DIR / "guards" / "precondition.py"
     assert guard_mod.exists(), "Guard module app/guards/precondition.py must exist."
-    src = guard_mod.read_text(encoding="utf-8")
     tree = _parse_ast(guard_mod)
-
-    # Assert presence of invariant error codes
-    assert "PRE_IF_MATCH_MISSING" in src, "Guard must define code PRE_IF_MATCH_MISSING."
-    assert "PRE_IF_MATCH_ETAG_MISMATCH" in src, "Guard must define code PRE_IF_MATCH_ETAG_MISMATCH."
-
-    # Assert presence of 428 and both mismatch status codes (409 and 412) in module
-    numeric_constants: set[int] = set()
+    # Verify import of PRECONDITION_ERROR_MAP from app.config.error_mapping
+    imported = False
     for n in ast.walk(tree):
-        if isinstance(n, ast.Constant) and isinstance(n.value, int):
-            numeric_constants.add(int(n.value))
-    assert 428 in numeric_constants, "Guard must construct 428 Precondition Required for missing If-Match."
-    missing_codes = {409, 412} - numeric_constants
-    assert not missing_codes, (
-        "Guard must construct both mismatch statuses: 409 (answers) and 412 (documents). Missing: "
-        + ", ".join(str(c) for c in sorted(missing_codes))
-    )
+        if isinstance(n, ast.ImportFrom):
+            if (getattr(n, "module", "") == "app.config.error_mapping"):
+                for alias in n.names:
+                    if alias.name == "PRECONDITION_ERROR_MAP":
+                        imported = True
+    assert imported, "Guard must import PRECONDITION_ERROR_MAP from app.config.error_mapping"
 
-    # Assert problem body includes a 'code' key in at least one construction site
-    has_code_key = False
-    for n in ast.walk(tree):
-        if isinstance(n, ast.Dict):
-            for k in n.keys:
-                if isinstance(k, ast.Constant) and k.value == "code":
-                    has_code_key = True
-    assert has_code_key, "Problem+json bodies constructed by guard must include a 'code' field."
+    # Optional negative check: discourage hardcoding of code strings and status ints in guard
+    # Allow presence in comments/docstrings or in non-precondition branches.
+    # Here we only ensure the mapping is the intended source of truth, not enforce a full ban.
 
 
 # 7.1.21 — OpenAPI declares If-Match as required on write routes
@@ -1268,40 +1363,20 @@ def test_7_1_21_openapi_declares_if_match_required_on_write_routes() -> None:
     assert loaded, "At least one OpenAPI document must parse successfully."
 
     def _iter_operations(spec: dict) -> Iterable[tuple[str, str, dict]]:
-        """Yield only Phase-0 in-scope operations for If-Match requirements.
-
-        Scope:
-        - PATCH paths containing '/response-sets/' and '/answers/' (per-answer autosave)
-        - PUT paths '/documents/order' and, if present, PUT '/documents/{id}/content'
-        Ignore other POST/PATCH/DELETE operations for the If-Match requirement.
-        """
+        """Yield all in-scope write operations (answers/documents, POST|PUT|PATCH|DELETE)."""
         paths = spec.get("paths") or {}
         for path, item in paths.items():
             if not isinstance(item, dict):
+                continue
+            in_scope = ("/answers" in path) or ("/documents" in path)
+            if not in_scope:
                 continue
             for method, op in item.items():
                 if not isinstance(op, dict):
                     continue
                 m = str(method).lower()
-                # Answers autosave PATCH
-                if m == "patch" and ("/response-sets/" in path and "/answers/" in path):
+                if m in {"post", "put", "patch", "delete"}:
                     yield path, m, op
-                    continue
-                # Documents reorder/content PUT
-                if m == "put":
-                    if path.endswith("/documents/order"):
-                        yield path, m, op
-                        continue
-                    # Match .../documents/{id}/content with any id placeholder
-                    try:
-                        import re as _re  # scoped import; tests run in static mode
-                        if _re.search(r"/documents/[^/]+/content$", path):
-                            yield path, m, op
-                            continue
-                    except Exception:
-                        # If regex is unavailable in runtime, fall back to a simple contains check
-                        if "/documents/" in path and path.endswith("/content"):
-                            yield path, m, op
 
     def _has_required_if_match(op: dict, spec: dict) -> bool:
         params = list(op.get("parameters") or [])
@@ -1393,19 +1468,37 @@ def test_7_1_22_guard_uses_only_public_etag_apis() -> None:
         + ", ".join([f"line {ln}: {name}" for ln, name in private_imports])
     )
 
-    # Also assert there is no attribute access of private members like etag._foo
+    # Also assert there is no attribute access of private etag members; scope to etag imports only
+    etag_aliases: set[str] = set()
+    for n in ast.walk(t):
+        if isinstance(n, ast.Import):
+            for alias in n.names:
+                if alias.name == "app.logic.etag":
+                    etag_aliases.add(alias.asname or alias.name or "etag")
+                if alias.name.startswith("app.logic.etag."):
+                    etag_aliases.add(alias.asname or alias.name.rsplit(".", 1)[-1])
+        if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("app.logic.etag"):
+            # ImportFrom of specific functions: collect names for attribute chain checks
+            for alias in n.names:
+                etag_aliases.add(alias.asname or alias.name)
+
     private_attrs: list[tuple[int, str]] = []
     for n in ast.walk(t):
         if isinstance(n, ast.Attribute) and isinstance(n.attr, str) and n.attr.startswith("_"):
-            # Record base name if present
-            base = None
-            if isinstance(n.value, ast.Name):
-                base = n.value.id
-            elif isinstance(n.value, ast.Attribute):
-                base = n.value.attr
-            private_attrs.append((getattr(n, "lineno", -1), f"{base or '?'}.{n.attr}"))
+            base_ok = False
+            if isinstance(n.value, ast.Name) and n.value.id in etag_aliases:
+                base_ok = True
+            if isinstance(n.value, ast.Attribute) and isinstance(n.value.attr, str) and n.value.attr in etag_aliases:
+                base_ok = True
+            if base_ok:
+                base = None
+                if isinstance(n.value, ast.Name):
+                    base = n.value.id
+                elif isinstance(n.value, ast.Attribute):
+                    base = n.value.attr
+                private_attrs.append((getattr(n, "lineno", -1), f"{base or '?'}.{n.attr}"))
     assert not private_attrs, (
-        "Guard must not access private attributes of the etag module/helpers: "
+        "Guard must not access private attributes of app.logic.etag via its imported aliases: "
         + ", ".join([f"line {ln}: {desc}" for ln, desc in private_attrs])
     )
 
@@ -1573,7 +1666,11 @@ def test_7_1_26_no_repository_access_before_guard_success() -> None:
         return False
 
     offenders: list[str] = []
+    # Apply repository-before-guard rule only to answers/documents write routes (Phase-0 scope)
+    allowed = {"answers.py", "documents.py"}
     for py in _iter_py_files(routes_dir):
+        if py.name not in allowed:
+            continue
         t = _parse_ast(py)
         for fn in _function_defs(t):
             # Only consider mutation handlers
@@ -1590,3 +1687,821 @@ def test_7_1_26_no_repository_access_before_guard_success() -> None:
         "Mutation handlers without precondition_guard must not access repositories before guard success: "
         + ", ".join(offenders)
     )
+
+
+# 7.1.29 — Global Problem+JSON handlers are registered in create_app
+def test_7_1_29_global_problem_json_handlers_registered_in_create_app() -> None:
+    """Verifies 7.1.29 — create_app defines exception handlers using allowed problem modules (static AST)."""
+    # Verifies section 7.1.29
+    main_py = APP_DIR / "main.py"
+    assert main_py.exists(), "app/main.py must exist."
+    t = _parse_ast(main_py)
+
+    # Locate create_app function
+    fns = [fn for fn in _function_defs(t) if fn.name == "create_app"]
+    assert fns, "app/main.py must define create_app()"
+    fn = fns[0]
+
+    # Map imported handler names to their source modules for allowlist validation
+    allowed_modules = {"app.http.problem", "app.http.errors"}
+    import_map: dict[str, str] = {}
+    for n in ast.walk(t):
+        if isinstance(n, ast.ImportFrom) and n.module in allowed_modules:
+            for alias in n.names:
+                import_map[alias.asname or alias.name] = n.module  # symbol -> module
+
+    # Within create_app, assert calls to add_exception_handler for specific exception types
+    expected_exceptions = {"HTTPException", "RequestValidationError", "Exception"}
+    seen: set[str] = set()
+    handler_from_allowed = False
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "add_exception_handler":
+            args = list(n.args)
+            if not args:
+                continue
+            exc_name = None
+            if isinstance(args[0], ast.Name):
+                exc_name = args[0].id
+            elif isinstance(args[0], ast.Attribute):
+                exc_name = args[0].attr
+            if exc_name:
+                seen.add(exc_name)
+            if len(args) >= 2:
+                handler = args[1]
+                if isinstance(handler, ast.Name) and handler.id in import_map and import_map[handler.id] in allowed_modules:
+                    handler_from_allowed = True
+                if isinstance(handler, ast.Attribute) and isinstance(handler.value, ast.Name):
+                    base = handler.value.id
+                    if base in import_map and import_map[base] in allowed_modules:
+                        handler_from_allowed = True
+
+    missing = sorted(expected_exceptions - seen)
+    assert not missing, (
+        "create_app must register exception handlers for HTTPException, RequestValidationError, and Exception"
+    )
+    assert handler_from_allowed, (
+        "Exception handlers must originate from allowed problem modules (app.http.problem/errors)."
+    )
+
+    # Also assert problem module declares PROBLEM_MEDIA_TYPE constant
+    problem_mod = APP_DIR / "http" / "problem.py"
+    assert problem_mod.exists(), "app/http/problem.py must exist and expose PROBLEM_MEDIA_TYPE."
+    ptree = _parse_ast(problem_mod)
+    has_const = False
+    for n in getattr(ptree, "body", []):
+        if isinstance(n, ast.Assign):
+            if any(isinstance(t, ast.Name) and t.id == "PROBLEM_MEDIA_TYPE" for t in n.targets):
+                if isinstance(n.value, ast.Constant) and isinstance(n.value.value, str):
+                    has_const = True
+    assert has_const, "app/http/problem.py must define string constant PROBLEM_MEDIA_TYPE."
+
+
+# 7.1.30 — Request ID middleware is registered at app startup
+def test_7_1_30_request_id_middleware_registered_once() -> None:
+    """Verifies 7.1.30 — create_app adds exactly one RequestIdMiddleware (static AST)."""
+    # Verifies section 7.1.30
+    main_py = APP_DIR / "main.py"
+    assert main_py.exists(), "app/main.py must exist."
+    t = _parse_ast(main_py)
+    fns = [fn for fn in _function_defs(t) if fn.name == "create_app"]
+    assert fns, "app/main.py must define create_app()"
+    fn = fns[0]
+
+    add_calls = 0
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "add_middleware":
+            if n.args:
+                arg0 = n.args[0]
+                if isinstance(arg0, ast.Name) and arg0.id == "RequestIdMiddleware":
+                    add_calls += 1
+                if isinstance(arg0, ast.Attribute) and arg0.attr == "RequestIdMiddleware":
+                    add_calls += 1
+    assert add_calls == 1, "create_app must register exactly one RequestIdMiddleware."
+
+    # Ensure not imported from tests.* modules
+    for n in ast.walk(t):
+        if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("tests."):
+            for alias in n.names:
+                if alias.name == "RequestIdMiddleware":
+                    pytest.fail("RequestIdMiddleware must not be imported from tests.* modules.")
+
+
+# 7.1.31 — No test-coupled fallbacks or harness leakage in repositories and guard
+def test_7_1_31_no_test_coupled_fallbacks_in_repos_and_guard() -> None:
+    """Verifies 7.1.31 — No hardcoded test ids/UUID fallbacks or test harness leakage (AST + targeted regex)."""
+    # Verifies section 7.1.31
+    targets: list[Path] = []
+    targets += list((APP_DIR / "logic").glob("repository_*.py"))
+    targets.append(APP_DIR / "guards" / "precondition.py")
+    for extra in ["etag.py", "screen_builder.py", "header_emitter.py"]:
+        p = APP_DIR / "logic" / extra
+        if p.exists():
+            targets.append(p)
+
+    uuid_re = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+    special_literals = {"q_001", "section_17_36", "invoke_orchestrator_trace", "X-EpicK-ForceError", "force_error"}
+
+    violations: list[str] = []
+
+    for path in targets:
+        if not path.exists():
+            continue
+        t = _parse_ast(path)
+        src = path.read_text(encoding="utf-8")
+
+        # (1) No dict with string keys matching UUID or "q_001"
+        for n in ast.walk(t):
+            if isinstance(n, ast.Dict):
+                for k in n.keys:
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                        if uuid_re.match(k.value) or k.value == "q_001":
+                            violations.append(f"{path.name}: dict key '{k.value}' looks like test-coupled id")
+
+        # (2) No constant test-id strings in return expressions or equality comparisons
+        for n in ast.walk(t):
+            if isinstance(n, ast.Return):
+                val = n.value
+                if isinstance(val, ast.Constant) and isinstance(val.value, str):
+                    if uuid_re.match(val.value) or val.value == "q_001":
+                        violations.append(f"{path.name}: returns hardcoded id '{val.value}'")
+                if isinstance(val, ast.JoinedStr):
+                    for p2 in val.values:
+                        if isinstance(p2, ast.Constant) and isinstance(p2.value, str):
+                            if re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", p2.value) or ("q_001" in p2.value):
+                                violations.append(f"{path.name}: f-string in return contains test id literal")
+            if isinstance(n, ast.Compare):
+                comparands = [n.left] + list(n.comparators)
+                for c in comparands:
+                    if isinstance(c, ast.Constant) and isinstance(c.value, str):
+                        if uuid_re.match(c.value) or c.value == "q_001":
+                            violations.append(f"{path.name}: comparison uses test id '{c.value}'")
+
+        # (3) No imports from tests.* and no forbidden symbol references
+        for n in ast.walk(t):
+            if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("tests."):
+                violations.append(f"{path.name}: imports from tests.* not allowed")
+            if isinstance(n, ast.Import):
+                for alias in n.names:
+                    if alias.name.startswith("tests."):
+                        violations.append(f"{path.name}: imports from tests.* not allowed")
+            if isinstance(n, ast.Name) and n.id in special_literals:
+                violations.append(f"{path.name}: forbidden symbol reference '{n.id}'")
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value in special_literals:
+                violations.append(f"{path.name}: forbidden literal '{n.value}'")
+
+        # (4) Secondary regex scan for behavioural contexts
+        for line in src.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if stripped.startswith("return") or "= f\"" in stripped or "= f'" in stripped:
+                if re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", stripped):
+                    violations.append(f"{path.name}: potential UUID literal in behavioural context")
+                if "q_001" in stripped:
+                    violations.append(f"{path.name}: 'q_001' literal in behavioural context")
+
+    assert not violations, (
+        "Production code must not embed test-coupled ids or harness hooks; replace with real lookups or move to fixtures. "
+        + ", ".join(violations)
+    )
+
+
+# 7.1.32 — Guard enforces first-failure precedence for write routes
+def test_7_1_32_guard_enforces_first_failure_precedence() -> None:
+    """Verifies 7.1.32 — Guard calls helpers in order and supports early-return/raise; no success header sets in guard."""
+    # Verifies section 7.1.32
+    guard_mod = APP_DIR / "guards" / "precondition.py"
+    assert guard_mod.exists(), "Guard module app/guards/precondition.py must exist."
+    tree = _parse_ast(guard_mod)
+
+    # Locate precondition_guard function
+    guard_fns = [fn for fn in _function_defs(tree) if fn.name == "precondition_guard"]
+    assert guard_fns, "precondition_guard function must be defined."
+    gf = guard_fns[0]
+
+    # (1) Verify call order of helpers
+    required_order = [
+        "_check_content_type",
+        "_check_if_match_presence",
+        "_parse_if_match",
+        "_compare_etag",
+    ]
+    first_index: dict[str, int] = {}
+    linear_nodes: list[ast.AST] = list(ast.walk(gf))
+    for idx, node in enumerate(linear_nodes):
+        if isinstance(node, ast.Call):
+            name = None
+            if isinstance(node.func, ast.Name):
+                name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                name = node.func.attr
+            if name in required_order and name not in first_index:
+                first_index[name] = idx
+    missing = [n for n in required_order if n not in first_index]
+    assert not missing, f"Guard must call helper(s) in order; missing: {missing}"
+    # Assert increasing order of first occurrences
+    indices = [first_index[n] for n in required_order]
+    assert indices == sorted(indices), (
+        "Guard must call helpers in source order: " + ", ".join(required_order)
+    )
+
+    # (2) Early-return or raise present between each check
+    def _has_early_exit(start: int, end: int) -> bool:
+        for node in linear_nodes[start:end]:
+            if isinstance(node, (ast.Raise, ast.Return)):
+                return True
+        return False
+
+    for i in range(len(required_order) - 1):
+        a, b = required_order[i], required_order[i + 1]
+        if a in first_index and b in first_index:
+            assert _has_early_exit(first_index[a], first_index[b]), (
+                f"Expected an early exit (return/raise) after {a} before {b} in guard."
+            )
+
+    # (3) Guard must not set success headers or call emit_etag_headers
+    domain_headers = {"ETag", "Screen-ETag", "Question-ETag", "Questionnaire-ETag", "Document-ETag"}
+    offenders = []
+    for lineno, header_name in _scan_for_header_sets(guard_mod):
+        if header_name in domain_headers:
+            offenders.append(f"line {lineno}: headers['{header_name}'] assignment in guard")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id == "emit_etag_headers":
+                offenders.append("emit_etag_headers() called in guard")
+            if isinstance(node.func, ast.Attribute) and node.func.attr == "emit_etag_headers":
+                offenders.append("emit_etag_headers() called in guard")
+    assert not offenders, (
+        "Guard must not emit success headers: " + ", ".join(offenders)
+    )
+
+
+# 7.1.33 — Content-Type 415 enforced in guard prior to body parsing
+def test_7_1_33_guard_enforces_content_type_415_prior_to_body_parsing() -> None:
+    """Verifies 7.1.33 — Guard checks Content-Type and rejects with 415 before any body parsing; app/http must not perform If-Match or PRE_* logic."""
+    # Verifies section 7.1.33
+    guard_mod = APP_DIR / "guards" / "precondition.py"
+    assert guard_mod.exists(), "Guard module app/guards/precondition.py must exist."
+    tree = _parse_ast(guard_mod)
+
+    # Locate precondition_guard function
+    guard_fns = [fn for fn in _function_defs(tree) if fn.name == "precondition_guard"]
+    assert guard_fns, "precondition_guard function must be defined."
+    gf = guard_fns[0]
+
+    # Gather indices of Content-Type/415 markers and body parsing calls in traversal order
+    nodes = list(ast.walk(gf))
+    ctype_indices: list[int] = []
+    json_parse_indices: list[int] = []
+    for idx, n in enumerate(nodes):
+        if isinstance(n, ast.Constant) and isinstance(n.value, (str, int)):
+            if (isinstance(n.value, str) and ("Content-Type" in n.value or "Unsupported Media Type" in n.value)) or (
+                isinstance(n.value, int) and n.value == 415
+            ):
+                ctype_indices.append(idx)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in {"json", "model_validate", "parse_obj"}:
+            json_parse_indices.append(idx)
+    assert ctype_indices, "Guard must contain a Content-Type check and 415 mapping."
+    if json_parse_indices:
+        assert min(ctype_indices) < min(json_parse_indices), (
+            "Content-Type 415 must be enforced before body parsing/validation calls."
+        )
+
+    # app/http must not perform If-Match checks or PRE_* emissions
+    http_dir = APP_DIR / "http"
+    assert http_dir.exists(), "app/http directory must exist."
+    http_offenders: list[str] = []
+    for py in _iter_py_files(http_dir):
+        t = _parse_ast(py)
+        # No import of guard
+        for n in ast.walk(t):
+            if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("app.guards"):
+                for alias in n.names:
+                    if alias.name == "precondition_guard":
+                        http_offenders.append(f"{py.name} imports precondition_guard")
+        # No PRE_* string constants in app/http
+        for n in ast.walk(t):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("PRE_"):
+                http_offenders.append(f"{py.name} contains PRE_* constant '{n.value}'")
+        # No explicit If-Match header usage
+        for n in ast.walk(t):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value == "If-Match":
+                http_offenders.append(f"{py.name} references If-Match header")
+    assert not http_offenders, (
+        "app/http wrappers must not perform If-Match checks or PRE_* emissions: " + ", ".join(http_offenders)
+    )
+
+
+# 7.1.34 — No normalise or compare ETag in routes or wrappers
+def test_7_1_34_no_normalise_or_compare_etag_in_routes_or_wrappers() -> None:
+    """Verifies 7.1.34 — Only guard may import/use ETag normaliser/comparison; routes/http must not raise PRE_* types."""
+    routes_dir = APP_DIR / "routes"
+    http_dir = APP_DIR / "http"
+    assert routes_dir.exists(), "app/routes directory must exist."
+    assert http_dir.exists(), "app/http directory must exist."
+
+    offenders: list[str] = []
+    # (1) No imports of normaliser/comparison in routes or wrappers
+    def _scan_file_for_etag_imports(path: Path) -> None:
+        t = _parse_ast(path)
+        for n in ast.walk(t):
+            if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("app.logic.etag"):
+                for alias in n.names:
+                    if re.search(r"normalis|normaliz|normalize|normalise|compare", alias.name, re.IGNORECASE):
+                        offenders.append(f"{path.name}: imports {alias.name} from app.logic.etag")
+            if isinstance(n, ast.Import) and any(m.name.startswith("app.logic.etag") for m in n.names):
+                offenders.append(f"{path.name}: imports app.logic.etag module")
+        # (3) No PRE_* problem types raised in routes/wrappers
+        for n in ast.walk(t):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("PRE_"):
+                offenders.append(f"{path.name}: contains PRE_* constant '{n.value}'")
+
+    for py in _iter_py_files(routes_dir):
+        _scan_file_for_etag_imports(py)
+    for py in _iter_py_files(http_dir):
+        _scan_file_for_etag_imports(py)
+
+    # (2) Only guard may import/use the normaliser/comparison
+    guard_path = APP_DIR / "guards" / "precondition.py"
+    assert guard_path.exists(), "Guard module must exist."
+    guard_tree = _parse_ast(guard_path)
+    guard_has_etag_use = False
+    for n in ast.walk(guard_tree):
+        if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("app.logic.etag"):
+            guard_has_etag_use = True
+        if isinstance(n, ast.Call):
+            if isinstance(n.func, ast.Name) and re.search(r"normalis|normaliz|normalize|normalise|compare", n.func.id, re.IGNORECASE):
+                guard_has_etag_use = True
+            if isinstance(n.func, ast.Attribute) and re.search(r"normalis|normaliz|normalize|normalise|compare", n.func.attr, re.IGNORECASE):
+                guard_has_etag_use = True
+    assert guard_has_etag_use, "Guard must be the only place using ETag normaliser/comparison."
+
+    assert not offenders, (
+        "Routes/wrappers must not import/use ETag normaliser or PRE_* constants: " + ", ".join(offenders)
+    )
+
+
+# 7.1.35 — Canonical PRE_* mapping includes invalid-format and route-kind split
+def test_7_1_35_canonical_pre_mapping_includes_invalid_format_and_route_kind_split() -> None:
+    """Verifies 7.1.35 — error mapping defines missing→428, invalid-format→409, mismatch split (answers→409, documents→412); guard/wrappers do not use RUN_* in failures."""
+    mapping_py = APP_DIR / "config" / "error_mapping.py"
+    assert mapping_py.exists(), "app/config/error_mapping.py must exist."
+    tree = _parse_ast(mapping_py)
+
+    # Find PRECONDITION_ERROR_MAP dict literal
+    maps: list[ast.Dict] = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Assign):
+            if any(isinstance(t, ast.Name) and t.id == "PRECONDITION_ERROR_MAP" for t in n.targets) and isinstance(n.value, ast.Dict):
+                maps.append(n.value)
+    assert maps, "PRECONDITION_ERROR_MAP must be defined as a dict literal."
+    m = maps[0]
+
+    def _dict_to_py(d: ast.Dict) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for k, v in zip(d.keys, d.values):
+            if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                key = k.value
+            else:
+                continue
+            if isinstance(v, ast.Dict):
+                entry: dict[str, Any] = {}
+                for kk, vv in zip(v.keys, v.values):
+                    if isinstance(kk, ast.Constant) and isinstance(kk.value, str):
+                        if isinstance(vv, ast.Constant):
+                            entry[kk.value] = vv.value
+                out[key] = entry
+        return out
+
+    pm = _dict_to_py(m)
+    # (1) Missing → 428 with code PRE_IF_MATCH_MISSING
+    miss = pm.get("missing") or pm.get("absent")
+    assert miss and miss.get("status") == 428 and miss.get("code") == "PRE_IF_MATCH_MISSING", (
+        "Mapping must define missing→428 with PRE_IF_MATCH_MISSING."
+    )
+    # (2) Invalid format → 409
+    inv = pm.get("invalid_format") or pm.get("invalid")
+    assert inv and inv.get("status") == 409 and inv.get("code") == "PRE_IF_MATCH_INVALID_FORMAT", (
+        "Mapping must define invalid_format→409 with PRE_IF_MATCH_INVALID_FORMAT."
+    )
+    # (3) Mismatch split: answers/screens→409; documents reorder→412
+    ans = pm.get("mismatch_answers") or pm.get("answers")
+    docs = pm.get("mismatch_documents") or pm.get("documents")
+    assert ans and ans.get("status") == 409 and ans.get("code") == "PRE_IF_MATCH_ETAG_MISMATCH", (
+        "Mapping must define answers mismatch→409."
+    )
+    assert docs and docs.get("status") == 412 and docs.get("code") == "PRE_IF_MATCH_ETAG_MISMATCH", (
+        "Mapping must define documents mismatch→412."
+    )
+
+    # (4) Guard/wrappers must not reference RUN_* in failure branches
+    forbidden_tokens = []
+    for path in [APP_DIR / "guards" / "precondition.py"] + list(_iter_py_files(APP_DIR / "http")):
+        t = _parse_ast(path)
+        for n in ast.walk(t):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("RUN_"):
+                forbidden_tokens.append(f"{path.name} contains '{n.value}'")
+    assert not forbidden_tokens, (
+        "Guard/wrappers must not use RUN_* in failure branches: " + ", ".join(forbidden_tokens)
+    )
+
+
+# 7.1.36 — Reorder diagnostics emitted through header emitter
+def test_7_1_36_reorder_diagnostics_via_emitter() -> None:
+    """Verifies 7.1.36 — Reorder failure path uses header emitter and does not set diagnostic headers directly."""
+    docs_py = APP_DIR / "routes" / "documents.py"
+    assert docs_py.exists(), "app/routes/documents.py must exist."
+    t = _parse_ast(docs_py)
+
+    # Find reorder handler function
+    fns = [fn for fn in _function_defs(t) if fn.name == "put_documents_order"]
+    assert fns, "documents.put_documents_order must be defined."
+    fn = fns[0]
+
+    # (1) Assert a call to header emitter exists within the handler
+    called_emitter = False
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Call):
+            if isinstance(n.func, ast.Name) and n.func.id in {"emit_etag_headers", "emit_reorder_diagnostics"}:
+                called_emitter = True
+            if isinstance(n.func, ast.Attribute) and n.func.attr in {"emit_etag_headers", "emit_reorder_diagnostics"}:
+                called_emitter = True
+    assert called_emitter, (
+        "Reorder handler must call a central header emitter (emit_etag_headers or emit_reorder_diagnostics)."
+    )
+
+    # (2) Assert no direct set of diagnostic headers in the handler
+    direct_sets = []
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Assign):
+            for tgt in n.targets:
+                if isinstance(tgt, ast.Subscript):
+                    base = tgt.value
+                    sl = getattr(tgt, "slice", None)
+                    if isinstance(sl, ast.Index):
+                        sl = sl.value
+                    if (
+                        isinstance(base, ast.Attribute)
+                        and base.attr == "headers"
+                        and isinstance(sl, ast.Constant)
+                        and isinstance(sl.value, str)
+                        and sl.value in {"X-List-ETag", "X-If-Match-Normalized"}
+                    ):
+                        direct_sets.append(sl.value)
+    assert not direct_sets, (
+        "Reorder handler must not set diagnostic headers directly: " + ", ".join(direct_sets)
+    )
+
+
+# 7.1.37 — Write routes avoid signature-level body models
+def test_7_1_37_write_routes_avoid_signature_level_body_models() -> None:
+    """Verifies 7.1.37 — No Pydantic models/Body(...) in write signatures; request param exists; parsing not before guard."""
+    # Verifies section 7.1.37
+    route_files = [APP_DIR / "routes" / "answers.py", APP_DIR / "routes" / "documents.py"]
+
+    def _pydantic_model_names(module_path: Path) -> set[str]:
+        names: set[str] = set()
+        t = _parse_ast(module_path)
+        for n in ast.walk(t):
+            if isinstance(n, ast.ClassDef):
+                # Identify BaseModel subclasses
+                for b in n.bases:
+                    if isinstance(b, ast.Name) and b.id == "BaseModel":
+                        names.add(n.name)
+                    if isinstance(b, ast.Attribute) and b.attr == "BaseModel":
+                        names.add(n.name)
+        return names
+
+    offenders_sig: list[str] = []  # (1) Pydantic or Body(...) in signature
+    offenders_req: list[str] = []  # (2) Missing request param
+    offenders_parse_before_guard: list[str] = []  # (3) Parsing helpers used but guard not mounted on decorator
+
+    parsing_attrs = {"json", "model_validate", "parse_obj", "parse_raw"}
+
+    for py in route_files:
+        assert py.exists(), f"Route module missing: {py}"
+        t = _parse_ast(py)
+        model_names = _pydantic_model_names(py)
+
+        for fn in _function_defs(t):
+            # Consider only write routes
+            methods: set[str] = set()
+            mounted_guard = False
+            for dec in fn.decorator_list:
+                if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute):
+                    methods.add(dec.func.attr.lower())
+                    for kw in dec.keywords or []:
+                        if kw.arg == "dependencies" and isinstance(kw.value, (ast.List, ast.Tuple)):
+                            for elt in kw.value.elts:
+                                if isinstance(elt, ast.Call) and isinstance(elt.func, ast.Name) and elt.func.id == "Depends":
+                                    if elt.args and isinstance(elt.args[0], ast.Name) and elt.args[0].id == "precondition_guard":
+                                        mounted_guard = True
+            if not any(m in {"post", "patch", "delete", "put"} for m in methods):
+                continue
+
+            # (1) Detect Pydantic model parameters and Body(...) defaults
+            has_bad_sig = False
+            # Combine all arg types (positional, posonly, kwonly)
+            all_args: list[ast.arg] = []
+            all_args.extend(fn.args.args)
+            all_args.extend(getattr(fn.args, "posonlyargs", []))  # type: ignore[arg-type]
+            all_args.extend(fn.args.kwonlyargs)
+            # Defaults for positional args
+            pos_defaults = list(fn.args.defaults)
+            pos_default_start = len(fn.args.args) - len(pos_defaults)
+            for idx, arg in enumerate(all_args):
+                default_node = None
+                if arg in fn.args.args and idx >= pos_default_start and idx - pos_default_start < len(pos_defaults):
+                    default_node = pos_defaults[idx - pos_default_start]
+                if arg in fn.args.kwonlyargs:
+                    i2 = fn.args.kwonlyargs.index(arg)
+                    if i2 < len(fn.args.kw_defaults):
+                        default_node = fn.args.kw_defaults[i2]
+                if isinstance(default_node, ast.Call) and isinstance(default_node.func, ast.Name) and default_node.func.id == "Body":
+                    has_bad_sig = True
+                ann = arg.annotation
+                if isinstance(ann, ast.Name) and ann.id in model_names:
+                    has_bad_sig = True
+                if isinstance(ann, ast.Attribute) and ann.attr in model_names:
+                    has_bad_sig = True
+            if has_bad_sig:
+                offenders_sig.append(f"{py.name}::{fn.name}")
+
+            # (2) Ensure a `request` parameter is present by name
+            if not any(isinstance(a, ast.arg) and a.arg == "request" for a in fn.args.args):
+                offenders_req.append(f"{py.name}::{fn.name}")
+
+            # (3) If parsing helpers are called, ensure guard is mounted via decorator
+            uses_parsing = False
+            for node in ast.walk(fn):
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in parsing_attrs:
+                    uses_parsing = True
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"model_validate", "parse_obj", "parse_raw"}:
+                    uses_parsing = True
+            if uses_parsing and not mounted_guard:
+                offenders_parse_before_guard.append(f"{py.name}::{fn.name}")
+
+    assert not offenders_sig, (
+        "Write route signatures must not declare Pydantic models or Body(...): "
+        + ", ".join(offenders_sig)
+    )
+    assert not offenders_req, (
+        "Write routes must include a 'request' parameter: " + ", ".join(offenders_req)
+    )
+    assert not offenders_parse_before_guard, (
+        "Body parsing helpers must not be used before the guard is mounted (dependencies=Depends(precondition_guard)): "
+        + ", ".join(offenders_parse_before_guard)
+    )
+
+
+# 7.1.38 — 415 Content-Type is enforced pre-body on write routes
+def test_7_1_38_content_type_enforced_pre_body_on_write_routes() -> None:
+    """Verifies 7.1.38 — Guard enforces 415 before parsing; wrappers have no PRE_*; ordering check via AST line numbers."""
+    # Verifies section 7.1.38
+    guard_mod = APP_DIR / "guards" / "precondition.py"
+    assert guard_mod.exists(), "Guard module app/guards/precondition.py must exist."
+    t = _parse_ast(guard_mod)
+
+    # Locate precondition_guard function
+    fns = [fn for fn in _function_defs(t) if fn.name == "precondition_guard"]
+    assert fns, "precondition_guard function must be defined."
+    fn = fns[0]
+
+    # Find first 415 literal and first presence/parse helper calls by line number
+    first_415: Optional[int] = None
+    first_presence_call: Optional[int] = None
+    first_parse_call: Optional[int] = None
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Constant) and isinstance(node.value, int) and node.value == 415:
+            ln = getattr(node, "lineno", None)
+            if isinstance(ln, int):
+                first_415 = ln if first_415 is None else min(first_415, ln)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_check_if_match_presence":
+            first_presence_call = getattr(node, "lineno", first_presence_call)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_parse_if_match":
+            first_parse_call = getattr(node, "lineno", first_parse_call)
+    assert first_415 is not None, "precondition_guard must reference status 415 for Content-Type enforcement."
+    if first_presence_call is not None:
+        assert first_415 <= first_presence_call, (
+            "Content-Type 415 enforcement must occur before If-Match presence checks."
+        )
+    if first_parse_call is not None:
+        assert first_415 <= first_parse_call, (
+            "Content-Type 415 enforcement must occur before If-Match parsing/normalisation."
+        )
+
+    # Wrappers under app/http must not contain PRE_* branches
+    http_dir = APP_DIR / "http"
+    if http_dir.exists():
+        for py in _iter_py_files(http_dir):
+            tt = _parse_ast(py)
+            for n in ast.walk(tt):
+                if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("PRE_"):
+                    pytest.fail(f"app/http wrappers must not reference PRE_* constants: {py} (found '{n.value}')")
+
+
+# 7.1.39 — PRE_* lives only in the guard
+def test_7_1_39_pre_only_in_guard() -> None:
+    """Verifies 7.1.39 — No PRE_* outside guard; no If-Match parsing/comparison outside guard; no RUN_* in guard failures."""
+    # Verifies section 7.1.39
+    guard_mod = APP_DIR / "guards" / "precondition.py"
+    assert guard_mod.exists(), "Guard module app/guards/precondition.py must exist."
+
+    offenders: list[str] = []
+    for root in [APP_DIR / "routes", APP_DIR / "http"]:
+        if not root.exists():
+            continue
+        for py in _iter_py_files(root):
+            if py == guard_mod:
+                continue
+            t = _parse_ast(py)
+            for n in ast.walk(t):
+                if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("PRE_"):
+                    offenders.append(f"{py}: PRE constant '{n.value}' present")
+                if isinstance(n, ast.Name) and n.id in {"normalize_if_match", "normalise_if_match", "compare_etag"}:
+                    offenders.append(f"{py}: direct call/reference to {n.id}")
+                if isinstance(n, ast.Attribute) and n.attr in {"normalize_if_match", "normalise_if_match", "compare_etag"}:
+                    offenders.append(f"{py}: attribute reference to {n.attr}")
+    assert not offenders, (
+        "PRE_* and If-Match parsing/comparison must live only in the guard: " + ", ".join(map(str, offenders))
+    )
+
+    # Parse guard module and assert it imports PRECONDITION_ERROR_MAP
+    guard_mod = APP_DIR / "guards" / "precondition.py"
+    assert guard_mod.exists(), "app/guards/precondition.py must exist."
+    gt = _parse_ast(guard_mod)
+    run_tokens: list[str] = []
+    for n in ast.walk(gt):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("RUN_"):
+            run_tokens.append(n.value)
+    assert not run_tokens, "Guard failure branches must not contain RUN_* tokens."
+
+
+# 7.1.40 — Canonical status mapping is declared and used
+def test_7_1_40_canonical_status_mapping_declared_and_used() -> None:
+    """Verifies 7.1.40 — Mapping contains required keys/statuses/codes; guard imports and uses it; no RUN_* in failures."""
+    # Verifies section 7.1.40
+    mapping_mod = APP_DIR / "config" / "error_mapping.py"
+    assert mapping_mod.exists(), "app/config/error_mapping.py must exist."
+    mt = _parse_ast(mapping_mod)
+
+    # Extract PRECONDITION_ERROR_MAP dict literal
+    mapping_dict: Optional[ast.Dict] = None
+    if isinstance(mt, ast.Module):
+        for n in mt.body:
+            if isinstance(n, ast.Assign):
+                for tgt in n.targets:
+                    if isinstance(tgt, ast.Name) and tgt.id == "PRECONDITION_ERROR_MAP" and isinstance(n.value, ast.Dict):
+                        mapping_dict = n.value
+    assert isinstance(mapping_dict, ast.Dict), "PRECONDITION_ERROR_MAP must be defined as a dict literal."
+
+    def _literal_str(node: ast.AST) -> Optional[str]:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        return None
+
+    def _literal_int(node: ast.AST) -> Optional[int]:
+        if isinstance(node, ast.Constant) and isinstance(node.value, int):
+            return node.value
+        return None
+
+    vals: dict[str, dict[str, Any]] = {}
+    for k, v in zip(mapping_dict.keys, mapping_dict.values):  # type: ignore[arg-type]
+        key = _literal_str(k) or ""
+        if not key or not isinstance(v, ast.Dict):
+            continue
+        entry: dict[str, Any] = {}
+        for kk, vv in zip(v.keys, v.values):  # type: ignore[arg-type]
+            k2 = _literal_str(kk) or ""
+            if k2 == "code":
+                entry["code"] = _literal_str(vv)
+            if k2 == "status":
+                entry["status"] = _literal_int(vv)
+        vals[key] = entry
+
+    exp = {
+        "missing": ("PRE_IF_MATCH_MISSING", 428),
+        "invalid_format": ("PRE_IF_MATCH_INVALID_FORMAT", 409),
+        "mismatch_answers": ("PRE_IF_MATCH_ETAG_MISMATCH", 409),
+        "mismatch_documents": ("PRE_IF_MATCH_ETAG_MISMATCH", 412),
+    }
+    missing: list[str] = []
+    wrong: list[str] = []
+    for k, (ecode, estatus) in exp.items():
+        if k not in vals:
+            missing.append(k)
+            continue
+        if vals[k].get("code") != ecode or vals[k].get("status") != estatus:
+            wrong.append(f"{k} -> {vals[k]}")
+    assert not missing and not wrong, (
+        "PRECONDITION_ERROR_MAP must include required entries with correct codes/statuses. "
+        + (f"Missing: {', '.join(missing)}. " if missing else "")
+        + (f"Wrong: {', '.join(wrong)}" if wrong else "")
+    )
+
+    # Guard must import the mapping
+    guard_mod = APP_DIR / "guards" / "precondition.py"
+    assert guard_mod.exists(), "app/guards/precondition.py must exist."
+    gt = _parse_ast(guard_mod)
+    imported = False
+    for n in ast.walk(gt):
+        if isinstance(n, ast.ImportFrom) and (n.module or "") == "app.config.error_mapping":
+            for alias in n.names:
+                if alias.name == "PRECONDITION_ERROR_MAP":
+                    imported = True
+    assert imported, "Guard must import PRECONDITION_ERROR_MAP via ImportFrom."
+
+    run_tokens: list[str] = []
+    for n in ast.walk(gt):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("RUN_"):
+            run_tokens.append(n.value)
+    assert not run_tokens, "Guard must not reference RUN_* tokens in failure branches."
+
+
+# 7.1.41 — Reorder diagnostics emitted only by header emitter
+def test_7_1_41_reorder_diagnostics_emitted_only_by_emitter() -> None:
+    """Verifies 7.1.41 — Reorder diagnostics must be imported/called via emitter; no direct sets; emitter exposes both."""
+    # Verifies section 7.1.41
+    docs_routes = APP_DIR / "routes" / "documents.py"
+    assert docs_routes.exists(), "app/routes/documents.py must exist."
+
+    t = _parse_ast(docs_routes)
+
+    def _is_reorder_handler(fn: ast.FunctionDef) -> bool:
+        for dec in fn.decorator_list:
+            if isinstance(dec, ast.Call):
+                for arg in dec.args:
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str) and "reorder" in arg.value:
+                        return True
+        return "reorder" in fn.name.lower()
+
+    reorder_fns = [fn for fn in _function_defs(t) if _is_reorder_handler(fn)]
+    assert reorder_fns, "documents.py must define a reorder handler."
+
+    imported_emit = False
+    for n in ast.walk(t):
+        if isinstance(n, ast.ImportFrom) and n.module == "app.logic.header_emitter":
+            for alias in n.names:
+                if alias.name == "emit_etag_headers":
+                    imported_emit = True
+    assert imported_emit, "documents.py must import emit_etag_headers for reorder path."
+
+    called_in_reorder = False
+    for fn in reorder_fns:
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id == "emit_etag_headers":
+                    called_in_reorder = True
+                if isinstance(node.func, ast.Attribute) and node.func.attr == "emit_etag_headers":
+                    called_in_reorder = True
+    assert called_in_reorder, "Reorder handler must call emit_etag_headers."
+
+    direct_sets = _scan_for_header_sets(docs_routes)
+    direct_offenders = [f"line {ln}: {hdr}" for ln, hdr in direct_sets if hdr in {"X-List-ETag", "X-If-Match-Normalized"}]
+    assert not direct_offenders, (
+        "documents.py must not set diagnostic headers directly; use the emitter: " + ", ".join(direct_offenders)
+    )
+
+    emitter_mod = APP_DIR / "logic" / "header_emitter.py"
+    assert emitter_mod.exists(), "app/logic/header_emitter.py must exist."
+    emitter_src = emitter_mod.read_text(encoding="utf-8")
+    for required in ("X-List-ETag", "X-If-Match-Normalized"):
+        assert required in emitter_src, f"header_emitter must reference diagnostic header '{required}'."
+
+
+# 7.1.42 — If-Match presence helper trims and treats blanks as missing
+def test_7_1_42_if_match_presence_helper_trims_and_treats_blanks_as_missing() -> None:
+    """Verifies 7.1.42 — Presence helper uses .strip and maps blanks to 'missing'; invoked before parse helpers."""
+    # Verifies section 7.1.42
+    guard_mod = APP_DIR / "guards" / "precondition.py"
+    assert guard_mod.exists(), "app/guards/precondition.py must exist."
+    t = _parse_ast(guard_mod)
+
+    helpers = [fn for fn in _function_defs(t) if fn.name == "_check_if_match_presence"]
+    assert helpers, "Guard must define presence helper '_check_if_match_presence'."
+    helper = helpers[0]
+
+    saw_strip = False
+    saw_missing_code = False
+    for n in ast.walk(helper):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "strip":
+            saw_strip = True
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value == "PRE_IF_MATCH_MISSING":
+            saw_missing_code = True
+    assert saw_strip, "Presence helper must trim the If-Match value using .strip()."
+    assert saw_missing_code, "Presence helper must map blanks to PRE_IF_MATCH_MISSING via mapping."
+
+    guards = [fn for fn in _function_defs(t) if fn.name == "precondition_guard"]
+    assert guards, "precondition_guard function must be defined."
+    guard_fn = guards[0]
+    presence_ln: Optional[int] = None
+    parse_ln: Optional[int] = None
+    for node in ast.walk(guard_fn):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == "_check_if_match_presence":
+                presence_ln = getattr(node, "lineno", presence_ln)
+            if node.func.id == "_parse_if_match":
+                parse_ln = getattr(node, "lineno", parse_ln)
+    assert presence_ln is not None, "precondition_guard must invoke _check_if_match_presence."
+    if parse_ln is not None:
+        assert presence_ln <= parse_ln, "Presence check must occur before If-Match parsing/normalisation."

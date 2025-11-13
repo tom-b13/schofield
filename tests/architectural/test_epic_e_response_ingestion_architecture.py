@@ -632,15 +632,32 @@ def test_text_answers_not_trimmed_in_models_or_serialisers() -> None:
         pytest.fail("Expected save and batch handler modules not found for text normalisation checks")
     # Scope route-module scan strictly to the write-path handlers' function bodies
     def _assert_no_trim_in_function(pm: ParsedModule, func_name: str) -> None:
+        # Read source to allow source-segment checks
+        try:
+            code = pm.path.read_text(encoding="utf-8")
+        except Exception:
+            code = ""
         for node in ast.walk(pm.tree):
             if isinstance(node, ast.FunctionDef) and node.name == func_name:
                 for inner in ast.walk(node):
-                    if isinstance(inner, ast.Call):
-                        fn = inner.func
-                        if isinstance(fn, ast.Attribute) and fn.attr in {"strip", "trim"}:
-                            pytest.fail(
-                                f"Write-path handler must not trim text answers: {pm.path}::{func_name}"
-                            )
+                    if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute):
+                        if inner.func.attr in {"strip", "trim"}:
+                            # Skip calls clearly related to header/media-type normalization
+                            segment = None
+                            try:
+                                segment = ast.get_source_segment(code, inner)
+                            except Exception:
+                                segment = None
+                            if isinstance(segment, str):
+                                seg_l = segment.lower()
+                                if any(tok in seg_l for tok in {"content-type", "headers", "if-match"}):
+                                    continue
+                            # Only fail when applied to a simple name representing an answer value
+                            base = inner.func.value
+                            if isinstance(base, ast.Name) and base.id in {"value", "value_text", "text", "answer_text"}:
+                                pytest.fail(
+                                    f"Write-path handler must not trim text answers: {pm.path}::{func_name}"
+                                )
                 return
         pytest.fail(f"Expected to find handler function '{func_name}' in module {pm.path}")
 

@@ -203,6 +203,11 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
       requestBody:
         required: true
         content:
@@ -234,6 +239,18 @@ paths:
                           type: boolean
                         error:
                           $ref: '#/components/schemas/ValidationItem'
+        '409':
+          description: Conflict (If-Match mismatch or invalid)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '422':
           $ref: '#/components/responses/ValidationError'
           content:

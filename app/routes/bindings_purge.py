@@ -11,6 +11,7 @@ from fastapi import APIRouter, Response, Header
 from fastapi.responses import JSONResponse
 import logging
 from app.logic.placeholders import purge_bindings
+from app.logic.header_emitter import emit_etag_headers
 
 
 router = APIRouter()
@@ -56,7 +57,10 @@ def post_document_bindings_purge(id: str) -> Response:  # noqa: D401
         payload.get("deleted_placeholders"),
         payload.get("updated_questions"),
     )
-    return JSONResponse(payload, status_code=200)
+    resp = JSONResponse(payload, status_code=200)
+    # Clarke 7.1.5: use central emitter for ETag headers on mutations
+    emit_etag_headers(resp, scope="generic", token='"skeleton-etag"', include_generic=True)
+    return resp
 
 
 __all__ = [

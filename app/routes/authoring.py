@@ -17,13 +17,6 @@ from app.logic.request_replay import (
     check_replay_before_write,
     store_replay_after_success,
 )
-from app.logic.etag import (
-    compare_etag,
-    compute_questionnaire_etag_for_authoring,
-    compute_authoring_screen_etag,
-    compute_authoring_screen_etag_from_order,
-    compute_authoring_question_etag,
-)
 from app.logic.header_emitter import emit_etag_headers, SCOPE_TO_HEADER
 from app.logic.order_sequences import reindex_screens, reindex_questions, reindex_screens_move
 from app.logic.repository_screens import update_screen_title
@@ -42,6 +35,17 @@ router = APIRouter(prefix="/authoring")
 logger = logging.getLogger(__name__)
 
 
+def _etag_equal(current: Optional[str], incoming: Optional[str]) -> bool:
+    try:
+        c = "" if current is None else str(current)
+        i = "" if incoming is None else str(incoming).strip().strip('"')
+        if i == "*":
+            return True
+        return bool(c) and c == i
+    except Exception:
+        return False
+
+
 def _problem_not_implemented(detail: str) -> JSONResponse:
     body = {
         "type": "about:blank",
@@ -54,6 +58,28 @@ def _problem_not_implemented(detail: str) -> JSONResponse:
 
 
 # Phase-0 authoring endpoints for Epic K: domain-only ETag emission
+def compute_authoring_screen_etag_from_order(screen_id: str, order: int) -> str:
+    import hashlib
+    token = f"{screen_id}|{int(order)}".encode("utf-8")
+    return f'W/"{hashlib.sha1(token).hexdigest()}"'
+
+
+def compute_authoring_screen_etag(screen_key: str, title: str, order: int) -> str:
+    import hashlib
+    token = f"{screen_key}|{title}|{int(order)}".encode("utf-8")
+    return f'W/"{hashlib.sha1(token).hexdigest()}"'
+
+
+def compute_authoring_question_etag(question_id: str, question_text: str, order: int) -> str:
+    import hashlib
+    token = f"{question_id}|{question_text}|{int(order)}".encode("utf-8")
+    return f'W/"{hashlib.sha1(token).hexdigest()}"'
+
+
+def compute_questionnaire_etag_for_authoring(questionnaire_id: str) -> str:
+    import hashlib
+    token = f"questionnaire:{questionnaire_id}".encode("utf-8")
+    return f'W/"{hashlib.sha1(token).hexdigest()}"'
 @router.patch("/screens/{screen_key}")
 def authoring_patch_screen(screen_key: str, response: Response) -> JSONResponse:
     token = compute_authoring_screen_etag_from_order(str(screen_key), 0)
@@ -399,7 +425,7 @@ async def update_screen(
     # Compute current Screen-ETag for If-Match enforcement
     current_etag = compute_authoring_screen_etag(db_skey, cur_title, int(cur_order))
     # Clarke instrumentation: log received header, computed ETag, and compare outcome
-    _match = compare_etag(current_etag, if_match)
+    _match = _etag_equal(current_etag, if_match)
     logger.info(
         "update_screen.precondition if_match=%s current_etag=%s match=%s",
         if_match,
@@ -527,10 +553,10 @@ async def update_question_position(
     qtext = str(meta.get("question_text") or "")
     cur_order = int(meta.get("question_order") or 0)
 
-    # Basic precondition: build current ETag and compare (wildcard supported via compare_etag in update_question)
+    # Basic precondition: build current ETag and compare (wildcard supported)
     current_etag = compute_authoring_question_etag(question_id, qtext, int(cur_order))
     # Clarke instrumentation: log If-Match, current_etag, and compare outcome
-    _match = compare_etag(current_etag, if_match)
+    _match = _etag_equal(current_etag, if_match)
     logger.info(
         "update_question_position.precondition question_id=%s if_match=%s current_etag=%s match=%s",
         question_id,
@@ -806,7 +832,7 @@ async def update_question_visibility(
     # If-Match precondition based on current entity tag
     current_etag = compute_authoring_question_etag(question_id, cur_text, int(cur_order))
     # Clarke instrumentation: log ETag ingredients and compare outcome
-    _match = compare_etag(current_etag, if_match)
+    _match = _etag_equal(current_etag, if_match)
     logger.info(
         "update_question_visibility.precondition question_id=%s if_match=%s current_etag=%s match=%s",
         question_id,

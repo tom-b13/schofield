@@ -14,7 +14,6 @@ from app.logic.repository_screens import (
     get_screen_key_for_question as _screen_key_from_screens,
 )
 import json
-import uuid
 import logging
 import sys
 
@@ -44,17 +43,6 @@ try:
 except Exception:
     pass
 
-# Minimal default mapping for Epic E tests when DB metadata is unavailable.
-_FALLBACK_SCREEN_BY_QID: Dict[str, str] = {
-    # Number-kind question used in integration tests
-    "11111111-1111-1111-1111-111111111111": "profile",
-    # Include: 22222222-2222-2222-2222-222222222222, 33333333-3333-3333-3333-333333333333, 44444444-4444-4444-4444-444444444444
-    "22222222-2222-2222-2222-222222222222": "profile",
-    "33333333-3333-3333-3333-333333333333": "profile",
-    "44444444-4444-4444-4444-444444444444": "profile",
-    # Clarke: ensure question_id maps to the specific screen used by GET
-    "33333333-3333-3333-3333-333333333331": "22222222-2222-2222-2222-222222222222",
-}
 
 def _bump_screen_version(response_set_id: str, screen_key: str) -> None:
     key = (response_set_id, screen_key)
@@ -110,39 +98,8 @@ def get_screen_key_for_question(question_id: str) -> str | None:
             "secondary screen_key probe failed for %s", question_id, exc_info=True
         )
 
-    # 3) Final fallback mapping for skeleton or metadata-light runs
-    fallback = _FALLBACK_SCREEN_BY_QID.get(question_id)
-    if not fallback:
-        # Epic K Phase-0 fallback for functional parity: resolve known test id
-        # to its GET screen key when metadata is unavailable.
-        if str(question_id) == "q_001":
-            return "welcome"
-        return None
-    # If the fallback resembles a UUID, translate it to a canonical screen_key
-    try:
-        uuid.UUID(str(fallback))
-        try:
-            eng = get_engine()
-            with eng.connect() as conn:
-                row = conn.execute(
-                    sql_text("SELECT screen_key FROM screen WHERE screen_id = :sid"),
-                    {"sid": str(fallback)},
-                ).fetchone()
-            if row and row[0]:
-                return str(row[0])
-            # If not resolvable, use a stable, explicit key (avoid mis-mapping)
-            return "profile"
-        except Exception:
-            logger.error(
-                "fallback screen_id resolution failed for %s -> %s",
-                question_id,
-                fallback,
-                exc_info=True,
-            )
-            return "profile"
-    except Exception:
-        # Not a UUID-like token; treat as canonical screen_key
-        return str(fallback)
+    # No test-coupled fallback: when metadata cannot be resolved, return None
+    return None
 
 
 def get_answer_kind_for_question(question_id: str) -> str | None:
@@ -156,14 +113,7 @@ def get_answer_kind_for_question(question_id: str) -> str | None:
         return str(row[0]) if row else None
     except Exception:
         logger.error("get_answer_kind_for_question failed for %s", question_id, exc_info=True)
-        # Provide explicit fallback kinds for Epic E test question_ids when DB metadata is unavailable.
-        fallback_kinds = {
-            "11111111-1111-1111-1111-111111111111": "number",
-            "22222222-2222-2222-2222-222222222222": "boolean",
-            "33333333-3333-3333-3333-333333333333": "enum_single",
-            "44444444-4444-4444-4444-444444444444": "short_string",
-        }
-        return fallback_kinds.get(question_id)
+        return None
 
 
 def get_existing_answer(response_set_id: str, question_id: str) -> tuple | None:

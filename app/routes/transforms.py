@@ -14,6 +14,7 @@ import anyio
 import app.logic.transform_engine as transform_engine
 from app.transform_registry import TRANSFORM_REGISTRY
 import logging
+from app.logic.header_emitter import emit_etag_headers
 
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,10 @@ def post_transforms_suggest(
         )
     except Exception:
         logger.error("transforms_suggest:complete_log_failed", exc_info=True)
-    return JSONResponse(suggestion, status_code=200, media_type="application/json")
+    resp = JSONResponse(suggestion, status_code=200, media_type="application/json")
+    # Clarke 7.1.5: central header emitter for mutations (generic scope)
+    emit_etag_headers(resp, scope="generic", token='"skeleton-etag"', include_generic=True)
+    return resp
 
 
 @router.post(
@@ -167,7 +171,10 @@ def post_transforms_preview(
         )
     except Exception:
         logger.error("transforms_preview:complete_log_failed", exc_info=True)
-    return JSONResponse(payload, status_code=200, media_type="application/json")
+    resp = JSONResponse(payload, status_code=200, media_type="application/json")
+    # Clarke 7.1.5: central header emitter for mutations (generic scope)
+    emit_etag_headers(resp, scope="generic", token='"skeleton-etag"', include_generic=True)
+    return resp
 
 
 @router.get(

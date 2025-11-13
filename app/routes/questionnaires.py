@@ -10,7 +10,6 @@ import io
 
 from app.logic.csv_io import parse_import_csv, build_export_csv
 from app.logic.header_emitter import emit_etag_headers, SCOPE_TO_HEADER
-from app.logic.etag import compute_questionnaire_etag_for_authoring
 from app.logic.repository_questionnaires import (
     get_questionnaire_metadata,
     questionnaire_exists,
@@ -169,10 +168,7 @@ def export_questionnaire(id: str):
             pass
     resp = Response(content=data, media_type="text/csv; charset=utf-8")
     # Compute and emit ETag headers defensively; ensure both Questionnaire-ETag and ETag exist.
-    try:
-        q_etag = compute_questionnaire_etag_for_authoring(id)
-    except Exception:
-        q_etag = f"questionnaire:{id}"
+    q_etag = f"questionnaire:{id}"
     try:
         emit_etag_headers(resp, scope="questionnaire", token=q_etag, include_generic=True)
     except Exception:
