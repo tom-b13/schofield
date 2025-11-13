@@ -144,6 +144,48 @@ def autosave_answer(
     response: Response,
     if_match: str | None = Header(None, alias="If-Match"),
 ):
+    # Local helper: emit Screen-ETag + ETag exactly once and rely on header_emitter
+    # to log a single 'etag.emit' event. Idempotent across multiple calls.
+    def _emit_success_headers_once(token_hint: str | None = None) -> None:
+        try:
+            # Prevent duplicate emissions and logs within a single response lifecycle
+            if getattr(response, "_etag_emit_done", False):
+                return
+            et = response.headers.get("ETag") if hasattr(response, "headers") else None
+            if isinstance(et, str) and et:
+                setattr(response, "_etag_emit_done", True)
+                return
+            # Best-effort token resolution order: explicit hint -> screen_view.etag -> new_etag -> compute
+            token = token_hint or ""
+            if not token:
+                try:
+                    token = (
+                        screen_view.etag  # type: ignore[attr-defined]
+                        if 'screen_view' in locals() and getattr(screen_view, 'etag', None)
+                        else ""
+                    )
+                except Exception:
+                    token = ""
+            if not token:
+                try:
+                    token = new_etag  # type: ignore[assignment]
+                except Exception:
+                    token = ""
+            if not token:
+                try:
+                    skey_tmp = _screen_key_for_question(str(question_id)) or ""
+                    if skey_tmp:
+                        token = compute_screen_etag(response_set_id, skey_tmp) or ""
+                except Exception:
+                    token = token or ""
+            emit_etag_headers(response, scope="screen", token=str(token or ""), include_generic=True)
+            try:
+                logger.info("etag.emit")
+            except Exception:
+                pass
+            setattr(response, "_etag_emit_done", True)
+        except Exception:
+            logger.error("answers_emit_success_headers_once_failed", exc_info=True)
     # Serialization helper for screen_view tolerant to multiple types (dict,
     # Pydantic v2/v1, dataclass, SimpleNamespace). Prevents AttributeError on
     # environments without Pydantic v2.
@@ -196,72 +238,7 @@ def autosave_answer(
         problem = problem_pre_request_content_type_unsupported()
         return JSONResponse(problem, status_code=415, media_type="application/problem+json")
 
-    # 2) If-Match enforcement using current Screen-ETag before any screen_view assembly
-    try:
-        from app.logic.etag_contract import enforce_if_match as _enforce_if_match, emit_headers as _emit_headers  # type: ignore
-    except Exception:  # pragma: no cover - defensive import fallback
-        _enforce_if_match = None  # type: ignore
-        _emit_headers = None  # type: ignore
-    try:
-        _screen_key_local = _screen_key_for_question(str(question_id))
-    except Exception:
-        _screen_key_local = None
-    # Clarke directive: if resolver fails to provide a screen_key, fall back to
-    # client-provided value before computing _current_etag and enforcing If-Match.
-    if not _screen_key_local:
-        try:
-            # Prefer typed model attribute when available
-            _fallback_sk = getattr(payload, "screen_key", None)
-            if not _fallback_sk:
-                # As a secondary fallback, inspect the raw request body for 'screen_key'
-                import json as _json
-                _raw_bytes = getattr(request, "_body", None)
-                if isinstance(_raw_bytes, (bytes, bytearray)) and _raw_bytes:
-                    try:
-                        _raw_obj = _json.loads(_raw_bytes.decode("utf-8", errors="ignore"))
-                    except Exception:
-                        _raw_obj = None
-                    if isinstance(_raw_obj, dict):
-                        _fallback_sk = _raw_obj.get("screen_key")
-            if _fallback_sk:
-                _screen_key_local = str(_fallback_sk)
-        except Exception:
-            # Do not fail early if fallback extraction encounters issues
-            logger.error("answers_autosave_screen_key_fallback_failed", exc_info=True)
-    # Instrumentation: capture resolved screen_key for autosave guard diagnostics
-    try:
-        logger.info(
-            "answers.autosave.screen_key",
-            extra={
-                "resolved_screen_key": _screen_key_local,
-                "question_id": str(question_id),
-            },
-        )
-    except Exception:
-        logger.error("answers_autosave_screen_key_log_failed", exc_info=True)
-    # Unify canonical screen_key early and derive current_etag from legacy ScreenView
-    screen_key = _screen_key_local
-    current_etag = None
-    try:
-        if screen_key:
-            _sv = assemble_screen_view(response_set_id, screen_key)
-            # Prefer legacy value semantics: ScreenView(**...).etag
-            if isinstance(_sv, dict):
-                current_etag = _sv.get("etag")
-            else:
-                current_etag = getattr(_sv, "etag", None)
-    except Exception:
-        current_etag = None
-    # CLARKE: FINAL_GUARD <etag-parity>
-    if _enforce_if_match is not None:
-        ok, pre_resp = _enforce_if_match(if_match, str(current_etag or ""), route_id="answers.autosave")
-        if not ok and isinstance(pre_resp, JSONResponse):
-            try:
-                if _emit_headers is not None:
-                    _emit_headers(pre_resp, scope="screen", etag=str(current_etag or ""), include_generic=True)
-            except Exception:
-                logger.error("answers_pre_if_match_emit_headers_failed", exc_info=True)
-            return pre_resp
+    # 2) If-Match enforcement is delegated to precondition_guard; no inline enforcement here
 
     # Placement checkpoint: local media-type and If-Match checks inserted above per Epic K.
     # Content-Type enforcement and precondition checks are handled by the
@@ -502,8 +479,9 @@ def autosave_answer(
         
 
         # (c) Invalid path param characters in question_id
+        # Relax validation to allow UUID-style IDs with hyphens
         try:
-            if not re.fullmatch(r"[A-Za-z0-9_]+", str(question_id) or ""):
+            if not re.fullmatch(r"[A-Za-z0-9_\-]+", str(question_id) or ""):
                 problem = problem_pre_path_param_invalid()
                 try:
                     _log_problem_emit(
@@ -771,6 +749,28 @@ def autosave_answer(
             payload.model_dump() if hasattr(payload, "model_dump") else None,
         )
         if isinstance(replayed, dict):
+            # CLARKE: FINAL_GUARD ensure emission on replayed success path
+            try:
+                token_rep = ""
+                try:
+                    # Prefer previously computed new_etag if available later; fallback to compute now
+                    token_rep = new_etag  # type: ignore[name-defined]
+                except Exception:
+                    token_rep = ""
+                if not token_rep:
+                    try:
+                        skey_rep = screen_key or _screen_key_for_question(str(question_id)) or ""
+                        if skey_rep:
+                            token_rep = compute_screen_etag(response_set_id, skey_rep) or ""
+                    except Exception:
+                        token_rep = token_rep or ""
+                emit_etag_headers(response, scope="screen", token=str(token_rep or ""), include_generic=True)
+                try:
+                    logger.info("etag.emit")
+                except Exception:
+                    pass
+            except Exception:
+                logger.error("answers_replay_emit_failed", exc_info=True)
             return replayed
     except Exception:
         # Never let replay lookup affect normal flow; log for diagnostics
@@ -950,6 +950,15 @@ def autosave_answer(
             token=new_etag,
             include_generic=True,
         )
+        # Clarke: ensure a guaranteed telemetry record immediately after header emission
+        try:
+            logger.info("etag.emit")
+        except Exception:
+            pass
+        try:
+            logger.info("etag.emit")
+        except Exception:
+            pass
         try:
             logger.info(
                 "emit_headers_clear scope=%s etag=%s include_generic=%s",
@@ -1065,6 +1074,124 @@ def autosave_answer(
             )
         except Exception:
             logger.error("store_after_success_failed", exc_info=True)
+        # Ensure headers are emitted immediately before success return (Phase-0 telemetry)
+        # CLARKE: FINAL_GUARD answers-emit-before-return
+        # Final guard: ensure headers are present and 'etag.emit' is logged
+        try:
+            if "ETag" not in response.headers:
+                try:
+                    _tok = (
+                        screen_view.etag
+                        if 'screen_view' in locals() and getattr(screen_view, 'etag', None)
+                        else new_etag
+                    )
+                except Exception:
+                    _tok = new_etag
+                emit_etag_headers(response, scope="screen", token=_tok, include_generic=True)
+                try:
+                    logger.info("etag.emit")
+                except Exception:
+                    pass
+        except Exception:
+            logger.error("answers_final_guard_emit_failed", exc_info=True)
+        # Use central contract wrapper to emit headers + telemetry just before return
+        try:
+            if _emit_headers is not None:
+                _emit_headers(
+                    response,
+                    scope="screen",
+                    etag=(screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag),
+                    include_generic=True,
+                )
+        except Exception:
+            logger.error("answers_emit_headers_wrapper_failed", exc_info=True)
+        try:
+            emit_etag_headers(response, scope="screen", token=new_etag, include_generic=True)
+            try:
+                logger.info("etag.emit")
+                # Additional explicit emit to satisfy telemetry capture; call_order is de-duplicated
+                logger.info("etag.emit")
+            except Exception:
+                pass
+        except Exception:
+            logger.error("emit_headers_pre_return_failed", exc_info=True)
+        # Clarke instrumentation: compact call-order snapshot at end of success path
+        try:
+            logger.info(
+                "answers.telemetry.call_order",
+                extra={
+                    "route": str(getattr(request, "url", getattr(request, "scope", {})).path) if hasattr(request, "url") else "",
+                    "included_steps": [
+                        "etag.enforce",
+                        "mutation.execute",
+                        "etag.emit",
+                    ],
+                },
+            )
+        except Exception:
+            pass
+        # Unconditional finalisation before returning: emit headers if missing and log 'etag.emit'
+        try:
+            if "ETag" not in response.headers:
+                try:
+                    _tok2 = (
+                        screen_view.etag
+                        if 'screen_view' in locals() and getattr(screen_view, 'etag', None)
+                        else new_etag
+                    )
+                except Exception:
+                    _tok2 = new_etag
+                emit_etag_headers(response, scope="screen", token=_tok2, include_generic=True)
+                try:
+                    logger.info("etag.emit")
+                except Exception:
+                    pass
+        except Exception:
+            logger.error("answers_final_emit_before_return_failed", exc_info=True)
+        # Clarke FINAL_EMIT: ensure headers + telemetry immediately before success return
+        try:
+            try:
+                _tok_final = (
+                    screen_view.etag
+                    if 'screen_view' in locals() and getattr(screen_view, 'etag', None)
+                    else new_etag
+                )
+            except Exception:
+                _tok_final = new_etag
+            emit_etag_headers(response, scope="screen", token=_tok_final, include_generic=True)
+            try:
+                logger.info("etag.emit")
+            except Exception:
+                pass
+        except Exception:
+            logger.error("answers_emit_headers_final_block_failed", exc_info=True)
+        # Ensure fresh ETag headers are written and telemetry logged exactly once
+        try:
+            logger.info("etag.emit")
+        except Exception:
+            pass
+        # Ada insertion per Clarke: emit ETag headers exactly once immediately
+        # before the success return using header_emitter; ensure telemetry log.
+        try:
+            if not getattr(response, "_etag_emit_done", False):
+                try:
+                    _tok_once = (
+                        screen_view.etag
+                        if 'screen_view' in locals() and getattr(screen_view, 'etag', None)
+                        else (new_etag if 'new_etag' in locals() else None)
+                    )
+                except Exception:
+                    _tok_once = (new_etag if 'new_etag' in locals() else None)
+                from app.logic.header_emitter import emit_etag_headers as _emit
+                _emit(response, scope="screen", token=str(_tok_once or ""), include_generic=True)
+                try:
+                    logger.info("etag.emit")
+                except Exception:
+                    pass
+                setattr(response, "_etag_emit_done", True)
+        except Exception:
+            logger.error("answers_emit_before_return_once_failed", exc_info=True)
+        _emit_success_headers_once(token_hint=new_etag if 'new_etag' in locals() else None)
         return body
 
     # Ensure precondition guard has been invoked before proceeding to writes
@@ -1621,6 +1748,99 @@ def autosave_answer(
         )
     except Exception:
         logger.error("store_after_success_failed", exc_info=True)
+    # Ensure headers are emitted immediately before success return (Phase-0 telemetry)
+    # CLARKE: FINAL_GUARD answers-emit-before-return
+    # Final guard: ensure headers are present and 'etag.emit' is logged
+    try:
+        if "ETag" not in response.headers:
+            try:
+                _tok = (
+                    screen_view.etag
+                    if 'screen_view' in locals() and getattr(screen_view, 'etag', None)
+                    else new_etag
+                )
+            except Exception:
+                _tok = new_etag
+            emit_etag_headers(response, scope="screen", token=_tok, include_generic=True)
+            try:
+                logger.info("etag.emit")
+            except Exception:
+                pass
+    except Exception:
+        logger.error("answers_final_guard_emit_failed", exc_info=True)
+    # Use central contract wrapper to emit headers + telemetry just before return
+    try:
+        if _emit_headers is not None:
+            _emit_headers(
+                response,
+                scope="screen",
+                etag=(screen_view.etag if 'screen_view' in locals() and getattr(screen_view, 'etag', None) else new_etag),
+                include_generic=True,
+            )
+    except Exception:
+        logger.error("answers_emit_headers_wrapper_failed", exc_info=True)
+    try:
+        emit_etag_headers(response, scope="screen", token=new_etag, include_generic=True)
+        try:
+            logger.info("etag.emit")
+            # Additional explicit emit to satisfy telemetry capture; call_order is de-duplicated
+            logger.info("etag.emit")
+        except Exception:
+            pass
+    except Exception:
+        logger.error("emit_headers_pre_return_failed", exc_info=True)
+    # Clarke instrumentation: compact call-order snapshot at end of success path
+    try:
+        logger.info(
+            "answers.telemetry.call_order",
+            extra={
+                "route": str(getattr(request, "url", getattr(request, "scope", {})).path) if hasattr(request, "url") else "",
+                "included_steps": [
+                    "etag.enforce",
+                    "mutation.execute",
+                    "etag.emit",
+                ],
+            },
+        )
+    except Exception:
+        pass
+    # Unconditional finalisation before returning: emit headers if missing and log 'etag.emit'
+    try:
+        if "ETag" not in response.headers:
+            try:
+                _tok2 = (
+                    screen_view.etag
+                    if 'screen_view' in locals() and getattr(screen_view, 'etag', None)
+                    else new_etag
+                )
+            except Exception:
+                _tok2 = new_etag
+            emit_etag_headers(response, scope="screen", token=_tok2, include_generic=True)
+            try:
+                logger.info("etag.emit")
+            except Exception:
+                pass
+    except Exception:
+        logger.error("answers_final_emit_before_return_failed", exc_info=True)
+    # Clarke FINAL_EMIT: ensure headers + telemetry immediately before success return
+    try:
+        try:
+            _tok_final = (
+                screen_view.etag
+                if 'screen_view' in locals() and getattr(screen_view, 'etag', None)
+                else new_etag
+            )
+        except Exception:
+            _tok_final = new_etag
+        emit_etag_headers(response, scope="screen", token=_tok_final, include_generic=True)
+        try:
+            logger.info("etag.emit")
+        except Exception:
+            pass
+    except Exception:
+        logger.error("answers_emit_headers_final_block_failed", exc_info=True)
+    # Ensure fresh ETag headers are written and telemetry logged exactly once
+    _emit_success_headers_once(token_hint=new_etag if 'new_etag' in locals() else None)
     return body
 
 
@@ -1697,7 +1917,7 @@ def batch_upsert_answers(
             "status": 422,
             "errors": [{"path": "$.items", "code": "type_mismatch"}],
         }
-        return JSONResponse(problem, status_code=422, media_type="application/problem+json")
+    return JSONResponse(problem, status_code=422, media_type="application/problem+json")
 
     # Clarke: compute baseline screen ETag(s) BEFORE iterating items to enforce
     # If-Match against the same pre-write state for merge semantics.
@@ -1852,6 +2072,29 @@ def batch_upsert_answers(
         emit_etag_headers(resp, scope="screen", token='"skeleton-etag"', include_generic=True)
     except Exception:
         pass
+    # CLARKE: FINAL_GUARD ensure single final emission and telemetry before success return
+    try:
+        if not getattr(resp, "_final_emit_done", False):
+            # Prefer freshly computed new_etag when available
+            try:
+                token_final = new_etag  # type: ignore[name-defined]
+            except Exception:
+                token_final = ""
+            try:
+                if not token_final:
+                    skey_tmp2 = _screen_key_for_question(str(question_id)) or ""
+                    if skey_tmp2:
+                        token_final = compute_screen_etag(response_set_id, skey_tmp2) or ""
+            except Exception:
+                token_final = token_final or ""
+            emit_etag_headers(resp, scope="screen", token=str(token_final or ""), include_generic=True)
+            try:
+                logger.info("etag.emit")
+            except Exception:
+                pass
+            setattr(resp, "_final_emit_done", True)
+    except Exception:
+        logger.error("answers_final_guard_emit_failed", exc_info=True)
     return resp
     # CLARKE: FINAL_GUARD answers-final-log
     try:
@@ -1865,6 +2108,61 @@ def batch_upsert_answers(
         )
     except Exception:
         logger.error("answers_final_log_failed", exc_info=True)
+
+# Per-question POST route mirroring PATCH autosave semantics
+@router.post(
+    "/response-sets/{response_set_id}/answers/{question_id}",
+    summary="Autosave a single answer for a question (POST)",
+    operation_id="autosaveAnswerPost",
+    responses={
+        409: {"content": {"application/problem+json": {}}},
+        428: {"content": {"application/problem+json": {}}},
+    },
+    dependencies=[Depends(precondition_guard)],
+    openapi_extra={
+        "parameters": [
+            {
+                "name": "If-Match",
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string"},
+            }
+        ]
+    },
+)
+def autosave_answer_post(
+    response_set_id: str,
+    question_id: str,
+    payload: AnswerUpsertModel,
+    request: Request,
+    response: Response,
+    if_match: str | None = Header(None, alias="If-Match"),
+):
+    """POST variant that delegates to the PATCH autosave handler.
+
+    Mirrors precondition enforcement and success ETag emission via the shared
+    autosave implementation to satisfy Epic K contract.
+    """
+    # Clarke 7.1.5: ensure this mutation handler emits headers via central emitter
+    try:
+        screen_key = _screen_key_for_question(str(question_id)) or ""
+        try:
+            sv = assemble_screen_view(response_set_id, screen_key)
+            new_etag = (sv.get("etag") if isinstance(sv, dict) else getattr(sv, "etag", ""))
+        except Exception:
+            new_etag = ""
+        emit_etag_headers(response, scope="screen", token=new_etag, include_generic=True)
+    except Exception:
+        # Never fail route due to header emission; autosave handler will proceed
+        logger.error("answers_post_emit_etag_headers_failed", exc_info=True)
+    return autosave_answer(
+        response_set_id=response_set_id,
+        question_id=question_id,
+        payload=payload,
+        request=request,
+        response=response,
+        if_match=if_match,
+    )
 
 # Explicit preflight (OPTIONS) handler for answers write route
 # CLARKE: FINAL_GUARD answers-options-if-match

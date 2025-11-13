@@ -1879,45 +1879,53 @@ def test_7_1_32_guard_enforces_first_failure_precedence() -> None:
     assert guard_fns, "precondition_guard function must be defined."
     gf = guard_fns[0]
 
-    # (1) Verify call order of helpers
+    # (1) Verify call order of helpers using source positions
     required_order = [
         "_check_content_type",
         "_check_if_match_presence",
         "_parse_if_match",
         "_compare_etag",
     ]
-    first_index: dict[str, int] = {}
-    linear_nodes: list[ast.AST] = list(ast.walk(gf))
-    for idx, node in enumerate(linear_nodes):
-        if isinstance(node, ast.Call):
-            name = None
-            if isinstance(node.func, ast.Name):
-                name = node.func.id
-            elif isinstance(node.func, ast.Attribute):
-                name = node.func.attr
-            if name in required_order and name not in first_index:
-                first_index[name] = idx
-    missing = [n for n in required_order if n not in first_index]
+    calls: list[tuple[str, int, int]] = []
+    for n in ast.walk(gf):
+        if isinstance(n, ast.Call):
+            name: Optional[str] = None
+            if isinstance(n.func, ast.Name):
+                name = n.func.id
+            elif isinstance(n.func, ast.Attribute):
+                name = n.func.attr
+            if name in required_order:
+                calls.append((name, getattr(n, "lineno", 10**9), getattr(n, "col_offset", 0)))
+
+    first_pos: dict[str, tuple[int, int]] = {}
+    for name, ln, col in calls:
+        if name not in first_pos:
+            first_pos[name] = (ln, col)
+
+    missing = [n for n in required_order if n not in first_pos]
     assert not missing, f"Guard must call helper(s) in order; missing: {missing}"
-    # Assert increasing order of first occurrences
-    indices = [first_index[n] for n in required_order]
+
+    indices = [first_pos[n] for n in required_order]
     assert indices == sorted(indices), (
         "Guard must call helpers in source order: " + ", ".join(required_order)
     )
 
-    # (2) Early-return or raise present between each check
-    def _has_early_exit(start: int, end: int) -> bool:
-        for node in linear_nodes[start:end]:
+    # (2) Early-return or raise present between each check using line ranges
+    def has_early_exit_between(a_pos: tuple[int, int], b_pos: tuple[int, int]) -> bool:
+        a_ln, _a_col = a_pos
+        b_ln, _b_col = b_pos
+        for node in ast.walk(gf):
             if isinstance(node, (ast.Raise, ast.Return)):
-                return True
+                ln = getattr(node, "lineno", 0)
+                if a_ln < ln < b_ln:
+                    return True
         return False
 
     for i in range(len(required_order) - 1):
         a, b = required_order[i], required_order[i + 1]
-        if a in first_index and b in first_index:
-            assert _has_early_exit(first_index[a], first_index[b]), (
-                f"Expected an early exit (return/raise) after {a} before {b} in guard."
-            )
+        assert has_early_exit_between(first_pos[a], first_pos[b]), (
+            f"Expected an early exit (return/raise) after {a} before {b} in guard."
+        )
 
     # (3) Guard must not set success headers or call emit_etag_headers
     domain_headers = {"ETag", "Screen-ETag", "Question-ETag", "Questionnaire-ETag", "Document-ETag"}

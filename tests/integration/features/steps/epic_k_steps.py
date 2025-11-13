@@ -382,16 +382,30 @@ def epic_k_get_with_vars(context, path: str, tail: str) -> None:
 
 @given('I GET "{path}" and capture the response header "ETag" as "{var_name}"')
 def epic_k_get_and_capture_etag(context, path: str, var_name: str) -> None:
-    _canonical.step_when_get(context, path)  # type: ignore[attr-defined]
-    status = int(getattr(context, "last_response", {}).get("status", 0) or 0)
-    # After primary GET, if status is 404, perform list GET and capture ETag
-    if status == 404:
+    """GET and capture ETag, with special-case for document list etag.
+
+    If the caller asks for a variable containing 'list_etag' while requesting a
+    document resource (not the names listing), fetch '/api/v1/documents/names'
+    instead and capture its ETag as the list token.
+    """
+    key = var_name.replace("\\_", "_")
+    ipath = _canonical._interpolate(path, context)
+    try:
+        ipath = ipath.strip()
+    except Exception:
+        pass
+    if (
+        "list_etag" in key
+        and isinstance(ipath, str)
+        and ipath.startswith("/api/v1/documents/")
+        and not ipath.endswith("/names")
+    ):
         _canonical.step_when_get(context, "/api/v1/documents/names")  # type: ignore[attr-defined]
+    else:
+        _canonical.step_when_get(context, ipath)  # type: ignore[attr-defined]
     headers = getattr(context, "last_response", {}).get("headers", {}) or {}
     val = _canonical._get_header_case_insensitive(headers, "ETag")
     assert isinstance(val, str) and val.strip(), "Expected non-empty ETag header"
-    # Normalize var name (unescape underscores) and store
-    key = var_name.replace("\\_", "_")
     _ensure_vars(context)[key] = val
 
 

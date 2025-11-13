@@ -194,7 +194,11 @@ async def post_placeholders_unbind(
 async def get_question_placeholders(
     id: str, document_id: Optional[str] = None
 ) -> Response:  # noqa: D401
-    """List placeholders for a question, optionally filtered by document_id."""
+    """List placeholders for a question, optionally filtered by document_id.
+
+    Contract: return top-level shape {items, etag} and emit Document-ETag and
+    generic ETag headers equal to body.etag.
+    """
     items: list[Dict[str, Any]] = []
     for rec in PLACEHOLDERS_BY_QUESTION.get(str(id), []) or []:
         if document_id and rec.get("document_id") != document_id:
@@ -215,7 +219,7 @@ async def get_question_placeholders(
     # Keep output stable: order by created_at ascending when available
     items.sort(key=lambda r: r.get("created_at") or "")
     etag = QUESTION_ETAGS.get(str(id)) or 'W/"doc-v1"'
-    body = {"placeholders": {"items": items, "etag": etag}}
+    body = {"items": items, "etag": etag}
     resp = JSONResponse(body, status_code=200)
     emit_etag_headers(resp, scope="document", token=etag, include_generic=True)
     return resp

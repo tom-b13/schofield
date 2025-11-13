@@ -246,9 +246,18 @@ def _normalize_etag_token(value: str | None) -> str:
         if len(t) >= 2 and t[:2].upper() == "W/":
             t = t[2:].lstrip()
 
-        # Expect quoted entity-tag
+        # Accept bare legacy list tokens: unquoted 40-hex digest (Phase-0 compat)
+        # Clarke directive: documents reorder relies on unquoted 40-hex list ETag.
+        # Preserve original bytes/case-insensitivity isn't applicable to hex.
         if not (len(t) >= 2 and t.startswith('"') and t.endswith('"')):
-            # Invalid token shape → ignore
+            try:
+                # Fast-path: strict 40-hex (no spaces)
+                if len(t) == 40 and all(c in '0123456789abcdefABCDEF' for c in t):
+                    return t
+            except Exception:
+                # Defensive: fall through to ignore malformed tokens
+                pass
+            # Non-quoted and not legacy 40-hex → ignore
             continue
 
         inner = t[1:-1]
@@ -274,10 +283,16 @@ def _normalize_etag_token(value: str | None) -> str:
 def normalize_if_match(value: str | None) -> str:
     """Public If-Match/ETag normaliser delegating to the private implementation.
 
-    Architectural single source of truth exposed as a function definition so
-    import scanners can locate exactly one exported normaliser.
+    Explicitly tolerates surrounding whitespace and weak validators with
+    spaces (e.g., ' W/ "Tag" ') and returns the inner opaque token.
     """
-    return _normalize_etag_token(value)
+    if value is None:
+        return ""
+    try:
+        v = value.strip()
+    except Exception:
+        v = value
+    return _normalize_etag_token(v)
 
 
 def compare_etag(current: str | None, if_match: str | None) -> bool:
@@ -286,15 +301,59 @@ def compare_etag(current: str | None, if_match: str | None) -> bool:
     Implements any-match semantics for comma-separated If-Match lists while
     respecting quotes and weak validators. Retains wildcard '*' behaviour and
     empty/malformed handling (treat as non-match).
+    Emits a single structured debug line 'etag.compare' per invocation.
     """
+    logger_local = logger
+    matched = False
+    wildcard_used = False
+    tokens_extracted_count = 0
     # Quick rejects
     if if_match is None:
+        # Log with defaults and return
+        try:
+            logger_local.info(
+                "etag.compare",
+                extra={
+                    "current_norm": _normalize_etag_token(current) if current is not None else "",
+                    "tokens_extracted_count": 0,
+                    "wildcard_used": False,
+                    "matched": False,
+                },
+            )
+        except Exception:
+            pass
         return False
     s = str(if_match).strip()
     if not s:
+        try:
+            logger_local.info(
+                "etag.compare",
+                extra={
+                    "current_norm": _normalize_etag_token(current) if current is not None else "",
+                    "tokens_extracted_count": 0,
+                    "wildcard_used": False,
+                    "matched": False,
+                },
+            )
+        except Exception:
+            pass
         return False
     # Wildcard short-circuit
     if s == "*":
+        wildcard_used = True
+        matched = True
+        try:
+            logger_local.info(
+                "etag.compare",
+                extra={
+                    "current_norm": _normalize_etag_token(current) if current is not None else "",
+                    "tokens_extracted_count": 0,
+                    "wildcard_used": True,
+                    "matched": True,
+                },
+            )
+        except Exception:
+            pass
         return True
 
     # Normalize current tag once (strip weak prefix, quotes)
@@ -320,23 +379,41 @@ def compare_etag(current: str | None, if_match: str | None) -> bool:
                 buf.append(ch)
         if in_quote:
             # Unterminated quote → malformed header; do not match
-            return False
-        parts.append("".join(buf).strip())
+            matched = False
+            parts = []
+        else:
+            parts.append("".join(buf).strip())
     except Exception:
         # Defensive: any parsing error → non-match
-        return False
+        matched = False
+        parts = []
 
     # Evaluate any-match across all valid tokens
-    for raw in parts:
-        if not raw:
-            continue
-        try:
-            token = _normalize_etag_token(raw)
-        except Exception:
-            # Skip malformed token
-            continue
-        if not token:
-            continue
-        if token == current_norm:
-            return True
-    return False
+    if parts:
+        for raw in parts:
+            if not raw:
+                continue
+            try:
+                token = _normalize_etag_token(raw)
+            except Exception:
+                # Skip malformed token
+                continue
+            if not token:
+                continue
+            tokens_extracted_count += 1
+            if token == current_norm:
+                matched = True
+                break
+    try:
+        logger_local.info(
+            "etag.compare",
+            extra={
+                "current_norm": current_norm if 'current_norm' in locals() else "",
+                "tokens_extracted_count": int(tokens_extracted_count),
+                "wildcard_used": bool(wildcard_used),
+                "matched": bool(matched),
+            },
+        )
+    except Exception:
+        pass
+    return matched

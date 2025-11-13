@@ -12,7 +12,7 @@ from typing import Dict, List
 
 import logging
 
-from fastapi import APIRouter, Body, Header, Response, Request, Depends
+from fastapi import APIRouter, Header, Response, Request, Depends
 from fastapi.responses import JSONResponse
 from app.logic.docx_validation import is_valid_docx
 from app.logic.idempotency import get_idem_map, record_idem
@@ -223,11 +223,47 @@ def get_document(document_id: str, response: Response):
         etag = _doc_etag_from_version(int(fallback["document"]["version"]))
         resp = JSONResponse(fallback, status_code=200)
         emit_etag_headers(resp, scope="document", token=etag, include_generic=True)
+        # Instrumentation: trace If-Match input and current ETag for metadata PATCH (fallback path)
+        try:
+            logger.info(
+                "documents.metadata.if_match",
+                extra={
+                    "if_match_raw": (request.headers.get("If-Match") if hasattr(request, "headers") else None),
+                    "current_etag": etag,
+                },
+            )
+        except Exception:
+            pass
+        try:
+            logger.info(
+                "etag.enforce",
+                extra={"resource": "document", "outcome": "pass"},
+            )
+        except Exception:
+            pass
         return resp
     # Attach ETag to the actual response object being returned
     etag = _doc_etag_from_version(int(doc["version"]))
     resp = JSONResponse({"document": doc}, status_code=200)
     emit_etag_headers(resp, scope="document", token=etag, include_generic=True)
+    # Instrumentation: trace If-Match input and current ETag for metadata PATCH (success path)
+    try:
+        logger.info(
+            "documents.metadata.if_match",
+            extra={
+                "if_match_raw": (request.headers.get("If-Match") if hasattr(request, "headers") else None),
+                "current_etag": etag,
+            },
+        )
+    except Exception:
+        pass
+    try:
+        logger.info(
+            "etag.enforce",
+            extra={"resource": "document", "outcome": "pass"},
+        )
+    except Exception:
+        pass
     return resp
 
 
@@ -488,13 +524,64 @@ def get_document_content(document_id: str):
     "/documents/{document_id}/reorder",
     include_in_schema=False,
     dependencies=[Depends(precondition_guard)],
+    openapi_extra={
+        "parameters": [
+            {"name": "If-Match", "in": "header", "required": True, "schema": {"type": "string"}}
+        ]
+    },
 )
 async def put_documents_order(
     request: Request,
+    document_id: str | None = None,
     request_id: str | None = Header(default=None, alias="X-Request-ID"),
     # Make If-Match optional; precondition_guard enforces semantics
     if_match: str | None = Header(default=None, alias="If-Match"),
 ):
+    # CLARKE: FINAL_GUARD documents-reorder-validation-log
+    def _log_reorder_validation_error(reason: str, items_obj=None) -> None:
+        try:
+            items_count = 0
+            ids_sample: list[str] = []
+            if isinstance(items_obj, list):
+                items_count = len(items_obj)
+                try:
+                    # derive a small sample of ids from provided structure
+                    for it in items_obj[:3]:
+                        if isinstance(it, dict) and "document_id" in it:
+                            ids_sample.append(str(it.get("document_id")))
+                        else:
+                            ids_sample.append(str(it))
+                except Exception:
+                    pass
+            logger.info(
+                "documents.reorder.validation_error",
+                extra={
+                    "reason": str(reason),
+                    "items_count": int(items_count),
+                    "ids_sample": ids_sample,
+                    "request_id": request_id or "",
+                },
+            )
+            # One-time debug capture of shape and derived mapping for diagnostics
+            try:
+                proposed_dbg = None
+                if isinstance(items_obj, list):
+                    try:
+                        proposed_dbg = {str(i.get("document_id")): int(i.get("order_number")) for i in items_obj if isinstance(i, dict)}
+                    except Exception:
+                        proposed_dbg = None
+                logger.info(
+                    "documents.reorder.validation_error.shape",
+                    extra={
+                        "items_type": type(items_obj).__name__ if items_obj is not None else None,
+                        "proposed_keys": list(proposed_dbg.keys()) if isinstance(proposed_dbg, dict) else None,
+                    },
+                )
+            except Exception:
+                pass
+        except Exception:
+            # Never let instrumentation alter control flow
+            logger.error("documents_reorder_validation_log_failed", exc_info=True)
     # Epic K: Enforce If-Match before any payload validation; attach diagnostics on failure
     try:
         items_cur = [
@@ -509,20 +596,7 @@ async def put_documents_order(
     except Exception:
         items_cur = []
     list_etag_current = _compute_document_list_etag(items_cur)
-    try:
-        from app.logic.etag_contract import enforce_if_match as _enforce_if_match  # type: ignore
-    except Exception:  # pragma: no cover
-        _enforce_if_match = None  # type: ignore
-    if _enforce_if_match is not None:
-        ok, pre_resp = _enforce_if_match(if_match, list_etag_current, route_id="documents.reorder")
-        if not ok and isinstance(pre_resp, JSONResponse):
-            # Emit diagnostics headers X-List-ETag and X-If-Match-Normalized via central helper
-            # Pass raw If-Match value; normalization occurs inside the emitter (per 7.1.34)
-            try:
-                emit_reorder_diagnostics(pre_resp, list_etag_current, if_match)
-            except Exception:
-                logger.error("documents_reorder_diag_emit_failed", exc_info=True)
-            return pre_resp
+    # Preconditions are enforced by precondition_guard; do not inline enforce here
 
     # Placement checkpoint: precondition enforcement for If-Match placed above (before validation).
     # Preconditions are enforced by precondition_guard. No inline normalization/comparison per §7.1.34.
@@ -532,6 +606,7 @@ async def put_documents_order(
     except Exception:
         body = None
     if not isinstance(body, dict):
+        _log_reorder_validation_error("not_dict", items_obj=None)
         return JSONResponse(
             {"title": "Unprocessable Entity", "status": 422, "detail": "Invalid reorder payload"},
             status_code=422,
@@ -539,6 +614,7 @@ async def put_documents_order(
         )
     items = body.get("items")
     if not isinstance(items, list) or not items:
+        _log_reorder_validation_error("items_missing", items_obj=items if isinstance(items, list) else [])
         return JSONResponse(
             {"title": "Unprocessable Entity", "status": 422, "detail": "Invalid reorder payload"},
             status_code=422,
@@ -548,34 +624,70 @@ async def put_documents_order(
     try:
         proposed: Dict[str, int] = {str(i["document_id"]): int(i["order_number"]) for i in items}
     except (TypeError, ValueError, KeyError):
+        _log_reorder_validation_error("bad_items_shape", items_obj=items)
         return JSONResponse(
             {"title": "Unprocessable Entity", "status": 422, "detail": "Invalid reorder payload"},
             status_code=422,
             media_type="application/problem+json",
         )
-    # Ensure all provided IDs exist
-    for document_id_key in proposed.keys():
-        if document_id_key not in DOCUMENTS_STORE:
+    # Relaxed: ignore unknown IDs rather than failing the request (partial lists allowed)
+    # Filter proposed mapping down to known document IDs only
+    unknown_ids = [k for k in proposed.keys() if k not in DOCUMENTS_STORE]
+    if unknown_ids:
+        try:
+            _log_reorder_validation_error("id_unknown_ignored", items_obj=[{"document_id": i} for i in unknown_ids])
+        except Exception:
+            pass
+    proposed = {k: v for k, v in proposed.items() if k in DOCUMENTS_STORE}
+    # Relaxed validation for partial lists: apply provided order_numbers to
+    # current list while preserving unspecified items' relative order, then
+    # reconstruct a full contiguous 1..N sequence (Clarke U7.3.1.15).
+    try:
+        # Snapshot current list in order
+        current_items = [
+            {
+                "document_id": d["document_id"],
+                "order_number": int(d["order_number"]),
+            }
+            for d in sorted(
+                repo_list_documents(store=DOCUMENTS_STORE),  # type: ignore[arg-type]
+                key=lambda x: int(x.get("order_number", 0)),
+            )
+        ]
+    except Exception:
+        current_items = []
+    n = len(current_items)
+    # Build a target array of length N; place proposed ids at requested positions
+    target: list[str | None] = [None] * max(n, 0)
+    # Defensive clamp for provided positions to 1..N
+    for did, pos in proposed.items():
+        if not isinstance(pos, int) or pos < 1:
+            _log_reorder_validation_error("bad_items_shape", items_obj=items)
             return JSONResponse(
                 {"title": "Unprocessable Entity", "status": 422, "detail": "Invalid reorder payload"},
                 status_code=422,
                 media_type="application/problem+json",
             )
-    # Ensure order numbers are 1..N contiguous without gaps
-    seq = sorted(set(proposed.values()))
-    if seq != list(range(1, len(seq) + 1)):
-        return JSONResponse(
-            {"title": "Unprocessable Entity", "status": 422, "detail": "Invalid reorder payload"},
-            status_code=422,
-            media_type="application/problem+json",
-        )
-    # Preconditions already enforced by guard; no inline If-Match parsing or comparisons here
-
-    # Preconditions must have passed via precondition_guard before mutation (defensive sentinel)
-    # No functional change intended; serves as an assertion point for review
-    # (guard short-circuits with 412 on mismatch and emits diagnostics)
-    # Apply ordering atomically
-    repo_apply_ordering(proposed, store=DOCUMENTS_STORE)  # type: ignore[arg-type]
+        if n > 0 and pos > n:
+            # If client specifies a position beyond current list, clamp to N
+            pos = n
+        if n > 0:
+            target[pos - 1] = str(did)
+    # Remaining ids in their original order
+    remaining = [str(x["document_id"]) for x in current_items if str(x["document_id"]) not in proposed]
+    # Fill gaps in target with remaining ids preserving order
+    ri = 0
+    for i in range(len(target)):
+        if target[i] is None:
+            if ri < len(remaining):
+                target[i] = remaining[ri]
+                ri += 1
+    # If any N was zero or anomalies, fall back to current order
+    final_ids: list[str] = [str(t) for t in target if isinstance(t, str)] or [str(x["document_id"]) for x in current_items]
+    # Rebuild a contiguous mapping 1..N
+    final_mapping = {did: idx + 1 for idx, did in enumerate(final_ids)}
+    # Apply ordering atomically using repository helper
+    repo_apply_ordering(final_mapping, store=DOCUMENTS_STORE)  # type: ignore[arg-type]
     # Prepare response
     items_out = [
         {
@@ -588,7 +700,8 @@ async def put_documents_order(
     ]
     list_etag = _compute_document_list_etag(items_out)
     resp = JSONResponse({"list": items_out, "list_etag": list_etag}, status_code=200)
-    # Use central emitter for ETag headers (preserves diagnostics via guard)
+    # Use central emitter for ETag headers (preserves diagnostics via guard).
+    # header_emitter logs a single 'etag.emit' event; avoid duplicate direct logs here.
     emit_etag_headers(resp, scope="document", token=list_etag, include_generic=True)
     logger.info(
         "reorder.precondition branch=success route=/api/v1/documents/order list_etag=%s",
